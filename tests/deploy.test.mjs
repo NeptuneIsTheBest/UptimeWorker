@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   deploymentSettings,
   ensureDatabase,
+  main,
   makeDeploymentConfig,
   parseConfiguration,
 } from '../scripts/prepare-deploy.mjs';
@@ -34,6 +35,33 @@ describe('deployment bootstrap', () => {
     expect(() =>
       deploymentSettings({ ...env, ACCESS_TEAM_DOMAIN: 'team.cloudflareaccess.com.evil.test' }),
     ).toThrow();
+  });
+  it.each([
+    [undefined, true],
+    ['', true],
+    [' \t\n', true],
+    ['true', true],
+    ['false', false],
+    [' TRUE ', true],
+    [' FaLsE\n', false],
+  ])('parses WORKERS_DEV=%j as %s', (value, expected) => {
+    expect(deploymentSettings({ ...env, WORKERS_DEV: value }).workersDev).toBe(expected);
+  });
+  it.each(['yes', 'no', '1', '0', 'false-ish'])('rejects invalid WORKERS_DEV=%j', (value) => {
+    expect(() => deploymentSettings({ ...env, WORKERS_DEV: value })).toThrow(
+      'WORKERS_DEV must be true or false',
+    );
+  });
+  it('rejects an invalid workers.dev setting before contacting Cloudflare', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Unexpected API call'));
+    try {
+      for (const [key, value] of Object.entries({ ...env, WORKERS_DEV: 'invalid' })) vi.stubEnv(key, value);
+      await expect(main()).rejects.toThrow('WORKERS_DEV must be true or false');
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllEnvs();
+      fetchMock.mockRestore();
+    }
   });
   it('creates a database on first deployment and uses its returned identifier', async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(ok([])).mockResolvedValueOnce(ok(database));
@@ -88,14 +116,24 @@ describe('deployment bootstrap', () => {
       ),
     ).rejects.toThrow('invalid database identity');
   });
-  it('generates matching build and migration bindings, excluding secrets and dev bypass flags', () => {
+  it.each([
+    [undefined, true],
+    ['true', true],
+    ['false', false],
+  ])('generates deployment bindings with WORKERS_DEV=%j and workers_dev=%s', (value, expected) => {
     const config = makeDeploymentConfig(
-      { main: 'src/worker/index.ts', vars: { DEV_ACCESS_BYPASS: 'true' } },
-      deploymentSettings({ ...env, WORKER_NAME: 'my-status' }),
+      {
+        main: 'src/worker/index.ts',
+        workers_dev: !expected,
+        preview_urls: true,
+        vars: { DEV_ACCESS_BYPASS: 'true' },
+      },
+      deploymentSettings({ ...env, WORKER_NAME: 'my-status', WORKERS_DEV: value }),
       uuid,
     );
     expect(config).toMatchObject({
       name: 'my-status',
+      workers_dev: expected,
       preview_urls: false,
       d1_databases: [
         { binding: 'DB', database_name: 'my-status-db', database_id: uuid, migrations_dir: 'migrations' },
@@ -103,5 +141,7 @@ describe('deployment bootstrap', () => {
     });
     expect(JSON.stringify(config)).not.toContain('secret-token');
     expect(JSON.stringify(config)).not.toContain('DEV_ACCESS_BYPASS');
+    expect(config.vars).not.toHaveProperty('WORKERS_DEV');
+    expect(config).not.toHaveProperty('routes');
   });
 });

@@ -36,12 +36,15 @@ export function deploymentSettings(env) {
         `${key} must contain 1–63 lowercase letters, digits, or hyphens and start with a letter`,
       );
   }
+  const workersDev = env.WORKERS_DEV?.trim().toLowerCase() || 'true';
+  if (workersDev !== 'true' && workersDev !== 'false') throw new Error('WORKERS_DEV must be true or false');
   return {
     accountId: env.CLOUDFLARE_ACCOUNT_ID,
     token: env.CLOUDFLARE_API_TOKEN,
     team,
     audience: env.ACCESS_AUD.trim(),
     workerName,
+    workersDev: workersDev === 'true',
     databaseName,
     siteName: env.SITE_NAME?.trim().slice(0, 80) || 'UptimeWorker',
   };
@@ -110,7 +113,7 @@ export function makeDeploymentConfig(base, settings, databaseId) {
   return {
     ...base,
     name: settings.workerName,
-    workers_dev: true,
+    workers_dev: settings.workersDev,
     preview_urls: false,
     vars: { ACCESS_TEAM_DOMAIN: settings.team, ACCESS_AUD: settings.audience, SITE_NAME: settings.siteName },
     d1_databases: [

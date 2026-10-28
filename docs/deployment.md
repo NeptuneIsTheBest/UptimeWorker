@@ -37,15 +37,16 @@ uptimeworker.<你的 workers.dev 子域名>.workers.dev/api/admin
 
 仓库 **Settings → Secrets and variables → Actions**：
 
-| 类型               | 名称                    | 内容                                |
-| ------------------ | ----------------------- | ----------------------------------- |
-| Secret             | `CLOUDFLARE_API_TOKEN`  | 上一步创建的 Token                  |
-| Secret             | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare 账户 ID（32 位）         |
-| Variable 或 Secret | `ACCESS_TEAM_DOMAIN`    | 团队域名，可包含 `https://`         |
-| Variable 或 Secret | `ACCESS_AUD`            | Access 应用的 64 位 AUD             |
-| Variable，可选     | `WORKER_NAME`           | 默认 `uptimeworker`                 |
-| Variable，可选     | `D1_DATABASE_NAME`      | 默认 `<WORKER_NAME>-db`             |
-| Variable，可选     | `SITE_NAME`             | 状态页站点名称，默认 `UptimeWorker` |
+| 类型               | 名称                    | 内容                                   |
+| ------------------ | ----------------------- | -------------------------------------- |
+| Secret             | `CLOUDFLARE_API_TOKEN`  | 上一步创建的 Token                     |
+| Secret             | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare 账户 ID（32 位）            |
+| Variable 或 Secret | `ACCESS_TEAM_DOMAIN`    | 团队域名，可包含 `https://`            |
+| Variable 或 Secret | `ACCESS_AUD`            | Access 应用的 64 位 AUD                |
+| Variable，可选     | `WORKER_NAME`           | 默认 `uptimeworker`                    |
+| Variable，可选     | `WORKERS_DEV`           | 默认 `true`；设为 `false` 关闭默认域名 |
+| Variable，可选     | `D1_DATABASE_NAME`      | 默认 `<WORKER_NAME>-db`                |
+| Variable，可选     | `SITE_NAME`             | 状态页站点名称，默认 `UptimeWorker`    |
 
 Access 配置同时存在于 Variables 和 Secrets 时，优先使用 Variables 中的值。
 
@@ -63,7 +64,17 @@ Worker / D1 名称使用小写字母、数字与连字符，字母开头，最�
 
 手动选择其他分支时只执行验证；仅 `main` 分支验证通过后才会部署。生产发布串行执行，正在运行的发布不会被后续手动运行取消。验证、配置、查库、构建或迁移失败都会阻止发布；数据库不会被自动删除或重建。
 
-部署地址为 `https://<WORKER_NAME>.<你的子域名>.workers.dev`。首次添加 Cron 后可能需要数分钟传播，参见 [Cron Triggers](https://developers.cloudflare.com/workers/configuration/cron-triggers/)。
+默认部署地址为 `https://<WORKER_NAME>.<你的子域名>.workers.dev`；关闭默认域名后，通过已绑定的自定义域名访问。首次添加 Cron 后可能需要数分钟传播，参见 [Cron Triggers](https://developers.cloudflare.com/workers/configuration/cron-triggers/)。
+
+## 仅使用自定义域名
+
+先在 Cloudflare 控制台将自定义域名绑定到同一 Worker，并为该域名配置上述 Access 后台路径。已有的自定义域名绑定会继续使用，无需在部署脚本中重复添加。
+
+在仓库 **Settings → Secrets and variables → Actions → Variables** 中添加 `WORKERS_DEV`，值设为 `false`，然后在 `main` 上重新运行 **Verify and deploy** 工作流。每次部署都会将默认域名设为关闭；仅在 Cloudflare 控制台手动关闭会被后续部署配置覆盖，参见 [Cloudflare 官方说明](https://developers.cloudflare.com/workers/configuration/routing/workers-dev/)。
+
+`WORKERS_DEV` 未设置、为空字符串或只有空白时默认 `true`。值去除首尾空白后不区分大小写，只接受 `true`、`false`；其他值会在调用 Cloudflare API 前阻止部署。预览域名始终保持 `preview_urls: false`，不随此变量开启。
+
+此变量由 `deploy:prepare` 读取并写入 `wrangler.deploy.json`，用于后续生产构建及发布；修改变量后必须重新部署才会生效。直接使用基础配置 `wrangler.jsonc` 构建并部署时，默认域名仍为开启。
 
 ## 首次上线验收
 
@@ -72,6 +83,7 @@ Worker / D1 名称使用小写字母、数字与连字符，字母开头，最�
 3. 等待 Cron 运行，在状态页与详情中确认检测结果、延迟和历史记录已出现。
 4. 重新运行部署，确认日志显示 `Reusing D1 database`，监控与历史仍然存在。
 5. 在 Cloudflare 查看 Worker Cron 日志、CPU 用量及 D1 Row Metrics。没有真实账户凭据时，本地测试不能替代这一步。
+6. 若设置了 `WORKERS_DEV=false`，首次及再次部署后确认 Worker 的 Production 和 Preview URL 开关均关闭，自定义域名首页与后台登录正常。
 
 ## 回滚与数据库恢复
 

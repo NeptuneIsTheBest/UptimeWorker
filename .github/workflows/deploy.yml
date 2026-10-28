@@ -41,6 +41,7 @@ jobs:
       ACCESS_TEAM_DOMAIN: ${{ vars.ACCESS_TEAM_DOMAIN || secrets.ACCESS_TEAM_DOMAIN }}
       ACCESS_AUD: ${{ vars.ACCESS_AUD || secrets.ACCESS_AUD }}
       WORKER_NAME: ${{ vars.WORKER_NAME }}
+      WORKERS_DEV: ${{ vars.WORKERS_DEV }}
       D1_DATABASE_NAME: ${{ vars.D1_DATABASE_NAME }}
       SITE_NAME: ${{ vars.SITE_NAME }}
     steps:
