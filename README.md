@@ -70,15 +70,17 @@ uptimeworker.<你的 workers.dev 子域名>.workers.dev/api/admin
 
 仓库 **Settings → Secrets and variables → Actions**：
 
-| 类型           | 名称                    | 内容                                |
-| -------------- | ----------------------- | ----------------------------------- |
-| Secret         | `CLOUDFLARE_API_TOKEN`  | 上一步创建的 Token                  |
-| Secret         | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare 账户 ID（32 位）         |
-| Variable       | `ACCESS_TEAM_DOMAIN`    | 团队域名，可包含 `https://`         |
-| Variable       | `ACCESS_AUD`            | Access 应用的 64 位 AUD             |
-| Variable，可选 | `WORKER_NAME`           | 默认 `uptimeworker`                 |
-| Variable，可选 | `D1_DATABASE_NAME`      | 默认 `<WORKER_NAME>-db`             |
-| Variable，可选 | `SITE_NAME`             | 状态页站点名称，默认 `UptimeWorker` |
+| 类型               | 名称                    | 内容                                |
+| ------------------ | ----------------------- | ----------------------------------- |
+| Secret             | `CLOUDFLARE_API_TOKEN`  | 上一步创建的 Token                  |
+| Secret             | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare 账户 ID（32 位）         |
+| Variable 或 Secret | `ACCESS_TEAM_DOMAIN`    | 团队域名，可包含 `https://`         |
+| Variable 或 Secret | `ACCESS_AUD`            | Access 应用的 64 位 AUD             |
+| Variable，可选     | `WORKER_NAME`           | 默认 `uptimeworker`                 |
+| Variable，可选     | `D1_DATABASE_NAME`      | 默认 `<WORKER_NAME>-db`             |
+| Variable，可选     | `SITE_NAME`             | 状态页站点名称，默认 `UptimeWorker` |
+
+Access 配置同时存在于 Variables 和 Secrets 时，优先使用 Variables 中的值。
 
 Worker / D1 名称使用小写字母、数字与连字符，字母开头，最长 63 个字符。每个实例应使用自己的名称；不要将不相关的数据库命名为相同名称。
 

@@ -41,8 +41,8 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      ACCESS_TEAM_DOMAIN: ${{ vars.ACCESS_TEAM_DOMAIN }}
-      ACCESS_AUD: ${{ vars.ACCESS_AUD }}
+      ACCESS_TEAM_DOMAIN: ${{ vars.ACCESS_TEAM_DOMAIN || secrets.ACCESS_TEAM_DOMAIN }}
+      ACCESS_AUD: ${{ vars.ACCESS_AUD || secrets.ACCESS_AUD }}
       WORKER_NAME: ${{ vars.WORKER_NAME }}
       D1_DATABASE_NAME: ${{ vars.D1_DATABASE_NAME }}
       SITE_NAME: ${{ vars.SITE_NAME }}
