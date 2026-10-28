@@ -174,8 +174,33 @@ describe('API boundaries', () => {
     expect(await fixture.db.prepare('SELECT version FROM global_settings').first('version')).toBe(1);
   });
 
+  it.each([0, 5, 15, 30, 60, 127, 3600])(
+    'returns the global refresh interval of %s seconds with matching public cache lifetimes',
+    async (pageRefreshSeconds) => {
+      const { request } = apiClient(fixture.db);
+      const row = (await createMonitor(fixture.db, httpConfig))!;
+      expect(
+        (await request('admin/settings', 'PATCH', { ...settingsUpdate, pageRefreshSeconds })).status,
+      ).toBe(200);
+      for (const path of ['status', `monitors/${row.id}/history`, 'admin/monitors']) {
+        const response = await request(path);
+        expect(response.status).toBe(200);
+        expect(response.headers.get('cache-control')).toBe(
+          path.startsWith('admin/')
+            ? 'no-store'
+            : `public, max-age=${Math.min(pageRefreshSeconds || 60, 60)}`,
+        );
+        const body = (await response.json()) as Record<string, unknown>;
+        expect(body.pageRefreshSeconds).toBe(pageRefreshSeconds);
+        for (const field of ['wafBypassEnabled', 'wafBypassToken', 'wafBypassTokenConfigured', 'version'])
+          expect(body).not.toHaveProperty(field);
+        expect(JSON.stringify(body)).not.toContain(settingsUpdate.wafBypassToken);
+      }
+    },
+  );
+
   it('exposes only sanitized public projections and caches only successful public GET requests', async () => {
-    const { app, env } = apiClient(fixture.db);
+    const { app, env, request } = apiClient(fixture.db);
     const row = await createMonitor(fixture.db, {
       ...httpConfig,
       url: 'https://secret.example.com/health?token=private',
@@ -194,10 +219,14 @@ describe('API boundaries', () => {
     } as unknown as ExecutionContext;
     const first = await app.fetch(new Request('https://status.test/api/status?random=1'), env, ctx);
     await Promise.all(pending);
-    expect(first.headers.get('cache-control')).toBe('public, max-age=60');
+    expect(first.headers.get('cache-control')).toBe('public, max-age=30');
     const text = await first.text();
     for (const hidden of ['secret.example.com', 'private', 'config_json', 'expectedStatusMin'])
       expect(text).not.toContain(hidden);
+    // Existing cache entries keep their old setting until their original TTL expires.
+    expect((await request('admin/settings', 'PATCH', { version: 1, pageRefreshSeconds: 15 })).status).toBe(
+      200,
+    );
     const second = await app.fetch(new Request('https://status.test/api/status?random=2'), env, ctx);
     expect(await second.text()).toBe(text);
     expect(put).toHaveBeenCalledOnce();
@@ -207,8 +236,21 @@ describe('API boundaries', () => {
       ctx,
     );
     expect(admin.headers.get('cache-control')).toBe('no-store');
+    expect(await admin.json()).toMatchObject({ pageRefreshSeconds: 15 });
     expect(put).toHaveBeenCalledOnce();
     const history = await app.request(`https://status.test/api/monitors/${row!.id}/history`, {}, env, ctx);
+    expect(history.headers.get('cache-control')).toBe('public, max-age=15');
     expect(await history.text()).not.toContain('secret.example.com');
+    await Promise.all(pending);
+    const puts = put.mock.calls.length;
+    const missing = await app.request('https://status.test/api/monitors/missing/history', {}, env, ctx);
+    expect(missing.status).toBe(404);
+    expect(missing.headers.get('cache-control')).toBe('no-store');
+    expect(put).toHaveBeenCalledTimes(puts);
+    stored.clear();
+    const renewed = await app.fetch(new Request('https://status.test/api/status'), env, ctx);
+    expect(renewed.headers.get('cache-control')).toBe('public, max-age=15');
+    expect(await renewed.json()).toMatchObject({ pageRefreshSeconds: 15 });
+    await Promise.all(pending);
   });
 });

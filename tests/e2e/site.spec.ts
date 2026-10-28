@@ -90,7 +90,12 @@ function sampleMonitor(index: number, status: PublicMonitor['status'] = 'up'): P
 }
 test('public overview is responsive, filterable and makes stale results explicit', async ({ page }) => {
   const monitors = Array.from({ length: 4 }, (_, i) => sampleMonitor(i));
-  const data: StatusResponse = { siteName: 'UptimeWorker', generatedAt: Date.now(), monitors };
+  const data: StatusResponse = {
+    siteName: 'UptimeWorker',
+    pageRefreshSeconds: 30,
+    generatedAt: Date.now(),
+    monitors,
+  };
   await page.route('**/api/status', (route) => route.fulfill({ json: data }));
   await page.goto('/');
   await expect(page.getByRole('heading', { name: '所有服务，运行如常。' })).toBeVisible();
@@ -121,7 +126,12 @@ test('service details render a full day of minute history on desktop and mobile'
   }));
   await page.route('**/api/monitors/sample-0/history', (route) =>
     route.fulfill({
-      json: { monitor: { ...sampleMonitor(0), intervalMinutes: 1 }, generatedAt: now, checks },
+      json: {
+        monitor: { ...sampleMonitor(0), intervalMinutes: 1 },
+        pageRefreshSeconds: 30,
+        generatedAt: now,
+        checks,
+      },
     }),
   );
   await page.goto('/monitors/sample-0');

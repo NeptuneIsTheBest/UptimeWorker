@@ -10,6 +10,51 @@ afterAll(async () => {
   await fixture?.dispose();
 });
 
+it('adds a 30-second refresh default while preserving existing settings and monitoring data', async () => {
+  const legacy = await databaseFixture('0003_flexible_intervals.sql');
+  try {
+    const db = legacy.db;
+    const row = (await createMonitor(db, httpConfig, timestamp))!;
+    await db.batch([
+      db
+        .prepare(
+          `UPDATE global_settings SET version = 7, waf_bypass_enabled = 1,
+        waf_bypass_token = ?, waf_bypass_domains_json = '["legacy.example.com"]'`,
+        )
+        .bind('existing-secret-'.repeat(4)),
+      db
+        .prepare(
+          `INSERT INTO check_results
+        (monitor_id, monitor_version, scheduled_at, checked_at, ok, latency_ms)
+        VALUES (?, 1, ?, ?, 1, 42)`,
+        )
+        .bind(row.id, timestamp, timestamp),
+      db
+        .prepare('UPDATE scheduler_state SET lease_owner = ?, lease_until = ?, last_completed_slot = ?')
+        .bind('existing-lease', timestamp + 60_000, timestamp),
+    ]);
+    const queries = ['monitors', 'check_results', 'daily_stats', 'scheduler_state', 'global_settings'];
+    const snapshot = async () =>
+      (
+        await db.batch<Record<string, unknown>>(queries.map((table) => db.prepare(`SELECT * FROM ${table}`)))
+      ).map((r) => r.results);
+    const before = await snapshot();
+    await applyMigration(db, '0004_page_refresh.sql');
+    const after = await snapshot();
+    expect(after.slice(0, 4)).toEqual(before.slice(0, 4));
+    expect(after[4]).toEqual([{ ...before[4][0], page_refresh_seconds: 30 }]);
+    for (const seconds of [0, 5, 15, 30, 60, 127, 3600])
+      await db.prepare('UPDATE global_settings SET page_refresh_seconds = ?').bind(seconds).run();
+    for (const seconds of [-1, 1, 4, 3601, 15.5, null])
+      await expect(
+        db.prepare('UPDATE global_settings SET page_refresh_seconds = ?').bind(seconds).run(),
+      ).rejects.toThrow();
+    expect((await db.prepare('PRAGMA foreign_key_check').all()).results).toEqual([]);
+  } finally {
+    await legacy.dispose();
+  }
+});
+
 it('upgrades legacy intervals without changing monitors, history, settings or scheduler state', async () => {
   const db = fixture.db;
   const ids: string[] = [];

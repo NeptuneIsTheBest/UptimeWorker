@@ -11,10 +11,12 @@ import {
   type AdminMonitor,
   type MonitorConfig,
   type ProbeResult,
+  type PageRefreshSettings,
 } from '../shared/types';
 import { parseMonitorConfig, wafMonitorDomain } from '../shared/validation';
 import { api, useRemote } from './api';
 import { GlobalSettingsDialog } from './GlobalSettingsDialog';
+import { RefreshStatus } from './RefreshStatus';
 import {
   Empty,
   ErrorNotice,
@@ -27,7 +29,7 @@ import {
   latency,
 } from './components';
 
-interface AdminResponse {
+interface AdminResponse extends PageRefreshSettings {
   monitors: AdminMonitor[];
   identity: { email: string };
   limit: number;
@@ -454,7 +456,8 @@ function MonitorEditor({
 }
 
 export function AdminPage() {
-  const { data, error, loading, refresh } = useRemote<AdminResponse>('/api/admin/monitors');
+  const remote = useRemote<AdminResponse>('/api/admin/monitors');
+  const { data, error, loading, refresh } = remote;
   const [editor, setEditor] = useState<AdminMonitor | 'new' | null>(null);
   const [deleting, setDeleting] = useState<AdminMonitor | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -524,6 +527,7 @@ export function AdminPage() {
           </button>
         </div>
       </div>
+      <RefreshStatus {...remote} />
       {data && (
         <div className="access-strip">
           <span>
@@ -663,9 +667,13 @@ export function AdminPage() {
         <GlobalSettingsDialog
           monitors={data?.monitors ?? []}
           close={() => setSettingsOpen(false)}
-          saved={() => {
+          saved={(settings) => {
+            remote.refreshWithSettings(settings);
             setSettingsOpen(false);
-            setNotice({ text: '全局设置已保存，将应用于新的连接测试及下一轮调度。', error: false });
+            setNotice({
+              text: '全局设置已保存，页面刷新设置已生效。WAF 设置应用于新的连接测试及下一轮调度。',
+              error: false,
+            });
           }}
         />
       )}

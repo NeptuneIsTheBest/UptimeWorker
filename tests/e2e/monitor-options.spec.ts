@@ -6,6 +6,7 @@ test('advanced monitor options persist and remain usable on mobile', async ({ pa
     route.fulfill({
       json: {
         version: 1,
+        pageRefreshSeconds: 30,
         wafBypassEnabled: false,
         wafBypassTokenConfigured: false,
       } satisfies GlobalSettings,

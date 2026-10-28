@@ -47,6 +47,7 @@ export const test = base.extend<{ resetState: void }>({
         headers: origin,
         data: {
           version: current.version,
+          pageRefreshSeconds: 30,
           wafBypassEnabled: false,
           wafBypassToken: 'e2e-fixture-token-'.repeat(4),
         },

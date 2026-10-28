@@ -1,5 +1,6 @@
 import { ERROR_LABELS, type HistoryResponse } from '../shared/types';
 import { useRemote } from './api';
+import { RefreshStatus } from './RefreshStatus';
 import {
   Empty,
   ErrorNotice,
@@ -18,9 +19,8 @@ import {
 } from './components';
 
 export function DetailPage({ id }: { id: string }) {
-  const { data, error, loading, refresh } = useRemote<HistoryResponse>(
-    `/api/monitors/${encodeURIComponent(id)}/history`,
-  );
+  const remote = useRemote<HistoryResponse>(`/api/monitors/${encodeURIComponent(id)}/history`);
+  const { data, error, loading, refresh } = remote;
   const now = useNow();
   return (
     <Layout>
@@ -28,6 +28,7 @@ export function DetailPage({ id }: { id: string }) {
         <Icon name="back" size={17} />
         返回状态概览
       </a>
+      {!data && <RefreshStatus {...remote} />}
       {error && <ErrorNotice message={error} retry={refresh} />}
       {loading ? (
         <Loading />
@@ -45,6 +46,7 @@ export function DetailPage({ id }: { id: string }) {
               </div>
               <StatusBadge status={effectiveStatus(data.monitor, now)} />
             </div>
+            <RefreshStatus {...remote} />
             <div className="detail-metrics">
               <div>
                 <span>当前响应时间</span>

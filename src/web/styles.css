@@ -360,6 +360,69 @@ select {
 .time-value {
   letter-spacing: 0.1px;
 }
+.refresh-status {
+  min-width: 0;
+}
+.refresh-time,
+.refresh-details {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+.refresh-time time {
+  display: block;
+  white-space: nowrap;
+}
+.refresh-details,
+.refresh-pending {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.7;
+}
+.refresh-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 20px;
+  padding: 14px 16px;
+  margin-bottom: 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.refresh-strip time {
+  font-size: 13px;
+}
+.refresh-strip .refresh-button {
+  margin-left: auto;
+}
+.refresh-card .refresh-time,
+.refresh-card .refresh-details {
+  display: block;
+}
+.refresh-card .refresh-pending {
+  display: block;
+  margin: 12px 0 8px;
+}
+.refresh-card .refresh-details > span {
+  display: block;
+}
+.refresh-status .refresh-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  color: var(--green);
+  white-space: nowrap;
+}
+.refresh-card .refresh-button {
+  margin-top: 5px;
+}
+.refresh-button .spinner {
+  width: 14px;
+  height: 14px;
+}
 .services-section {
   margin-top: 37px;
 }
@@ -1157,6 +1220,16 @@ td {
   padding: 0;
   margin: 0;
   min-width: 0;
+}
+.refresh-settings {
+  padding-bottom: 20px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--line);
+}
+.refresh-settings legend {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 16px;
 }
 .settings-configured {
   margin-left: 10px;

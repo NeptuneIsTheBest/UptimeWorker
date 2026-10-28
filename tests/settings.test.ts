@@ -10,6 +10,7 @@ import { databaseFixture, httpConfig, tcpConfig, resetDatabase, success, timesta
 
 const defaults: GlobalSettings = {
   version: 1,
+  pageRefreshSeconds: 30,
   wafBypassEnabled: false,
   wafBypassTokenConfigured: false,
 };
@@ -17,11 +18,34 @@ const token = 'test-bypass-token-'.repeat(4);
 const rotatedToken = 'rotated-bypass-token-'.repeat(4);
 const config = {
   version: 1,
+  pageRefreshSeconds: 30,
   wafBypassEnabled: true,
   wafBypassToken: token,
 };
 
 describe('global settings validation', () => {
+  it.each([0, 5, 15, 30, 60, 127, 3600])(
+    'accepts a page refresh interval of %s seconds',
+    (pageRefreshSeconds) => {
+      expect(parseGlobalSettingsPatch({ version: 1, pageRefreshSeconds }, defaults).pageRefreshSeconds).toBe(
+        pageRefreshSeconds,
+      );
+    },
+  );
+  it.each([-1, 1, 4, 3601, 15.5, '15', '', null, false])(
+    'rejects an invalid page refresh interval: %j',
+    (pageRefreshSeconds) => {
+      expect(() => parseGlobalSettingsPatch({ version: 1, pageRefreshSeconds }, defaults)).toThrow(
+        '页面刷新间隔',
+      );
+    },
+  );
+  it('preserves the current refresh interval when omitted, including disabled refresh', () => {
+    for (const pageRefreshSeconds of [0, 127])
+      expect(
+        parseGlobalSettingsPatch({ version: 1 }, { ...defaults, pageRefreshSeconds }).pageRefreshSeconds,
+      ).toBe(pageRefreshSeconds);
+  });
   it('derives normalized, deduplicated rule domains from enabled WAF monitors, including paused ones', () => {
     expect(
       wafRuleDomains([
@@ -153,6 +177,7 @@ describe('global settings API and probe integration', () => {
       expect(saved.status).toBe(200);
       expect(await saved.json()).toEqual({
         version: 2,
+        pageRefreshSeconds: 30,
         wafBypassEnabled: true,
         wafBypassTokenConfigured: true,
       });
@@ -171,6 +196,28 @@ describe('global settings API and probe integration', () => {
     await fixture.db.prepare('UPDATE monitors SET config_json = ? WHERE id = ?').bind('broken', row.id).run();
     expect(await (await read()).json()).toEqual(defaults);
     expect((await patch(config)).status).toBe(200);
+  });
+
+  it('persists refresh preferences, preserves them in WAF-only updates and rejects stale writes', async () => {
+    const { read, patch } = client();
+    let version = 1;
+    for (const pageRefreshSeconds of [15, 127, 0]) {
+      const saved = await patch({ version, pageRefreshSeconds });
+      expect(saved.status).toBe(200);
+      expect(await saved.json()).toMatchObject({ version: ++version, pageRefreshSeconds });
+      expect(await (await read()).json()).toMatchObject({ version, pageRefreshSeconds });
+    }
+    expect((await patch({ version, wafBypassToken: token })).status).toBe(200);
+    expect(await (await read()).json()).toMatchObject({
+      version: ++version,
+      pageRefreshSeconds: 0,
+      wafBypassTokenConfigured: true,
+    });
+    expect((await patch({ version: version - 1, pageRefreshSeconds: 30 })).status).toBe(409);
+    for (const pageRefreshSeconds of [4, 3601, 1.5, '30', null])
+      expect((await patch({ version, pageRefreshSeconds })).status).toBe(400);
+    expect(await (await read()).json()).toMatchObject({ version, pageRefreshSeconds: 0 });
+    expect((await getGlobalSettings(fixture.db)).settings.wafBypass.token).toBe(token);
   });
 
   it('rejects invalid settings without changing stored state or exposing the token', async () => {

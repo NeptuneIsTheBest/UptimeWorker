@@ -22,7 +22,11 @@
 
 ## 全局设置
 
-全局设置的 GET / PATCH 响应为 `version`、`wafBypassEnabled`、`wafBypassTokenConfigured`。PATCH 必须携带当前 `version`，其余字段可按需提交；`wafBypassToken` 仅用于写入，省略或空字符串保留原密钥。旧请求中的 `wafBypassDomains`、`wafBypassAutoDomains` 会被忽略，不再返回或参与放行判定。配置不合法返回 `400`，版本冲突返回 `409`，需重新读取设置后提交。
+全局设置的 GET / PATCH 响应为 `version`、`pageRefreshSeconds`、`wafBypassEnabled`、`wafBypassTokenConfigured`。PATCH 必须携带当前 `version`，其余字段可按需提交；`wafBypassToken` 仅用于写入，省略或空字符串保留原密钥。旧请求中的 `wafBypassDomains`、`wafBypassAutoDomains` 会被忽略，不再返回或参与放行判定。配置不合法返回 `400`，版本冲突返回 `409`，需重新读取设置后提交。
+
+`pageRefreshSeconds` 默认 `30`，接受 `5–3600` 的整数秒或 `0`（关闭自动刷新）；省略时保留当前值，字符串、小数、null 和越界值返回 `400`。例如 `{"version": 1, "pageRefreshSeconds": 15}` 将三个数据页的刷新间隔统一设为 15 秒。
+
+`GET /api/status`、`GET /api/monitors/:id/history` 和 `GET /api/admin/monitors` 的顶层响应均包含 `pageRefreshSeconds`。公开接口缓存有效期为 `min(pageRefreshSeconds, 60)` 秒，关闭时为 60 秒；已有缓存自然过期后才反映新设置。管理接口及失败响应不缓存。`generatedAt` 仍表示服务端生成数据的时间；界面的“上次刷新”使用客户端成功接收数据的时间，命中缓存也会更新。
 
 ## 监控配置
 

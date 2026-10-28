@@ -82,6 +82,7 @@ export async function resetDatabase(db: D1Database) {
     db.prepare('DELETE FROM monitors'),
     db.prepare('UPDATE scheduler_state SET lease_owner = NULL, lease_until = 0, last_completed_slot = 0'),
     db.prepare(`INSERT INTO global_settings(id) VALUES (1) ON CONFLICT(id) DO UPDATE SET
-      waf_bypass_enabled = 0, waf_bypass_token = NULL, waf_bypass_domains_json = '[]', version = 1`),
+      page_refresh_seconds = 30, waf_bypass_enabled = 0, waf_bypass_token = NULL,
+      waf_bypass_domains_json = '[]', version = 1`),
   ]);
 }

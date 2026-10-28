@@ -10,6 +10,7 @@ import {
 } from '../shared/types';
 import type { Env, MonitorRow } from './types';
 import { parseMonitorConfig } from '../shared/validation';
+import { getPageRefreshSeconds } from './settings';
 
 const DAY = 86_400_000;
 export const utcDay = (time: number) => new Date(time).toISOString().slice(0, 10);
@@ -148,15 +149,19 @@ function publicMonitor(row: MonitorRow, daily: DailyRow[], now: number): PublicM
   };
 }
 export async function getStatus(env: Env, now = Date.now()): Promise<StatusResponse> {
-  const [monitors, stats] = await env.DB.batch([
-    env.DB.prepare('SELECT * FROM monitors ORDER BY created_at, id'),
-    env.DB.prepare('SELECT * FROM daily_stats WHERE day >= ? ORDER BY day').bind(
-      utcDay(dayStart(now) - 89 * DAY),
-    ),
+  const [[monitors, stats], pageRefreshSeconds] = await Promise.all([
+    env.DB.batch([
+      env.DB.prepare('SELECT * FROM monitors ORDER BY created_at, id'),
+      env.DB.prepare('SELECT * FROM daily_stats WHERE day >= ? ORDER BY day').bind(
+        utcDay(dayStart(now) - 89 * DAY),
+      ),
+    ]),
+    getPageRefreshSeconds(env.DB),
   ]);
   const daily = stats.results as unknown as DailyRow[];
   return {
     siteName: env.SITE_NAME || 'UptimeWorker',
+    pageRefreshSeconds,
     generatedAt: now,
     monitors: (monitors.results as unknown as MonitorRow[]).map((row) =>
       publicMonitor(
@@ -174,19 +179,23 @@ export async function getHistory(
 ): Promise<HistoryResponse | null> {
   const row = await findMonitor(db, id);
   if (!row) return null;
-  const [daily, checks] = await db.batch([
-    db
-      .prepare('SELECT * FROM daily_stats WHERE monitor_id = ? AND day >= ? ORDER BY day')
-      .bind(id, utcDay(dayStart(now) - 89 * DAY)),
-    db
-      .prepare(
-        `SELECT checked_at, ok, latency_ms, http_status, error_code FROM check_results
+  const [[daily, checks], pageRefreshSeconds] = await Promise.all([
+    db.batch([
+      db
+        .prepare('SELECT * FROM daily_stats WHERE monitor_id = ? AND day >= ? ORDER BY day')
+        .bind(id, utcDay(dayStart(now) - 89 * DAY)),
+      db
+        .prepare(
+          `SELECT checked_at, ok, latency_ms, http_status, error_code FROM check_results
       WHERE monitor_id = ? AND checked_at >= ? ORDER BY checked_at DESC`,
-      )
-      .bind(id, now - DAY),
+        )
+        .bind(id, now - DAY),
+    ]),
+    getPageRefreshSeconds(db),
   ]);
   return {
     monitor: publicMonitor(row, daily.results as unknown as DailyRow[], now),
+    pageRefreshSeconds,
     generatedAt: now,
     checks: (checks.results as unknown as CheckRow[]).reverse().map((check) => ({
       checkedAt: Number(check.checked_at),

@@ -1,6 +1,9 @@
 export const DEFAULT_INTERVAL_MINUTES = 1;
 export const MIN_INTERVAL_MINUTES = 1;
 export const MAX_INTERVAL_MINUTES = 60;
+export const DEFAULT_PAGE_REFRESH_SECONDS = 30;
+export const MIN_PAGE_REFRESH_SECONDS = 5;
+export const MAX_PAGE_REFRESH_SECONDS = 3600;
 export const MAX_MONITORS = 10;
 export const HTTP_METHODS = ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'] as const;
 export type HttpMethod = (typeof HTTP_METHODS)[number];
@@ -31,13 +34,17 @@ export type ErrorCode =
   | 'response_too_large'
   | 'unsafe_redirect';
 
-export interface GlobalSettings {
+export interface PageRefreshSettings {
+  pageRefreshSeconds: number;
+}
+export interface GlobalSettings extends PageRefreshSettings {
   version: number;
   wafBypassEnabled: boolean;
   wafBypassTokenConfigured: boolean;
 }
 export interface GlobalSettingsPatch {
   version: number;
+  pageRefreshSeconds?: number;
   wafBypassEnabled?: boolean;
   wafBypassToken?: string;
 }
@@ -87,7 +94,7 @@ export interface PublicMonitor {
   uptime30d: number | null;
   days: DailyStat[];
 }
-export interface StatusResponse {
+export interface StatusResponse extends PageRefreshSettings {
   siteName: string;
   generatedAt: number;
   monitors: PublicMonitor[];
@@ -100,7 +107,7 @@ export type AdminMonitor = MonitorConfig & {
   latencyMs: number | null;
   errorCode: ErrorCode | null;
 };
-export interface HistoryResponse {
+export interface HistoryResponse extends PageRefreshSettings {
   monitor: PublicMonitor;
   checks: ProbeResult[];
   generatedAt: number;

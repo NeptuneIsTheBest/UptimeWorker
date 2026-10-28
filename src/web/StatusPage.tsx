@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { PublicMonitor, StatusResponse } from '../shared/types';
 import { useRemote } from './api';
+import { RefreshStatus } from './RefreshStatus';
 import {
   Empty,
   ErrorNotice,
@@ -54,7 +55,8 @@ function MonitorCard({ monitor, now }: { monitor: PublicMonitor; now: number }) 
   );
 }
 export function StatusPage() {
-  const { data, error, loading, refresh } = useRemote<StatusResponse>('/api/status');
+  const remote = useRemote<StatusResponse>('/api/status');
+  const { data, error, loading, refresh } = remote;
   const now = useNow();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
@@ -181,15 +183,7 @@ export function StatusPage() {
           </div>
           <span className="stat-note">正常服务的最近一次响应</span>
         </div>
-        <div className="stat-card">
-          <span className="stat-label">
-            <Icon name="clock" size={16} /> 最近同步
-          </span>
-          <div className="stat-value time-value">{data ? formatTime(data.generatedAt).slice(0, 5) : '—'}</div>
-          <span className="stat-note">
-            <span className="small-dot" /> 页面每 60 秒自动刷新
-          </span>
-        </div>
+        <RefreshStatus {...remote} card />
       </section>
       <section className="services-section">
         <div className="section-heading">

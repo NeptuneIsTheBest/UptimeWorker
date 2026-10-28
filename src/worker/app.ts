@@ -15,7 +15,15 @@ import {
   updateMonitor,
 } from './repository';
 import type { AppEnv, Probe } from './types';
-import { adminSettings, getGlobalSettings, getProbeSnapshot, updateGlobalSettings } from './settings';
+import {
+  adminSettings,
+  getGlobalSettings,
+  getPageRefreshSeconds,
+  getProbeSnapshot,
+  updateGlobalSettings,
+} from './settings';
+
+const publicCacheControl = (seconds: number) => `public, max-age=${Math.min(seconds || 60, 60)}`;
 
 export function createApp(probe: Probe, verify?: TokenVerifier) {
   const app = new Hono<AppEnv>();
@@ -51,22 +59,31 @@ export function createApp(probe: Probe, verify?: TokenVerifier) {
     if (hit) return new Response(hit.body, hit);
     await next();
     if (c.res.status === 200) {
-      c.header('Cache-Control', 'public, max-age=60');
       if (cache) c.executionCtx.waitUntil(cache.put(key, c.res.clone()));
     } else c.header('Cache-Control', 'no-store');
   };
-  app.get('/api/status', publicCache, async (c) => c.json(await getStatus(c.env)));
+  app.get('/api/status', publicCache, async (c) => {
+    const result = await getStatus(c.env);
+    return c.json(result, 200, { 'Cache-Control': publicCacheControl(result.pageRefreshSeconds) });
+  });
   app.get('/api/monitors/:id/history', publicCache, async (c) => {
     const result = await getHistory(c.env.DB, c.req.param('id'));
-    return result ? c.json(result) : c.json({ error: '监控不存在。' }, 404);
+    return result
+      ? c.json(result, 200, { 'Cache-Control': publicCacheControl(result.pageRefreshSeconds) })
+      : c.json({ error: '监控不存在。' }, 404);
   });
-  app.get('/api/admin/monitors', async (c) =>
-    c.json({
-      monitors: (await listMonitors(c.env.DB)).map((row) => adminMonitor(row)),
+  app.get('/api/admin/monitors', async (c) => {
+    const [monitors, pageRefreshSeconds] = await Promise.all([
+      listMonitors(c.env.DB),
+      getPageRefreshSeconds(c.env.DB),
+    ]);
+    return c.json({
+      pageRefreshSeconds,
+      monitors: monitors.map((row) => adminMonitor(row)),
       identity: c.get('identity'),
       limit: MAX_MONITORS,
-    }),
-  );
+    });
+  });
   app.get('/api/admin/settings', async (c) => {
     const { settings } = await getGlobalSettings(c.env.DB);
     return c.json(adminSettings(settings));

@@ -1,6 +1,12 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { isWafToken, parseGlobalSettingsPatch, wafRuleDomains, wafSkipExpression } from '../shared/settings';
-import type { GlobalSettings, MonitorConfig } from '../shared/types';
+import {
+  DEFAULT_PAGE_REFRESH_SECONDS,
+  MIN_PAGE_REFRESH_SECONDS,
+  MAX_PAGE_REFRESH_SECONDS,
+  type GlobalSettings,
+  type MonitorConfig,
+} from '../shared/types';
 import { api, ApiError } from './api';
 import { ErrorNotice, Icon, Modal } from './components';
 
@@ -11,10 +17,12 @@ export function GlobalSettingsDialog({
 }: {
   monitors: readonly MonitorConfig[];
   close: () => void;
-  saved: () => void;
+  saved: (settings: GlobalSettings) => void;
 }) {
   const [settings, setSettings] = useState<GlobalSettings | null>(null);
   const [enabled, setEnabled] = useState(false);
+  const [refreshPreset, setRefreshPreset] = useState('30');
+  const [customRefresh, setCustomRefresh] = useState<number | ''>(DEFAULT_PAGE_REFRESH_SECONDS);
   const [token, setToken] = useState('');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -36,6 +44,10 @@ export function GlobalSettingsDialog({
         if (controller.signal.aborted) return;
         setSettings(value);
         setEnabled(value.wafBypassEnabled);
+        setRefreshPreset(
+          [0, 15, 30, 60].includes(value.pageRefreshSeconds) ? String(value.pageRefreshSeconds) : 'custom',
+        );
+        setCustomRefresh(value.pageRefreshSeconds || DEFAULT_PAGE_REFRESH_SECONDS);
       })
       .catch((err: unknown) => {
         if (!controller.signal.aborted) setError(err instanceof Error ? err.message : '读取全局设置失败');
@@ -72,15 +84,19 @@ export function GlobalSettingsDialog({
       const patch = parseGlobalSettingsPatch(
         {
           version: settings.version,
+          pageRefreshSeconds: refreshPreset === 'custom' ? customRefresh : Number(refreshPreset),
           wafBypassEnabled: enabled,
           wafBypassToken: token,
         },
         settings,
       );
       setBusy(true);
-      await api<GlobalSettings>('/api/admin/settings', { method: 'PATCH', body: JSON.stringify(patch) });
+      const updated = await api<GlobalSettings>('/api/admin/settings', {
+        method: 'PATCH',
+        body: JSON.stringify(patch),
+      });
       setToken('');
-      saved();
+      saved(updated);
     } catch (err) {
       setError(err instanceof Error ? err.message : '保存失败');
       setConflict(err instanceof ApiError && err.status === 409);
@@ -111,6 +127,44 @@ export function GlobalSettingsDialog({
         </div>
       ) : (
         <form onSubmit={submit} className="monitor-form settings-form">
+          <fieldset className="settings-fields refresh-settings" disabled={busy}>
+            <legend>页面自动刷新</legend>
+            <div className="field">
+              <label htmlFor="page-refresh">刷新间隔</label>
+              <select
+                id="page-refresh"
+                value={refreshPreset}
+                onChange={(event) => setRefreshPreset(event.target.value)}
+              >
+                <option value="0">关闭自动刷新</option>
+                <option value="15">每 15 秒</option>
+                <option value="30">每 30 秒（默认）</option>
+                <option value="60">每 60 秒</option>
+                <option value="custom">自定义</option>
+              </select>
+            </div>
+            {refreshPreset === 'custom' && (
+              <div className="field">
+                <label htmlFor="custom-page-refresh">自定义间隔（秒）</label>
+                <input
+                  id="custom-page-refresh"
+                  type="number"
+                  min={MIN_PAGE_REFRESH_SECONDS}
+                  max={MAX_PAGE_REFRESH_SECONDS}
+                  step={1}
+                  required
+                  value={customRefresh}
+                  onChange={(event) =>
+                    setCustomRefresh(event.target.value === '' ? '' : Number(event.target.value))
+                  }
+                />
+                <small>支持 5–3600 的整数秒。</small>
+              </div>
+            )}
+            <p className="form-note">
+              统一应用于状态概览、监控详情和管理页。其他页面在下次成功刷新时获取新设置；关闭后可点击“立即刷新”。重新开启后，已关闭的页面需手动刷新或重新打开。
+            </p>
+          </fieldset>
           <p className="form-intro">
             为开启单站 WAF 放行的监控提供共享密钥和总开关，需配合目标站点的 WAF Skip 规则。
           </p>
@@ -225,7 +279,7 @@ export function GlobalSettingsDialog({
             </button>
           )}
           <p className="form-note">
-            保存后应用于新的连接测试及下一轮调度。关闭总开关会保留密钥和单站开关设置。
+            WAF 设置保存后应用于新的连接测试及下一轮调度。关闭 WAF 总开关会保留密钥和单站开关设置。
           </p>
           <div className="modal-actions">
             <button type="button" className="button secondary" disabled={busy} onClick={close}>
