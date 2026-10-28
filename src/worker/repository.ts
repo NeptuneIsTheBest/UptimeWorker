@@ -1,0 +1,198 @@
+import {
+  MAX_MONITORS,
+  type AdminMonitor,
+  type DailyStat,
+  type HistoryResponse,
+  type MonitorConfig,
+  type MonitorStatus,
+  type PublicMonitor,
+  type StatusResponse,
+} from '../shared/types';
+import type { Env, MonitorRow } from './types';
+
+const DAY = 86_400_000;
+export const utcDay = (time: number) => new Date(time).toISOString().slice(0, 10);
+export const dayStart = (time: number) => Math.floor(time / DAY) * DAY;
+
+export function monitorConfig(row: MonitorRow): MonitorConfig {
+  return {
+    ...JSON.parse(row.config_json),
+    name: row.name,
+    type: row.type,
+    intervalMinutes: row.interval_minutes,
+    timeoutSeconds: row.timeout_seconds,
+    enabled: row.enabled === 1,
+  };
+}
+export function currentStatus(row: MonitorRow, now: number): MonitorStatus {
+  if (!row.enabled) return 'paused';
+  if (row.last_checked_at === null) return 'unknown';
+  if (now - row.last_checked_at > row.interval_minutes * 120_000) return 'stale';
+  return row.last_ok === 1 ? 'up' : 'down';
+}
+export function adminMonitor(row: MonitorRow, now = Date.now()): AdminMonitor {
+  return {
+    ...monitorConfig(row),
+    id: row.id,
+    version: row.version,
+    status: currentStatus(row, now),
+    lastCheckedAt: row.last_checked_at,
+    latencyMs: row.last_latency_ms,
+    errorCode: row.last_error_code,
+  };
+}
+export async function findMonitor(db: D1Database, id: string) {
+  return db.prepare('SELECT * FROM monitors WHERE id = ?').bind(id).first<MonitorRow>();
+}
+export async function listMonitors(db: D1Database) {
+  return (await db.prepare('SELECT * FROM monitors ORDER BY created_at, id').all<MonitorRow>()).results;
+}
+export async function createMonitor(
+  db: D1Database,
+  config: MonitorConfig,
+  now = Date.now(),
+): Promise<MonitorRow | null> {
+  const id = crypto.randomUUID();
+  const result = await db
+    .prepare(
+      `INSERT INTO monitors
+    (id, name, type, config_json, interval_minutes, timeout_seconds, enabled, created_at, updated_at)
+    SELECT ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM monitors) < ?`,
+    )
+    .bind(
+      id,
+      config.name,
+      config.type,
+      JSON.stringify(config),
+      config.intervalMinutes,
+      config.timeoutSeconds,
+      Number(config.enabled),
+      now,
+      now,
+      MAX_MONITORS,
+    )
+    .run();
+  return result.meta.changes ? findMonitor(db, id) : null;
+}
+export async function updateMonitor(
+  db: D1Database,
+  id: string,
+  version: number,
+  config: MonitorConfig,
+  now = Date.now(),
+) {
+  const result = await db
+    .prepare(
+      `UPDATE monitors SET name = ?, type = ?, config_json = ?, interval_minutes = ?,
+    timeout_seconds = ?, enabled = ?, updated_at = ?, version = version + 1, next_check_at = 0,
+    last_checked_at = NULL, last_ok = NULL, last_latency_ms = NULL, last_error_code = NULL
+    WHERE id = ? AND version = ?`,
+    )
+    .bind(
+      config.name,
+      config.type,
+      JSON.stringify(config),
+      config.intervalMinutes,
+      config.timeoutSeconds,
+      Number(config.enabled),
+      now,
+      id,
+      version,
+    )
+    .run();
+  return result.meta.changes ? findMonitor(db, id) : null;
+}
+
+interface DailyRow {
+  monitor_id: string;
+  day: string;
+  total: number;
+  successful: number;
+}
+interface CheckRow {
+  checked_at: number;
+  ok: number;
+  latency_ms: number;
+  http_status: number | null;
+  error_code: HistoryResponse['checks'][number]['errorCode'];
+}
+function publicMonitor(row: MonitorRow, daily: DailyRow[], now: number): PublicMonitor {
+  const indexed = new Map(daily.map((stat) => [stat.day, stat]));
+  const days: DailyStat[] = Array.from({ length: 90 }, (_, index) => {
+    const day = utcDay(dayStart(now) - (89 - index) * DAY);
+    const stat = indexed.get(day);
+    return {
+      day,
+      total: stat?.total ?? 0,
+      successful: stat?.successful ?? 0,
+      uptime: stat?.total ? (stat.successful / stat.total) * 100 : null,
+    };
+  });
+  const totals = days
+    .slice(-30)
+    .reduce((acc, day) => ({ total: acc.total + day.total, successful: acc.successful + day.successful }), {
+      total: 0,
+      successful: 0,
+    });
+  return {
+    id: row.id,
+    name: row.name,
+    type: row.type,
+    status: currentStatus(row, now),
+    intervalMinutes: row.interval_minutes,
+    lastCheckedAt: row.last_checked_at,
+    latencyMs: row.last_latency_ms,
+    uptime30d: totals.total ? (totals.successful / totals.total) * 100 : null,
+    days,
+  };
+}
+export async function getStatus(env: Env, now = Date.now()): Promise<StatusResponse> {
+  const [monitors, stats] = await env.DB.batch([
+    env.DB.prepare('SELECT * FROM monitors ORDER BY created_at, id'),
+    env.DB.prepare('SELECT * FROM daily_stats WHERE day >= ? ORDER BY day').bind(
+      utcDay(dayStart(now) - 89 * DAY),
+    ),
+  ]);
+  const daily = stats.results as unknown as DailyRow[];
+  return {
+    siteName: env.SITE_NAME || 'UptimeWorker',
+    generatedAt: now,
+    monitors: (monitors.results as unknown as MonitorRow[]).map((row) =>
+      publicMonitor(
+        row,
+        daily.filter((stat) => stat.monitor_id === row.id),
+        now,
+      ),
+    ),
+  };
+}
+export async function getHistory(
+  db: D1Database,
+  id: string,
+  now = Date.now(),
+): Promise<HistoryResponse | null> {
+  const row = await findMonitor(db, id);
+  if (!row) return null;
+  const [daily, checks] = await db.batch([
+    db
+      .prepare('SELECT * FROM daily_stats WHERE monitor_id = ? AND day >= ? ORDER BY day')
+      .bind(id, utcDay(dayStart(now) - 89 * DAY)),
+    db
+      .prepare(
+        `SELECT checked_at, ok, latency_ms, http_status, error_code FROM check_results
+      WHERE monitor_id = ? AND checked_at >= ? ORDER BY checked_at DESC LIMIT 400`,
+      )
+      .bind(id, now - DAY),
+  ]);
+  return {
+    monitor: publicMonitor(row, daily.results as unknown as DailyRow[], now),
+    generatedAt: now,
+    checks: (checks.results as unknown as CheckRow[]).reverse().map((check) => ({
+      checkedAt: Number(check.checked_at),
+      ok: check.ok === 1,
+      latencyMs: Number(check.latency_ms),
+      httpStatus: check.http_status as number | null,
+      errorCode: check.error_code as HistoryResponse['checks'][number]['errorCode'],
+    })),
+  };
+}

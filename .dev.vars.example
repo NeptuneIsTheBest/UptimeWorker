@@ -1,0 +1,4 @@
+# Only used by `npm run dev` on localhost. Production builds remove this bypass.
+DEV_ACCESS_BYPASS=true
+ACCESS_TEAM_DOMAIN=
+ACCESS_AUD=
