@@ -11,6 +11,7 @@ import { databaseFixture, httpConfig, tcpConfig, resetDatabase, success, timesta
 const defaults: GlobalSettings = {
   version: 1,
   pageRefreshSeconds: 30,
+  autoIncidentAfterMinutes: 5,
   wafBypassEnabled: false,
   wafBypassTokenConfigured: false,
 };
@@ -19,6 +20,7 @@ const rotatedToken = 'rotated-bypass-token-'.repeat(4);
 const config = {
   version: 1,
   pageRefreshSeconds: 30,
+  autoIncidentAfterMinutes: 5,
   wafBypassEnabled: true,
   wafBypassToken: token,
 };
@@ -178,6 +180,7 @@ describe('global settings API and probe integration', () => {
       expect(await saved.json()).toEqual({
         version: 2,
         pageRefreshSeconds: 30,
+        autoIncidentAfterMinutes: 5,
         wafBypassEnabled: true,
         wafBypassTokenConfigured: true,
       });

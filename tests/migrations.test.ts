@@ -1,6 +1,29 @@
 import { afterAll, beforeAll, expect, it } from 'vitest';
-import { createMonitor, findMonitor } from '../src/worker/repository';
+import { findMonitor } from '../src/worker/repository';
 import { applyMigration, databaseFixture, httpConfig, tcpConfig, timestamp } from './helpers';
+
+// Seed old schemas without using repository code that requires the latest columns.
+async function createMonitor(db: D1Database, config: typeof httpConfig | typeof tcpConfig, now: number) {
+  const id = crypto.randomUUID();
+  await db
+    .prepare(
+      `INSERT INTO monitors(id, name, type, config_json, interval_minutes, timeout_seconds,
+    enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .bind(
+      id,
+      config.name,
+      config.type,
+      JSON.stringify(config),
+      config.intervalMinutes,
+      config.timeoutSeconds,
+      Number(config.enabled),
+      now,
+      now,
+    )
+    .run();
+  return { id };
+}
 
 let fixture: Awaited<ReturnType<typeof databaseFixture>>;
 beforeAll(async () => {
@@ -137,5 +160,42 @@ it('upgrades legacy intervals without changing monitors, history, settings or sc
     expect(
       await db.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE monitor_id = ?`).bind(ids[1]).first('n'),
     ).toBe(2);
+  }
+});
+
+it('adds groups and events without backfilling incidents or changing legacy monitoring state', async () => {
+  const legacy = await databaseFixture('0004_page_refresh.sql');
+  try {
+    const db = legacy.db;
+    const row = await createMonitor(db, httpConfig, timestamp);
+    await db
+      .prepare(
+        `INSERT INTO check_results(monitor_id, monitor_version, scheduled_at, checked_at, ok, latency_ms)
+      VALUES (?, 1, ?, ?, 0, 10)`,
+      )
+      .bind(row.id, timestamp, timestamp)
+      .run();
+    const before = await db.prepare('SELECT * FROM monitors WHERE id = ?').bind(row.id).first();
+    const tables = ['check_results', 'daily_stats', 'global_settings', 'scheduler_state'];
+    const previous = await db.batch<Record<string, unknown>>(
+      tables.map((table) => db.prepare(`SELECT * FROM ${table}`)),
+    );
+    await applyMigration(db, '0005_groups_events.sql');
+    expect(await db.prepare('SELECT * FROM monitors WHERE id = ?').bind(row.id).first()).toEqual({
+      ...before,
+      group_id: null,
+    });
+    const current = await db.batch(tables.map((table) => db.prepare(`SELECT * FROM ${table}`)));
+    for (const index of [0, 1, 3]) expect(current[index].results).toEqual(previous[index].results);
+    expect(current[2].results).toEqual([{ ...previous[2].results[0], auto_incident_after_minutes: 5 }]);
+    for (const table of ['events', 'monitor_outages', 'monitor_groups'])
+      expect(await db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).first('n')).toBe(0);
+    expect((await db.prepare('PRAGMA foreign_key_check').all()).results).toEqual([]);
+    for (const value of [-1, 1441, 1.2, null])
+      await expect(
+        db.prepare('UPDATE global_settings SET auto_incident_after_minutes = ?').bind(value).run(),
+      ).rejects.toThrow();
+  } finally {
+    await legacy.dispose();
   }
 });

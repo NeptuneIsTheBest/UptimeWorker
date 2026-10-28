@@ -1,8 +1,8 @@
-import { ERROR_LABELS, type HistoryResponse } from '../shared/types';
+import { type HistoryResponse } from '../shared/types';
 import { useRemote } from './api';
+import { EventList } from './EventList';
 import { RefreshStatus } from './RefreshStatus';
 import {
-  Empty,
   ErrorNotice,
   HistoryBars,
   Icon,
@@ -75,51 +75,7 @@ export function DetailPage({ id }: { id: string }) {
               </div>
               <HistoryBars days={data.monitor.days} />
             </section>
-            <section className="panel checks-panel">
-              <div className="panel-heading">
-                <h2>最近检测</h2>
-                <span className="muted">最近 20 条 · 时间按浏览器时区显示</span>
-              </div>
-              {!data.checks.length ? (
-                <Empty title="等待首次检测" icon="clock">
-                  检测记录将在下一轮调度后出现在这里。
-                </Empty>
-              ) : (
-                <div className="table-scroll">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>检测时间</th>
-                        <th>状态</th>
-                        <th>响应时间</th>
-                        <th>结果</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.checks
-                        .slice(-20)
-                        .reverse()
-                        .map((check) => (
-                          <tr key={check.checkedAt}>
-                            <td className="tabular">{formatTime(check.checkedAt, true)}</td>
-                            <td>
-                              <StatusBadge status={check.ok ? 'up' : 'down'} />
-                            </td>
-                            <td className="tabular">{latency(check.latencyMs)}</td>
-                            <td>
-                              {check.errorCode
-                                ? `${ERROR_LABELS[check.errorCode]}${check.httpStatus ? ` · HTTP ${check.httpStatus}` : ''}`
-                                : check.httpStatus
-                                  ? `HTTP ${check.httpStatus}`
-                                  : 'TCP 连接成功'}
-                            </td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </section>
+            <EventList events={data.events ?? []} title="关联事件" />
           </>
         )
       )}

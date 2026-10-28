@@ -7,6 +7,7 @@ import type { Env, ProbeOptions } from '../src/worker/types';
 export const timestamp = Date.UTC(2026, 9, 28, 2, 0);
 export const httpConfig: Extract<MonitorConfig, { type: 'http' }> = {
   name: '官方网站',
+  groupId: null,
   type: 'http',
   url: 'https://example.com/health',
   method: 'GET',
@@ -22,6 +23,7 @@ export const httpConfig: Extract<MonitorConfig, { type: 'http' }> = {
 };
 export const tcpConfig: Extract<MonitorConfig, { type: 'tcp' }> = {
   name: '数据库',
+  groupId: null,
   type: 'tcp',
   hostname: 'db.example.com',
   port: 5432,
@@ -79,10 +81,12 @@ export function environment(db: D1Database): Env {
 }
 export async function resetDatabase(db: D1Database) {
   await db.batch([
+    db.prepare('DELETE FROM events'),
     db.prepare('DELETE FROM monitors'),
+    db.prepare('DELETE FROM monitor_groups'),
     db.prepare('UPDATE scheduler_state SET lease_owner = NULL, lease_until = 0, last_completed_slot = 0'),
     db.prepare(`INSERT INTO global_settings(id) VALUES (1) ON CONFLICT(id) DO UPDATE SET
-      page_refresh_seconds = 30, waf_bypass_enabled = 0, waf_bypass_token = NULL,
+      page_refresh_seconds = 30, auto_incident_after_minutes = 5, waf_bypass_enabled = 0, waf_bypass_token = NULL,
       waf_bypass_domains_json = '[]', version = 1`),
   ]);
 }

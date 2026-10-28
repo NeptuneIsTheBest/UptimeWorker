@@ -7,6 +7,7 @@ test('advanced monitor options persist and remain usable on mobile', async ({ pa
       json: {
         version: 1,
         pageRefreshSeconds: 30,
+        autoIncidentAfterMinutes: 5,
         wafBypassEnabled: false,
         wafBypassTokenConfigured: false,
       } satisfies GlobalSettings,

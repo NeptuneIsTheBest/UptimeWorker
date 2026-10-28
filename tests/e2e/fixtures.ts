@@ -1,5 +1,5 @@
 import { test as base, expect, type APIRequestContext } from '@playwright/test';
-import type { AdminMonitor, GlobalSettings } from '../../src/shared/types';
+import type { AdminMonitor, GlobalSettings, AdminEvent, MonitorGroup } from '../../src/shared/types';
 
 export { expect };
 export const origin = { Origin: 'http://127.0.0.1:4173' };
@@ -39,6 +39,33 @@ export const test = base.extend<{ resetState: void }>({
   resetState: [
     async ({ request }, use) => {
       await clearMonitors(request);
+      // Deleting monitors stops open automatic events, which can then be removed.
+      while (true) {
+        const listing = await request.get('/api/admin/events');
+        expect(listing.ok()).toBe(true);
+        const { events } = (await listing.json()) as { events: AdminEvent[] };
+        if (!events.length) break;
+        for (const event of events)
+          expect(
+            (
+              await request.delete(`/api/admin/events/${event.id}`, {
+                headers: origin,
+                data: { version: event.version },
+              })
+            ).ok(),
+          ).toBe(true);
+      }
+      const listing = await request.get('/api/admin/groups');
+      const { groups } = (await listing.json()) as { groups: MonitorGroup[] };
+      for (const group of groups)
+        expect(
+          (
+            await request.delete(`/api/admin/groups/${group.id}`, {
+              headers: origin,
+              data: { version: group.version },
+            })
+          ).ok(),
+        ).toBe(true);
       const response = await request.get('/api/admin/settings');
       expect(response.ok()).toBe(true);
       const current = (await response.json()) as GlobalSettings;
@@ -48,6 +75,7 @@ export const test = base.extend<{ resetState: void }>({
         data: {
           version: current.version,
           pageRefreshSeconds: 30,
+          autoIncidentAfterMinutes: 5,
           wafBypassEnabled: false,
           wafBypassToken: 'e2e-fixture-token-'.repeat(4),
         },

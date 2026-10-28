@@ -10,6 +10,7 @@ export interface Env {
 }
 export interface MonitorRow {
   id: string;
+  group_id: string | null;
   name: string;
   type: 'http' | 'tcp';
   config_json: string;

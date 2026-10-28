@@ -166,6 +166,9 @@ export function parseMonitorConfig(value: unknown): MonitorConfig {
   const v = value as Record<string, unknown>;
   const name = typeof v.name === 'string' ? v.name.trim() : '';
   if (!name || name.length > 80) throw new ValidationError('名称需为 1–80 个字符');
+  const groupId = v.groupId ?? null;
+  if (groupId !== null && (typeof groupId !== 'string' || !groupId || groupId.length > 100))
+    throw new ValidationError('分组无效');
   const intervalMinutes = v.intervalMinutes === undefined ? DEFAULT_INTERVAL_MINUTES : v.intervalMinutes;
   if (
     typeof intervalMinutes !== 'number' ||
@@ -179,6 +182,7 @@ export function parseMonitorConfig(value: unknown): MonitorConfig {
   if (typeof v.enabled !== 'boolean') throw new ValidationError('启用状态无效');
   const common = {
     name,
+    groupId,
     intervalMinutes,
     timeoutSeconds: Number(v.timeoutSeconds),
     enabled: v.enabled,

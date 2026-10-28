@@ -6,6 +6,7 @@ import {
   MAX_INTERVAL_MINUTES,
   HTTP_METHODS,
   type GlobalSettings,
+  type MonitorGroup,
   type HttpMethod,
   type RequestBody,
   type AdminMonitor,
@@ -15,6 +16,8 @@ import {
 } from '../shared/types';
 import { parseMonitorConfig, wafMonitorDomain } from '../shared/validation';
 import { api, useRemote } from './api';
+import { GroupManager } from './GroupManager';
+import { EventManager } from './EventManager';
 import { GlobalSettingsDialog } from './GlobalSettingsDialog';
 import { RefreshStatus } from './RefreshStatus';
 import {
@@ -33,18 +36,22 @@ interface AdminResponse extends PageRefreshSettings {
   monitors: AdminMonitor[];
   identity: { email: string };
   limit: number;
+  groups?: MonitorGroup[];
 }
 function MonitorEditor({
   initial,
+  groups,
   save,
   close,
 }: {
   initial?: AdminMonitor;
+  groups: MonitorGroup[];
   save: (config: MonitorConfig) => Promise<void>;
   close: () => void;
 }) {
   const [type, setType] = useState<'http' | 'tcp'>(initial?.type ?? 'http');
   const [name, setName] = useState(initial?.name ?? '');
+  const [groupId, setGroupId] = useState(initial?.groupId ?? '');
   const [url, setUrl] = useState(initial?.type === 'http' ? initial.url : '');
   const [method, setMethod] = useState<HttpMethod>(initial?.type === 'http' ? initial.method : 'GET');
   const [wafBypassEnabled, setWafBypassEnabled] = useState(
@@ -97,6 +104,7 @@ function MonitorEditor({
           .filter(Boolean);
       const config = parseMonitorConfig({
         name,
+        groupId: groupId || null,
         type,
         url,
         method,
@@ -167,6 +175,17 @@ function MonitorEditor({
             onChange={(e) => setName(e.target.value)}
             placeholder="例如：官方网站"
           />
+        </label>
+        <label className="field">
+          所属分组
+          <select value={groupId} onChange={(e) => setGroupId(e.target.value)}>
+            <option value="">未分组</option>
+            {groups.map((group) => (
+              <option key={group.id} value={group.id}>
+                {group.name}
+              </option>
+            ))}
+          </select>
         </label>
         {type === 'http' ? (
           <>
@@ -439,7 +458,9 @@ function MonitorEditor({
           <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
           <span>启用定时检测</span>
         </label>
-        {initial && <p className="form-note">保存后等待下一轮检测，已有历史记录会保留。</p>}
+        {initial && (
+          <p className="form-note">修改检测参数后等待下一轮检测；仅修改名称或分组会保留当前状态。</p>
+        )}
         {error && <ErrorNotice message={error} />}
         <div className="modal-actions">
           <button type="button" className="button secondary" disabled={busy} onClick={close}>
@@ -461,6 +482,9 @@ export function AdminPage() {
   const [editor, setEditor] = useState<AdminMonitor | 'new' | null>(null);
   const [deleting, setDeleting] = useState<AdminMonitor | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [savedSettings, setSavedSettings] = useState<GlobalSettings>();
+  const [groupsOpen, setGroupsOpen] = useState(false);
+  const [tab, setTab] = useState<'monitors' | 'events'>('monitors');
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ text: string; error: boolean } | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -484,7 +508,7 @@ export function AdminPage() {
       });
     else await api('/api/admin/monitors', { method: 'POST', body: JSON.stringify(config) });
     setEditor(null);
-    setNotice({ text: '监控已保存，下一轮调度将使用新配置。', error: false });
+    setNotice({ text: '监控已保存。', error: false });
     refresh();
   }
   async function remove() {
@@ -510,9 +534,12 @@ export function AdminPage() {
       <div className="admin-heading">
         <div>
           <h1>监控管理</h1>
-          <p className="muted">配置监控目标、检测间隔与期望响应。</p>
+          <p className="muted">管理监控、服务器分组与服务事件。</p>
         </div>
         <div className="admin-heading-actions">
+          <button className="button secondary" disabled={!data} onClick={() => setGroupsOpen(true)}>
+            分组管理
+          </button>
           <button className="button secondary" onClick={() => setSettingsOpen(true)}>
             <Icon name="shield" size={18} />
             全局设置
@@ -527,151 +554,169 @@ export function AdminPage() {
           </button>
         </div>
       </div>
-      <RefreshStatus {...remote} />
-      {data && (
-        <div className="access-strip">
-          <span>
-            <Icon name="shield" size={17} />
-            {data.identity.email === 'local@development' ? '本地开发身份' : 'Cloudflare Access 已验证'}
-            <strong>{data.identity.email}</strong>
-          </span>
-          <span>
-            {data.monitors.length} / {data.limit} 个监控
-            {data.identity.email !== 'local@development' && <a href="/cdn-cgi/access/logout">退出登录</a>}
-          </span>
-        </div>
-      )}
-      {error && <ErrorNotice message={error} retry={refresh} />}
-      {notice && (
-        <div role="status" className={`notice ${notice.error ? 'error' : ''}`}>
-          <Icon name={notice.error ? 'info' : 'check'} size={18} />
-          <span>{notice.text}</span>
-          <button className="icon-button" onClick={() => setNotice(null)} aria-label="关闭提示">
-            <Icon name="close" size={16} />
-          </button>
-        </div>
-      )}
-      {loading ? (
-        <Loading />
-      ) : (
-        data && (
-          <section className="admin-list">
-            {!data.monitors.length ? (
-              <Empty title="让你的服务开始被看见" icon="server">
-                支持 HTTP / HTTPS 与 TCP 端口检测。
-                <br />
-                <button className="button primary empty-action" onClick={() => setEditor('new')}>
-                  <Icon name="plus" size={16} />
-                  添加第一个监控
-                </button>
-              </Empty>
-            ) : (
-              data.monitors.map((monitor) => (
-                <article className="admin-card" key={monitor.id}>
-                  <div className="admin-card-info">
-                    <span className="service-icon">
-                      <Icon name={monitor.type === 'http' ? 'globe' : 'server'} />
-                    </span>
-                    <div>
-                      <div className="admin-name">
-                        <h2>{monitor.name}</h2>
-                        <StatusBadge status={monitor.status} />
-                      </div>
-                      <p
-                        className="target-text"
-                        title={monitor.type === 'http' ? monitor.url : monitor.hostname}
-                      >
-                        {monitor.type === 'http'
-                          ? monitor.url
-                          : `${monitor.hostname.includes(':') ? `[${monitor.hostname}]` : monitor.hostname}:${monitor.port}`}
-                      </p>
-                      <div className="monitor-meta">
-                        <span className="protocol">{monitor.type.toUpperCase()}</span>
-                        <span>每 {monitor.intervalMinutes} 分钟</span>
-                        <span>超时 {monitor.timeoutSeconds} 秒</span>
-                        <span>最近检测 {formatTime(monitor.lastCheckedAt)}</span>
+      <div className="admin-tabs" role="tablist" aria-label="管理内容">
+        <button role="tab" aria-selected={tab === 'monitors'} onClick={() => setTab('monitors')}>
+          监控
+        </button>
+        <button role="tab" aria-selected={tab === 'events'} onClick={() => setTab('events')}>
+          事件
+        </button>
+      </div>
+      <div hidden={tab !== 'monitors'}>
+        <RefreshStatus {...remote} />
+        {data && (
+          <div className="access-strip">
+            <span>
+              <Icon name="shield" size={17} />
+              {data.identity.email === 'local@development' ? '本地开发身份' : 'Cloudflare Access 已验证'}
+              <strong>{data.identity.email}</strong>
+            </span>
+            <span>
+              {data.monitors.length} / {data.limit} 个监控
+              {data.identity.email !== 'local@development' && <a href="/cdn-cgi/access/logout">退出登录</a>}
+            </span>
+          </div>
+        )}
+        {error && <ErrorNotice message={error} retry={refresh} />}
+        {notice && (
+          <div role="status" className={`notice ${notice.error ? 'error' : ''}`}>
+            <Icon name={notice.error ? 'info' : 'check'} size={18} />
+            <span>{notice.text}</span>
+            <button className="icon-button" onClick={() => setNotice(null)} aria-label="关闭提示">
+              <Icon name="close" size={16} />
+            </button>
+          </div>
+        )}
+        {loading ? (
+          <Loading />
+        ) : (
+          data && (
+            <section className="admin-list">
+              {!data.monitors.length ? (
+                <Empty title="让你的服务开始被看见" icon="server">
+                  支持 HTTP / HTTPS 与 TCP 端口检测。
+                  <br />
+                  <button className="button primary empty-action" onClick={() => setEditor('new')}>
+                    <Icon name="plus" size={16} />
+                    添加第一个监控
+                  </button>
+                </Empty>
+              ) : (
+                data.monitors.map((monitor) => (
+                  <article className="admin-card" key={monitor.id}>
+                    <div className="admin-card-info">
+                      <span className="service-icon">
+                        <Icon name={monitor.type === 'http' ? 'globe' : 'server'} />
+                      </span>
+                      <div>
+                        <div className="admin-name">
+                          <h2>{monitor.name}</h2>
+                          <StatusBadge status={monitor.status} />
+                        </div>
+                        <p
+                          className="target-text"
+                          title={monitor.type === 'http' ? monitor.url : monitor.hostname}
+                        >
+                          {monitor.type === 'http'
+                            ? monitor.url
+                            : `${monitor.hostname.includes(':') ? `[${monitor.hostname}]` : monitor.hostname}:${monitor.port}`}
+                        </p>
+                        <div className="monitor-meta">
+                          <span className="protocol">{monitor.type.toUpperCase()}</span>
+                          <span>
+                            {data.groups?.find((group) => group.id === monitor.groupId)?.name ?? '未分组'}
+                          </span>
+                          <span>每 {monitor.intervalMinutes} 分钟</span>
+                          <span>超时 {monitor.timeoutSeconds} 秒</span>
+                          <span>最近检测 {formatTime(monitor.lastCheckedAt)}</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div className="admin-actions">
-                    <button
-                      className="button small secondary"
-                      disabled={busy === monitor.id}
-                      onClick={() =>
-                        void action(monitor.id, async () => {
-                          const result = await api<ProbeResult>(`/api/admin/monitors/${monitor.id}/test`, {
-                            method: 'POST',
-                            body: '{}',
-                          });
-                          if (!result.ok)
-                            throw new Error(
-                              `${monitor.name}：${result.errorCode ? ERROR_LABELS[result.errorCode] : '检测失败'}（${latency(result.latencyMs)}）`,
-                            );
-                          return `${monitor.name}：连接成功，${latency(result.latencyMs)}。本次测试不计入历史统计。`;
-                        })
-                      }
-                    >
-                      <Icon name="pulse" size={16} />
-                      {busy === monitor.id ? '处理中' : '测试连接'}
-                    </button>
-                    <button
-                      className="icon-button"
-                      title={monitor.enabled ? '暂停监控' : '恢复监控'}
-                      aria-label={`${monitor.enabled ? '暂停' : '恢复'} ${monitor.name}`}
-                      disabled={busy === monitor.id}
-                      onClick={() =>
-                        void action(monitor.id, async () => {
-                          await api(`/api/admin/monitors/${monitor.id}`, {
-                            method: 'PATCH',
-                            body: JSON.stringify({ enabled: !monitor.enabled, version: monitor.version }),
-                          });
-                          return monitor.enabled ? '监控已暂停。' : '监控已恢复，将在下一轮调度检测。';
-                        })
-                      }
-                    >
-                      <Icon name={monitor.enabled ? 'pause' : 'play'} size={17} />
-                    </button>
-                    <button
-                      className="icon-button"
-                      title="编辑监控"
-                      aria-label={`编辑 ${monitor.name}`}
-                      disabled={busy === monitor.id}
-                      onClick={() => setEditor(monitor)}
-                    >
-                      <Icon name="edit" size={17} />
-                    </button>
-                    <button
-                      className="icon-button danger"
-                      title="删除监控"
-                      aria-label={`删除 ${monitor.name}`}
-                      disabled={busy === monitor.id}
-                      onClick={() => {
-                        setDeleting(monitor);
-                        setDeleteError(null);
-                      }}
-                    >
-                      <Icon name="trash" size={17} />
-                    </button>
-                  </div>
-                </article>
-              ))
-            )}
-          </section>
-        )
-      )}
-      <div className="info-strip">
-        <Icon name="clock" size={17} />
-        <span>定时任务每分钟检查到期的监控。连接测试即时执行，不改变当前状态和可用率。</span>
+                    <div className="admin-actions">
+                      <button
+                        className="button small secondary"
+                        disabled={busy === monitor.id}
+                        onClick={() =>
+                          void action(monitor.id, async () => {
+                            const result = await api<ProbeResult>(`/api/admin/monitors/${monitor.id}/test`, {
+                              method: 'POST',
+                              body: '{}',
+                            });
+                            if (!result.ok)
+                              throw new Error(
+                                `${monitor.name}：${result.errorCode ? ERROR_LABELS[result.errorCode] : '检测失败'}（${latency(result.latencyMs)}）`,
+                              );
+                            return `${monitor.name}：连接成功，${latency(result.latencyMs)}。本次测试不计入历史统计。`;
+                          })
+                        }
+                      >
+                        <Icon name="pulse" size={16} />
+                        {busy === monitor.id ? '处理中' : '测试连接'}
+                      </button>
+                      <button
+                        className="icon-button"
+                        title={monitor.enabled ? '暂停监控' : '恢复监控'}
+                        aria-label={`${monitor.enabled ? '暂停' : '恢复'} ${monitor.name}`}
+                        disabled={busy === monitor.id}
+                        onClick={() =>
+                          void action(monitor.id, async () => {
+                            await api(`/api/admin/monitors/${monitor.id}`, {
+                              method: 'PATCH',
+                              body: JSON.stringify({ enabled: !monitor.enabled, version: monitor.version }),
+                            });
+                            return monitor.enabled ? '监控已暂停。' : '监控已恢复，将在下一轮调度检测。';
+                          })
+                        }
+                      >
+                        <Icon name={monitor.enabled ? 'pause' : 'play'} size={17} />
+                      </button>
+                      <button
+                        className="icon-button"
+                        title="编辑监控"
+                        aria-label={`编辑 ${monitor.name}`}
+                        disabled={busy === monitor.id}
+                        onClick={() => setEditor(monitor)}
+                      >
+                        <Icon name="edit" size={17} />
+                      </button>
+                      <button
+                        className="icon-button danger"
+                        title="删除监控"
+                        aria-label={`删除 ${monitor.name}`}
+                        disabled={busy === monitor.id}
+                        onClick={() => {
+                          setDeleting(monitor);
+                          setDeleteError(null);
+                        }}
+                      >
+                        <Icon name="trash" size={17} />
+                      </button>
+                    </div>
+                  </article>
+                ))
+              )}
+            </section>
+          )
+        )}
+        <div className="info-strip">
+          <Icon name="clock" size={17} />
+          <span>定时任务每分钟检查到期的监控。连接测试即时执行，不改变当前状态和可用率。</span>
+        </div>
       </div>
+      {tab === 'events' && data && <EventManager monitors={data.monitors} settings={savedSettings} />}
+      {groupsOpen && (
+        <GroupManager groups={data?.groups ?? []} changed={refresh} close={() => setGroupsOpen(false)} />
+      )}
       {settingsOpen && (
         <GlobalSettingsDialog
           monitors={data?.monitors ?? []}
           close={() => setSettingsOpen(false)}
           saved={(settings) => {
             remote.refreshWithSettings(settings);
+            setSavedSettings(settings);
             setSettingsOpen(false);
             setNotice({
-              text: '全局设置已保存，页面刷新设置已生效。WAF 设置应用于新的连接测试及下一轮调度。',
+              text: '全局设置已保存，页面刷新和自动事件设置已生效。WAF 设置应用于新的连接测试及下一轮调度。',
               error: false,
             });
           }}
@@ -679,6 +724,7 @@ export function AdminPage() {
       )}
       {editor && (
         <MonitorEditor
+          groups={data?.groups ?? []}
           initial={editor === 'new' ? undefined : editor}
           save={save}
           close={() => setEditor(null)}
@@ -695,7 +741,9 @@ export function AdminPage() {
             <p>
               确定删除「<strong>{deleting.name}</strong>」？
             </p>
-            <p className="muted">此监控的检测明细和历史汇总也将删除，无法恢复。</p>
+            <p className="muted">
+              此监控的检测明细和历史汇总也将删除，无法恢复。已发布事件会保留，进行中的自动事件将停止跟踪。
+            </p>
             {deleteError && <ErrorNotice message={deleteError} />}
           </div>
           <div className="modal-actions">

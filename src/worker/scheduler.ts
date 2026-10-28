@@ -109,6 +109,10 @@ export async function runScheduled(
     // A bounded cleanup each tick catches up after long downtimes without a large transaction.
     const housekeeping = await env.DB.batch([
       env.DB.prepare(
+        `DELETE FROM event_suppressions WHERE id IN
+        (SELECT id FROM event_suppressions WHERE ends_at < ? ORDER BY ends_at LIMIT 100)`,
+      ).bind(now() - 7 * DAY),
+      env.DB.prepare(
         `DELETE FROM check_results WHERE id IN
         (SELECT id FROM check_results WHERE checked_at < ? ORDER BY checked_at LIMIT 500)`,
       ).bind(now() - 7 * DAY),

@@ -11,6 +11,7 @@ import {
 import type { Env, MonitorRow } from './types';
 import { parseMonitorConfig } from '../shared/validation';
 import { getPageRefreshSeconds } from './settings';
+import { assertGroup, listEvents, listGroups, publicEvent } from './events';
 
 const DAY = 86_400_000;
 export const utcDay = (time: number) => new Date(time).toISOString().slice(0, 10);
@@ -20,6 +21,7 @@ export function monitorConfig(row: MonitorRow): MonitorConfig {
   return parseMonitorConfig({
     ...JSON.parse(row.config_json),
     name: row.name,
+    groupId: row.group_id ?? null,
     type: row.type,
     intervalMinutes: row.interval_minutes,
     timeoutSeconds: row.timeout_seconds,
@@ -54,12 +56,14 @@ export async function createMonitor(
   config: MonitorConfig,
   now = Date.now(),
 ): Promise<MonitorRow | null> {
+  await assertGroup(db, config.groupId);
   const id = crypto.randomUUID();
   const result = await db
     .prepare(
       `INSERT INTO monitors
-    (id, name, type, config_json, interval_minutes, timeout_seconds, enabled, created_at, updated_at)
-    SELECT ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM monitors) < ?`,
+    (id, name, type, config_json, interval_minutes, timeout_seconds, enabled, created_at, updated_at, group_id)
+    SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM monitors) < ?
+      AND (? IS NULL OR EXISTS (SELECT 1 FROM monitor_groups WHERE id = ?))`,
     )
     .bind(
       id,
@@ -71,9 +75,13 @@ export async function createMonitor(
       Number(config.enabled),
       now,
       now,
+      config.groupId ?? null,
       MAX_MONITORS,
+      config.groupId ?? null,
+      config.groupId ?? null,
     )
     .run();
+  if (!result.meta.changes) await assertGroup(db, config.groupId);
   return result.meta.changes ? findMonitor(db, id) : null;
 }
 export async function updateMonitor(
@@ -83,12 +91,25 @@ export async function updateMonitor(
   config: MonitorConfig,
   now = Date.now(),
 ) {
+  await assertGroup(db, config.groupId);
+  const current = await findMonitor(db, id);
+  if (!current || current.version !== version) return null;
+  const probeConfig = (value: MonitorConfig) => {
+    const { name: _name, groupId: _groupId, ...probe } = value;
+    return JSON.stringify(probe);
+  };
+  const reset = probeConfig(monitorConfig(current)) !== probeConfig(parseMonitorConfig(config));
   const result = await db
     .prepare(
       `UPDATE monitors SET name = ?, type = ?, config_json = ?, interval_minutes = ?,
-    timeout_seconds = ?, enabled = ?, updated_at = ?, version = version + 1, next_check_at = 0,
-    last_checked_at = NULL, last_ok = NULL, last_latency_ms = NULL, last_error_code = NULL
-    WHERE id = ? AND version = ?`,
+    timeout_seconds = ?, enabled = ?, updated_at = ?, group_id = ?, version = version + 1,
+    next_check_at = CASE WHEN ? THEN 0 ELSE next_check_at END,
+    last_checked_at = CASE WHEN ? THEN NULL ELSE last_checked_at END,
+    last_ok = CASE WHEN ? THEN NULL ELSE last_ok END,
+    last_latency_ms = CASE WHEN ? THEN NULL ELSE last_latency_ms END,
+    last_error_code = CASE WHEN ? THEN NULL ELSE last_error_code END
+    WHERE id = ? AND version = ?
+      AND (? IS NULL OR EXISTS (SELECT 1 FROM monitor_groups WHERE id = ?))`,
     )
     .bind(
       config.name,
@@ -98,10 +119,15 @@ export async function updateMonitor(
       config.timeoutSeconds,
       Number(config.enabled),
       now,
+      config.groupId ?? null,
+      ...Array(5).fill(Number(reset)),
       id,
       version,
+      config.groupId ?? null,
+      config.groupId ?? null,
     )
     .run();
+  if (!result.meta.changes) await assertGroup(db, config.groupId);
   return result.meta.changes ? findMonitor(db, id) : null;
 }
 
@@ -139,6 +165,7 @@ function publicMonitor(row: MonitorRow, daily: DailyRow[], now: number): PublicM
   return {
     id: row.id,
     name: row.name,
+    groupId: row.group_id ?? null,
     type: row.type,
     status: currentStatus(row, now),
     intervalMinutes: row.interval_minutes,
@@ -149,7 +176,7 @@ function publicMonitor(row: MonitorRow, daily: DailyRow[], now: number): PublicM
   };
 }
 export async function getStatus(env: Env, now = Date.now()): Promise<StatusResponse> {
-  const [[monitors, stats], pageRefreshSeconds] = await Promise.all([
+  const [[monitors, stats], pageRefreshSeconds, groups, events] = await Promise.all([
     env.DB.batch([
       env.DB.prepare('SELECT * FROM monitors ORDER BY created_at, id'),
       env.DB.prepare('SELECT * FROM daily_stats WHERE day >= ? ORDER BY day').bind(
@@ -157,9 +184,13 @@ export async function getStatus(env: Env, now = Date.now()): Promise<StatusRespo
       ),
     ]),
     getPageRefreshSeconds(env.DB),
+    listGroups(env.DB),
+    listEvents(env.DB),
   ]);
   const daily = stats.results as unknown as DailyRow[];
   return {
+    groups: groups.map(({ version: _version, ...group }) => group),
+    events: events.events.map(publicEvent),
     siteName: env.SITE_NAME || 'UptimeWorker',
     pageRefreshSeconds,
     generatedAt: now,
@@ -179,7 +210,7 @@ export async function getHistory(
 ): Promise<HistoryResponse | null> {
   const row = await findMonitor(db, id);
   if (!row) return null;
-  const [[daily, checks], pageRefreshSeconds] = await Promise.all([
+  const [[daily, checks], pageRefreshSeconds, events] = await Promise.all([
     db.batch([
       db
         .prepare('SELECT * FROM daily_stats WHERE monitor_id = ? AND day >= ? ORDER BY day')
@@ -192,8 +223,10 @@ export async function getHistory(
         .bind(id, now - DAY),
     ]),
     getPageRefreshSeconds(db),
+    listEvents(db, { monitorId: id }),
   ]);
   return {
+    events: events.events.map(publicEvent),
     monitor: publicMonitor(row, daily.results as unknown as DailyRow[], now),
     pageRefreshSeconds,
     generatedAt: now,

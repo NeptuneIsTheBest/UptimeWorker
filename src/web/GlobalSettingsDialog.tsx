@@ -21,6 +21,7 @@ export function GlobalSettingsDialog({
 }) {
   const [settings, setSettings] = useState<GlobalSettings | null>(null);
   const [enabled, setEnabled] = useState(false);
+  const [autoIncidentAfterMinutes, setAutoIncidentAfterMinutes] = useState<number | ''>(5);
   const [refreshPreset, setRefreshPreset] = useState('30');
   const [customRefresh, setCustomRefresh] = useState<number | ''>(DEFAULT_PAGE_REFRESH_SECONDS);
   const [token, setToken] = useState('');
@@ -44,6 +45,7 @@ export function GlobalSettingsDialog({
         if (controller.signal.aborted) return;
         setSettings(value);
         setEnabled(value.wafBypassEnabled);
+        setAutoIncidentAfterMinutes(value.autoIncidentAfterMinutes ?? 5);
         setRefreshPreset(
           [0, 15, 30, 60].includes(value.pageRefreshSeconds) ? String(value.pageRefreshSeconds) : 'custom',
         );
@@ -84,6 +86,7 @@ export function GlobalSettingsDialog({
       const patch = parseGlobalSettingsPatch(
         {
           version: settings.version,
+          autoIncidentAfterMinutes,
           pageRefreshSeconds: refreshPreset === 'custom' ? customRefresh : Number(refreshPreset),
           wafBypassEnabled: enabled,
           wafBypassToken: token,
@@ -127,6 +130,27 @@ export function GlobalSettingsDialog({
         </div>
       ) : (
         <form onSubmit={submit} className="monitor-form settings-form">
+          <fieldset className="settings-fields" disabled={busy}>
+            <legend>离线自动事件</legend>
+            <label className="field">
+              连续离线阈值（分钟）
+              <input
+                type="number"
+                required
+                min={0}
+                max={1440}
+                step={1}
+                value={autoIncidentAfterMinutes}
+                onChange={(e) =>
+                  setAutoIncidentAfterMinutes(e.target.value === '' ? '' : Number(e.target.value))
+                }
+              />
+            </label>
+            <p className="form-note">
+              默认 5 分钟，支持 1–1440 分钟，设为 0
+              关闭新事件自动发布。达到阈值后由下一次失败检测确认发布，恢复后自动完成原事件。维护窗口或已有手动故障事件期间不重复发布。
+            </p>
+          </fieldset>
           <fieldset className="settings-fields refresh-settings" disabled={busy}>
             <legend>页面自动刷新</legend>
             <div className="field">

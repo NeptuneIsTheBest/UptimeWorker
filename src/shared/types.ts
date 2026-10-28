@@ -39,11 +39,13 @@ export interface PageRefreshSettings {
 }
 export interface GlobalSettings extends PageRefreshSettings {
   version: number;
+  autoIncidentAfterMinutes: number;
   wafBypassEnabled: boolean;
   wafBypassTokenConfigured: boolean;
 }
 export interface GlobalSettingsPatch {
   version: number;
+  autoIncidentAfterMinutes?: number;
   pageRefreshSeconds?: number;
   wafBypassEnabled?: boolean;
   wafBypassToken?: string;
@@ -51,6 +53,7 @@ export interface GlobalSettingsPatch {
 
 export interface CommonConfig {
   name: string;
+  groupId?: string | null;
   intervalMinutes: number;
   timeoutSeconds: number;
   enabled: boolean;
@@ -85,6 +88,7 @@ export interface DailyStat {
 }
 export interface PublicMonitor {
   id: string;
+  groupId?: string | null;
   name: string;
   type: 'http' | 'tcp';
   status: MonitorStatus;
@@ -98,6 +102,8 @@ export interface StatusResponse extends PageRefreshSettings {
   siteName: string;
   generatedAt: number;
   monitors: PublicMonitor[];
+  groups?: Omit<MonitorGroup, 'version'>[];
+  events?: StatusEvent[];
 }
 export type AdminMonitor = MonitorConfig & {
   id: string;
@@ -111,6 +117,48 @@ export interface HistoryResponse extends PageRefreshSettings {
   monitor: PublicMonitor;
   checks: ProbeResult[];
   generatedAt: number;
+  events?: StatusEvent[];
+}
+
+export interface MonitorGroup {
+  id: string;
+  name: string;
+  sortOrder: number;
+  version: number;
+}
+export interface EventConfig {
+  title: string;
+  body: string;
+  type: 'incident' | 'maintenance';
+  monitorIds: string[];
+  startsAt: number | null;
+  endsAt: number | null;
+}
+export type EventStatus = 'open' | 'resolved' | 'stopped';
+export interface EventUpdate {
+  id: string;
+  body: string;
+  status: EventStatus | null;
+  source: 'manual' | 'automatic';
+  createdAt: number;
+}
+export interface StatusEvent extends Omit<EventConfig, 'monitorIds'> {
+  id: string;
+  source: 'manual' | 'automatic';
+  status: EventStatus;
+  monitors: { id: string | null; name: string }[];
+  startedAt: number;
+  endedAt: number | null;
+  createdAt: number;
+  updatedAt: number;
+  updates: EventUpdate[];
+}
+export interface AdminEvent extends StatusEvent {
+  version: number;
+}
+export interface EventsResponse extends PageRefreshSettings {
+  events: AdminEvent[];
+  nextCursor: string | null;
 }
 export const STATUS_LABELS: Record<MonitorStatus, string> = {
   up: '运行正常',

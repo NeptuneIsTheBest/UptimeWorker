@@ -2,18 +2,21 @@ import { isPageRefreshSeconds, parseGlobalSettingsPatch } from '../shared/settin
 import { DEFAULT_PAGE_REFRESH_SECONDS, type GlobalSettings } from '../shared/types';
 import type { MonitorRow, ProbeOptions, WafBypassSettings } from './types';
 
-const SETTINGS_COLUMNS = 'version, page_refresh_seconds, waf_bypass_enabled, waf_bypass_token';
+const SETTINGS_COLUMNS =
+  'version, page_refresh_seconds, auto_incident_after_minutes, waf_bypass_enabled, waf_bypass_token';
 const SETTINGS_QUERY = `SELECT ${SETTINGS_COLUMNS} FROM global_settings WHERE id = 1`;
 
 interface SettingsRow {
   version: number;
   page_refresh_seconds: number;
+  auto_incident_after_minutes: number;
   waf_bypass_enabled: number;
   waf_bypass_token: string | null;
 }
 export interface StoredSettings {
   version: number;
   pageRefreshSeconds: number;
+  autoIncidentAfterMinutes: number;
   wafBypass: WafBypassSettings;
 }
 
@@ -24,12 +27,14 @@ function storedSettings(row: SettingsRow | undefined): StoredSettings {
       {
         version: row.version,
         pageRefreshSeconds: row.page_refresh_seconds,
+        autoIncidentAfterMinutes: row.auto_incident_after_minutes,
         wafBypassEnabled: row.waf_bypass_enabled === 1,
         wafBypassToken: row.waf_bypass_token ?? '',
       },
       {
         version: row.version,
         pageRefreshSeconds: DEFAULT_PAGE_REFRESH_SECONDS,
+        autoIncidentAfterMinutes: 5,
         wafBypassEnabled: false,
         wafBypassTokenConfigured: false,
       },
@@ -37,6 +42,7 @@ function storedSettings(row: SettingsRow | undefined): StoredSettings {
     return {
       version: parsed.version,
       pageRefreshSeconds: parsed.pageRefreshSeconds,
+      autoIncidentAfterMinutes: parsed.autoIncidentAfterMinutes,
       wafBypass: {
         enabled: parsed.wafBypassEnabled,
         token: parsed.wafBypassToken ?? null,
@@ -52,6 +58,7 @@ export function adminSettings(settings: StoredSettings): GlobalSettings {
   return {
     version: settings.version,
     pageRefreshSeconds: settings.pageRefreshSeconds,
+    autoIncidentAfterMinutes: settings.autoIncidentAfterMinutes,
     wafBypassEnabled: settings.wafBypass.enabled,
     wafBypassTokenConfigured: Boolean(settings.wafBypass.token),
   };
@@ -89,12 +96,13 @@ export async function updateGlobalSettings(
 ): Promise<StoredSettings | null> {
   const result = await db
     .prepare(
-      `UPDATE global_settings SET page_refresh_seconds = ?, waf_bypass_enabled = ?,
+      `UPDATE global_settings SET page_refresh_seconds = ?, auto_incident_after_minutes = ?, waf_bypass_enabled = ?,
       waf_bypass_token = COALESCE(?, waf_bypass_token), version = version + 1
     WHERE id = 1 AND version = ? RETURNING ${SETTINGS_COLUMNS}`,
     )
     .bind(
       patch.pageRefreshSeconds,
+      patch.autoIncidentAfterMinutes,
       Number(patch.wafBypassEnabled),
       patch.wafBypassToken ?? null,
       patch.version,

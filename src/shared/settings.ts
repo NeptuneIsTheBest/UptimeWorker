@@ -41,6 +41,17 @@ export function parseGlobalSettingsPatch(value: unknown, current: GlobalSettings
   const v = value as Record<string, unknown>;
   if (!Number.isSafeInteger(v.version) || Number(v.version) < 1)
     throw new ValidationError('请携带有效的设置版本号');
+  const autoIncidentAfterMinutes =
+    v.autoIncidentAfterMinutes === undefined
+      ? (current.autoIncidentAfterMinutes ?? 5)
+      : v.autoIncidentAfterMinutes;
+  if (
+    typeof autoIncidentAfterMinutes !== 'number' ||
+    !Number.isInteger(autoIncidentAfterMinutes) ||
+    autoIncidentAfterMinutes < 0 ||
+    autoIncidentAfterMinutes > 1440
+  )
+    throw new ValidationError('自动事件阈值需为 1–1440 分钟的整数，或设为 0 关闭');
   const pageRefreshSeconds =
     v.pageRefreshSeconds === undefined ? current.pageRefreshSeconds : v.pageRefreshSeconds;
   if (!isPageRefreshSeconds(pageRefreshSeconds))
@@ -57,6 +68,7 @@ export function parseGlobalSettingsPatch(value: unknown, current: GlobalSettings
     throw new ValidationError('启用 WAF 放行前请先配置密钥');
   return {
     version: Number(v.version),
+    autoIncidentAfterMinutes,
     pageRefreshSeconds,
     wafBypassEnabled: enabled,
     ...(token ? { wafBypassToken: token } : {}),

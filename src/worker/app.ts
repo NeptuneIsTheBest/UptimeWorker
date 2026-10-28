@@ -3,6 +3,18 @@ import { bodyLimit } from 'hono/body-limit';
 import { parseMonitorConfig, ValidationError } from '../shared/validation';
 import { MAX_MONITORS } from '../shared/types';
 import { parseGlobalSettingsPatch } from '../shared/settings';
+import { object, parseEventConfig, parseGroup, parseText, parseVersion } from '../shared/events';
+import {
+  appendEventUpdate,
+  ConflictError,
+  createEvent,
+  deleteEvent,
+  editEvent,
+  getEvent,
+  listEvents,
+  listGroups,
+  saveGroup,
+} from './events';
 import { requireAccess, type TokenVerifier } from './auth';
 import {
   adminMonitor,
@@ -53,8 +65,12 @@ export function createApp(probe: Probe, verify?: TokenVerifier) {
     const url = new URL(c.req.url);
     url.search = '';
     const key = new Request(url.toString(), { method: 'GET' });
+    // Local edits and isolated browser-test data should not reuse a previous
+    // development response. Production keeps the existing shared cache policy.
     const cache =
-      typeof caches === 'undefined' ? undefined : (caches as unknown as { default?: Cache }).default;
+      __LOCAL_DEV__ || typeof caches === 'undefined'
+        ? undefined
+        : (caches as unknown as { default?: Cache }).default;
     const hit = await cache?.match(key);
     if (hit) return new Response(hit.body, hit);
     await next();
@@ -73,12 +89,14 @@ export function createApp(probe: Probe, verify?: TokenVerifier) {
       : c.json({ error: '监控不存在。' }, 404);
   });
   app.get('/api/admin/monitors', async (c) => {
-    const [monitors, pageRefreshSeconds] = await Promise.all([
+    const [monitors, pageRefreshSeconds, groups] = await Promise.all([
       listMonitors(c.env.DB),
       getPageRefreshSeconds(c.env.DB),
+      listGroups(c.env.DB),
     ]);
     return c.json({
       pageRefreshSeconds,
+      groups,
       monitors: monitors.map((row) => adminMonitor(row)),
       identity: c.get('identity'),
       limit: MAX_MONITORS,
@@ -87,6 +105,71 @@ export function createApp(probe: Probe, verify?: TokenVerifier) {
   app.get('/api/admin/settings', async (c) => {
     const { settings } = await getGlobalSettings(c.env.DB);
     return c.json(adminSettings(settings));
+  });
+  app.get('/api/admin/groups', async (c) => c.json({ groups: await listGroups(c.env.DB) }));
+  app.post('/api/admin/groups', async (c) =>
+    c.json(await saveGroup(c.env.DB, parseGroup(await c.req.json())), 201),
+  );
+  app.patch('/api/admin/groups/:id', async (c) => {
+    const body = object(await c.req.json());
+    return c.json(await saveGroup(c.env.DB, parseGroup(body), c.req.param('id'), parseVersion(body.version)));
+  });
+  app.delete('/api/admin/groups/:id', async (c) => {
+    const body = object(await c.req.json());
+    const deleted = await c.env.DB.prepare('DELETE FROM monitor_groups WHERE id = ? AND version = ?')
+      .bind(c.req.param('id'), parseVersion(body.version))
+      .run();
+    if (!deleted.meta.changes) throw new ConflictError('分组已变更，请刷新后重试。');
+    return c.json({ ok: true });
+  });
+  app.get('/api/admin/events', async (c) => {
+    const [events, pageRefreshSeconds] = await Promise.all([
+      listEvents(c.env.DB, { cursor: c.req.query('cursor') }),
+      getPageRefreshSeconds(c.env.DB),
+    ]);
+    return c.json({ ...events, pageRefreshSeconds });
+  });
+  app.get('/api/admin/events/:id', async (c) => {
+    const event = await getEvent(c.env.DB, c.req.param('id'));
+    return event ? c.json(event) : c.json({ error: '事件不存在。' }, 404);
+  });
+  app.post('/api/admin/events', async (c) =>
+    c.json(await createEvent(c.env.DB, parseEventConfig(await c.req.json())), 201),
+  );
+  app.patch('/api/admin/events/:id', async (c) => {
+    const body = object(await c.req.json());
+    const existing = await getEvent(c.env.DB, c.req.param('id'));
+    if (!existing) return c.json({ error: '事件不存在。' }, 404);
+    return c.json(
+      await editEvent(
+        c.env.DB,
+        existing.id,
+        parseVersion(body.version),
+        parseEventConfig(
+          body,
+          existing.monitors.some((monitor) => monitor.id === null),
+        ),
+      ),
+    );
+  });
+  app.post('/api/admin/events/:id/updates', async (c) => {
+    const body = object(await c.req.json());
+    if (body.resolve !== undefined && typeof body.resolve !== 'boolean')
+      throw new ValidationError('完成状态无效');
+    return c.json(
+      await appendEventUpdate(
+        c.env.DB,
+        c.req.param('id'),
+        parseVersion(body.version),
+        parseText(body.body, '进展说明', 4000),
+        body.resolve === true,
+      ),
+    );
+  });
+  app.delete('/api/admin/events/:id', async (c) => {
+    const body = object(await c.req.json());
+    await deleteEvent(c.env.DB, c.req.param('id'), parseVersion(body.version));
+    return c.json({ ok: true });
   });
   app.patch('/api/admin/settings', async (c) => {
     const body = await c.req.json();
@@ -137,6 +220,7 @@ export function createApp(probe: Probe, verify?: TokenVerifier) {
   app.onError((error, c) => {
     c.header('Cache-Control', 'no-store');
     if (error instanceof ValidationError) return c.json({ error: error.message }, 400);
+    if (error instanceof ConflictError) return c.json({ error: error.message }, 409);
     if (error instanceof SyntaxError) return c.json({ error: 'JSON 格式无效。' }, 400);
     console.error(JSON.stringify({ event: 'request_failed', path: new URL(c.req.url).pathname }));
     return c.json({ error: '服务暂时不可用，请稍后重试。' }, 503);

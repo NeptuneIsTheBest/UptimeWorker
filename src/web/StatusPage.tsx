@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { PublicMonitor, StatusResponse } from '../shared/types';
 import { useRemote } from './api';
+import { EventList } from './EventList';
 import { RefreshStatus } from './RefreshStatus';
 import {
   Empty,
@@ -60,6 +61,7 @@ export function StatusPage() {
   const now = useNow();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
+  const [groupFilter, setGroupFilter] = useState('all');
   const monitors = data?.monitors ?? [];
   const statuses = monitors.map((m) => effectiveStatus(m, now));
   const up = statuses.filter((s) => s === 'up').length;
@@ -105,9 +107,11 @@ export function StatusPage() {
       monitors.filter(
         (m) =>
           m.name.toLowerCase().includes(search.toLowerCase()) &&
-          (filter === 'all' || effectiveStatus(m, now) === filter),
+          (filter === 'all' || effectiveStatus(m, now) === filter) &&
+          (groupFilter === 'all' ||
+            (data?.groups?.some((group) => group.id === m.groupId) ? m.groupId : '') === groupFilter),
       ),
-    [monitors, search, filter, now],
+    [monitors, search, filter, groupFilter, now, data?.groups],
   );
   return (
     <Layout siteName={data?.siteName}>
@@ -204,6 +208,19 @@ export function StatusPage() {
                   onChange={(e) => setSearch(e.target.value)}
                 />
               </label>
+              <select
+                aria-label="按分组筛选"
+                value={groupFilter}
+                onChange={(e) => setGroupFilter(e.target.value)}
+              >
+                <option value="all">全部分组</option>
+                {(data?.groups ?? []).map((group) => (
+                  <option key={group.id} value={group.id}>
+                    {group.name}
+                  </option>
+                ))}
+                <option value="">未分组</option>
+              </select>
               <select aria-label="按状态筛选" value={filter} onChange={(e) => setFilter(e.target.value)}>
                 <option value="all">全部状态</option>
                 <option value="up">运行正常</option>
@@ -229,10 +246,29 @@ export function StatusPage() {
             </Empty>
           ) : !visible.length ? (
             <Empty title="没有匹配的服务" icon="search">
-              试试其他名称或状态。
+              试试其他名称、分组或状态。
             </Empty>
           ) : (
-            visible.map((m) => <MonitorCard key={m.id} monitor={m} now={now} />)
+            [...(data?.groups ?? []), { id: '', name: '未分组' }].map((group) => {
+              const members = visible.filter(
+                (monitor) =>
+                  (data?.groups?.some((item) => item.id === monitor.groupId) ? monitor.groupId : '') ===
+                  group.id,
+              );
+              return (
+                members.length > 0 && (
+                  <section className="monitor-group" key={group.id || 'ungrouped'} aria-label={group.name}>
+                    <h3 className="group-heading">
+                      {group.name}
+                      <span className="count-badge">{members.length}</span>
+                    </h3>
+                    {members.map((monitor) => (
+                      <MonitorCard key={monitor.id} monitor={monitor} now={now} />
+                    ))}
+                  </section>
+                )
+              );
+            })
           )}
         </div>
         <div className="list-footnote">
@@ -240,6 +276,7 @@ export function StatusPage() {
           <span>空白区间表示没有检测数据，不计为成功。</span>
         </div>
       </section>
+      <EventList events={data?.events ?? []} />
       <div className="info-strip">
         <Icon name="info" size={17} />
         <span>状态来自定时连接检测。数据超过两个检测周期未更新时，将标记为过期。</span>
