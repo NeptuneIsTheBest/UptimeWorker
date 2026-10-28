@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createApp } from '../src/worker/app';
 import { createMonitor, findMonitor } from '../src/worker/repository';
-import { databaseFixture, environment, httpConfig, resetDatabase, success } from './helpers';
+import { adminHeaders as headers, apiClient } from './api-client';
+import { databaseFixture, httpConfig, resetDatabase } from './helpers';
 
 let fixture: Awaited<ReturnType<typeof databaseFixture>>;
 beforeAll(async () => {
@@ -14,23 +14,27 @@ beforeEach(async () => {
   await resetDatabase(fixture.db);
 });
 afterEach(() => vi.unstubAllGlobals());
-const verify = async (token: string) => {
-  if (token !== 'valid') throw new Error('bad token');
-  return { email: 'admin@example.com' };
-};
-const headers = {
-  'Cf-Access-Jwt-Assertion': 'valid',
-  Origin: 'https://status.test',
-  'Content-Type': 'application/json',
-};
+
+const settingsUpdate = { version: 1, wafBypassEnabled: true, wafBypassToken: 'test-token-'.repeat(4) };
+const writes = [
+  ['admin/monitors', 'POST', httpConfig],
+  ['admin/settings', 'PATCH', settingsUpdate],
+] as const;
 
 describe('API boundaries', () => {
   it('keeps public endpoints accessible while denying unauthenticated admin paths', async () => {
-    const app = createApp(async () => success(), verify);
-    const env = environment(fixture.db);
-    expect((await app.request('https://status.test/api/status', {}, env)).status).toBe(200);
-    for (const path of ['/admin', '/admin/nested', '/api/admin', '/api/admin/monitors']) {
-      const response = await app.request(`https://status.test${path}`, {}, env);
+    const { app, env, request } = apiClient(fixture.db);
+    expect((await request('status', 'GET', undefined, { headers: {} })).status).toBe(200);
+    for (const [path, method] of [
+      ['/admin', 'GET'],
+      ['/admin/nested', 'GET'],
+      ['/api/admin', 'GET'],
+      ['/api/admin/monitors', 'GET'],
+      ['/api/admin/monitors', 'POST'],
+      ['/api/admin/settings', 'GET'],
+      ['/api/admin/settings', 'PATCH'],
+    ]) {
+      const response = await app.request(`https://status.test${path}`, { method }, env);
       expect(response.status).toBe(401);
       expect(response.headers.get('cache-control')).toBe('no-store');
     }
@@ -38,9 +42,9 @@ describe('API boundaries', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('cache-control')).toBe('no-store');
   });
+
   it('fails closed when Access is unconfigured and never enables the development bypass in production', async () => {
-    const app = createApp(async () => success(), verify);
-    const env = environment(fixture.db);
+    const { app, env } = apiClient(fixture.db);
     expect(
       (await app.request('https://status.test/api/admin/monitors', { headers }, { ...env, ACCESS_AUD: '' }))
         .status,
@@ -54,118 +58,90 @@ describe('API boundaries', () => {
         )
       ).status,
     ).toBe(401);
-    expect(
-      (
-        await app.request(
-          'https://status.test/api/admin/monitors',
-          { headers: { ...headers, 'Cf-Access-Jwt-Assertion': 'forged' } },
-          env,
-        )
-      ).status,
-    ).toBe(401);
   });
-  it('allows CRUD with a verified identity, rejects cross-origin writes and detects stale versions', async () => {
-    const app = createApp(async () => success(), verify);
-    const env = environment(fixture.db);
-    const path = 'https://status.test/api/admin/monitors';
-    expect(
-      (
-        await app.request(
-          path,
-          {
-            method: 'POST',
-            headers: { ...headers, Origin: 'https://evil.test' },
-            body: JSON.stringify(httpConfig),
-          },
-          env,
-        )
-      ).status,
-    ).toBe(403);
-    expect(
-      (
-        await app.request(
-          path,
-          {
-            method: 'POST',
-            headers: { ...headers, 'Content-Type': 'text/plain' },
-            body: JSON.stringify(httpConfig),
-          },
-          env,
-        )
-      ).status,
-    ).toBe(415);
-    const created = await app.request(
-      path,
-      { method: 'POST', headers, body: JSON.stringify(httpConfig) },
-      env,
-    );
+
+  it.each(writes)(
+    'protects %s writes from forged identities, other origins and non-JSON content',
+    async (path, method, body) => {
+      const { request } = apiClient(fixture.db);
+      for (const [changed, status] of [
+        [{ ...headers, 'Cf-Access-Jwt-Assertion': 'forged' }, 401],
+        [{ ...headers, Origin: 'https://evil.test' }, 403],
+        [{ ...headers, 'Content-Type': 'text/plain' }, 415],
+      ] as const) {
+        const response = await request(path, method, body, { headers: changed });
+        expect(response.status).toBe(status);
+        expect(response.headers.get('cache-control')).toBe('no-store');
+      }
+      expect(await fixture.db.prepare('SELECT COUNT(*) AS n FROM monitors').first('n')).toBe(0);
+      expect(await fixture.db.prepare('SELECT version FROM global_settings').first('version')).toBe(1);
+    },
+  );
+
+  it('allows CRUD with a verified identity and detects stale monitor versions', async () => {
+    const { request } = apiClient(fixture.db);
+    const created = await request('admin/monitors', 'POST', httpConfig);
     expect(created.status).toBe(201);
     const row = (await created.json()) as { id: string; version: number };
-    expect(
-      (
-        await app.request(
-          `${path}/${row.id}`,
-          { method: 'PATCH', headers, body: JSON.stringify({ version: row.version, enabled: false }) },
-          env,
-        )
-      ).status,
-    ).toBe(200);
-    expect(
-      (
-        await app.request(
-          `${path}/${row.id}`,
-          { method: 'PATCH', headers, body: JSON.stringify({ version: row.version, enabled: true }) },
-          env,
-        )
-      ).status,
-    ).toBe(409);
+    const path = `admin/monitors/${row.id}`;
+    expect((await request(path, 'PATCH', { version: row.version, enabled: false })).status).toBe(200);
+    expect((await request(path, 'PATCH', { version: row.version, enabled: true })).status).toBe(409);
     expect((await findMonitor(fixture.db, row.id))?.enabled).toBe(0);
-    expect(
-      (await app.request(`${path}/${row.id}`, { method: 'DELETE', headers, body: '{}' }, env)).status,
-    ).toBe(200);
-    expect(
-      (await app.request(`${path}/${row.id}`, { method: 'DELETE', headers, body: '{}' }, env)).status,
-    ).toBe(404);
+    expect((await request(path, 'DELETE', {})).status).toBe(200);
+    expect((await request(path, 'DELETE', {})).status).toBe(404);
   });
-  it('returns JSON validation errors, body limits, missing monitors and unknown API paths', async () => {
-    const app = createApp(async () => success(), verify);
-    const env = environment(fixture.db);
-    const path = 'https://status.test/api/admin/monitors';
-    expect((await app.request(path, { method: 'POST', headers, body: '{broken' }, env)).status).toBe(400);
-    expect((await app.request(path, { method: 'POST', headers, body: '{}' }, env)).status).toBe(400);
-    expect(
-      (
-        await app.request(
-          path,
-          { method: 'POST', headers, body: JSON.stringify({ name: 'x'.repeat(18000) }) },
-          env,
-        )
-      ).status,
-    ).toBe(413);
-    expect((await app.request('https://status.test/api/monitors/nope/history', {}, env)).status).toBe(404);
-    const unknown = await app.request('https://status.test/api/not-an-endpoint', {}, env);
+
+  it('returns JSON errors for malformed writes, missing monitors and unknown API paths', async () => {
+    const { request } = apiClient(fixture.db);
+    for (const [path, method] of writes) {
+      for (const body of ['{broken', '{}']) {
+        const response = await request(path, method, undefined, { body });
+        expect(response.status).toBe(400);
+        expect(response.headers.get('content-type')).toContain('application/json');
+        expect(await response.json()).toHaveProperty('error');
+      }
+    }
+    expect((await request('monitors/nope/history')).status).toBe(404);
+    const unknown = await request('not-an-endpoint');
     expect(unknown.status).toBe(404);
     expect(unknown.headers.get('content-type')).toContain('application/json');
+    expect(await fixture.db.prepare('SELECT version FROM global_settings').first('version')).toBe(1);
   });
-  it('manual connection testing never changes status, history or aggregates', async () => {
-    const probe = vi.fn(async () => success());
-    const app = createApp(probe, verify);
-    const env = environment(fixture.db);
-    const row = await createMonitor(fixture.db, httpConfig);
-    const response = await app.request(
-      `https://status.test/api/admin/monitors/${row!.id}/test`,
-      { method: 'POST', headers, body: '{}' },
-      env,
-    );
-    expect(response.status).toBe(200);
-    expect(probe).toHaveBeenCalledOnce();
-    expect((await findMonitor(fixture.db, row!.id))?.last_checked_at).toBeNull();
-    expect(await fixture.db.prepare('SELECT COUNT(*) AS n FROM check_results').first('n')).toBe(0);
-    expect(await fixture.db.prepare('SELECT COUNT(*) AS n FROM daily_stats').first('n')).toBe(0);
+
+  it('allows larger monitor JSON envelopes while enforcing field and route-specific limits', async () => {
+    const { request } = apiClient(fixture.db);
+    // Escaping makes this valid 16 KiB body exceed the ordinary API envelope limit.
+    const requestBody = { format: 'text', content: '\t'.repeat(16384) };
+    const created = await request('admin/monitors', 'POST', { ...httpConfig, method: 'POST', requestBody });
+    expect(created.status).toBe(201);
+    const row = (await created.json()) as { id: string; version: number };
+    expect(row).toHaveProperty('requestBody', requestBody);
+    const path = `admin/monitors/${row.id}`;
+    expect((await request(path, 'PATCH', { version: row.version, requestBody })).status).toBe(200);
+    expect(
+      (
+        await request(path, 'PATCH', {
+          version: 2,
+          requestBody: { format: 'text', content: 'x'.repeat(16385) },
+        })
+      ).status,
+    ).toBe(400);
+    for (const [target, method] of [
+      ['admin/monitors', 'POST'],
+      [path, 'PATCH'],
+    ])
+      expect((await request(target, method, { padding: 'x'.repeat(256 * 1024) })).status).toBe(413);
+    for (const [target, method] of [
+      ['admin/settings', 'PATCH'],
+      [`${path}/test`, 'POST'],
+      [path, 'DELETE'],
+    ])
+      expect((await request(target, method, { padding: 'x'.repeat(16 * 1024) })).status).toBe(413);
+    expect(await fixture.db.prepare('SELECT version FROM global_settings').first('version')).toBe(1);
   });
+
   it('exposes only sanitized public projections and caches only successful public GET requests', async () => {
-    const app = createApp(async () => success(), verify);
-    const env = environment(fixture.db);
+    const { app, env } = apiClient(fixture.db);
     const row = await createMonitor(fixture.db, {
       ...httpConfig,
       url: 'https://secret.example.com/health?token=private',

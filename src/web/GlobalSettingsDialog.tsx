@@ -1,41 +1,20 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import {
-  isWafToken,
-  normalizeWafDomain,
-  parseGlobalSettingsPatch,
-  parseWafDomains,
-  wafSkipExpression,
-} from '../shared/settings';
-import type { AdminMonitor, GlobalSettings } from '../shared/types';
+import { isWafToken, parseGlobalSettingsPatch, wafRuleDomains, wafSkipExpression } from '../shared/settings';
+import type { GlobalSettings, MonitorConfig } from '../shared/types';
 import { api, ApiError } from './api';
 import { ErrorNotice, Icon, Modal } from './components';
 
-function tryNormalizeDomain(value: string): string | null {
-  try {
-    return normalizeWafDomain(value);
-  } catch {
-    return null;
-  }
-}
-
 export function GlobalSettingsDialog({
   monitors,
-  monitorsLoading,
-  monitorsError,
-  retryMonitors,
   close,
   saved,
 }: {
-  monitors: AdminMonitor[];
-  monitorsLoading: boolean;
-  monitorsError: string | null;
-  retryMonitors: () => void;
+  monitors: readonly MonitorConfig[];
   close: () => void;
   saved: () => void;
 }) {
   const [settings, setSettings] = useState<GlobalSettings | null>(null);
   const [enabled, setEnabled] = useState(false);
-  const [domains, setDomains] = useState('');
   const [token, setToken] = useState('');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -57,7 +36,6 @@ export function GlobalSettingsDialog({
         if (controller.signal.aborted) return;
         setSettings(value);
         setEnabled(value.wafBypassEnabled);
-        setDomains(value.wafBypassDomains.join('\n'));
       })
       .catch((err: unknown) => {
         if (!controller.signal.aborted) setError(err instanceof Error ? err.message : '读取全局设置失败');
@@ -68,47 +46,9 @@ export function GlobalSettingsDialog({
     return () => controller.abort();
   }, [revision]);
 
-  const domainLines = domains
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-  const selectedDomains = new Set(domainLines.map(tryNormalizeDomain));
-  const monitorDomains = new Map<string, string[]>();
-  for (const monitor of monitors) {
-    if (monitor.type !== 'http') continue;
-    let url: URL;
-    try {
-      url = new URL(monitor.url);
-    } catch {
-      continue;
-    }
-    if (url.protocol !== 'https:') continue;
-    const domain = tryNormalizeDomain(url.hostname);
-    if (!domain) continue;
-    const names = monitorDomains.get(domain) ?? [];
-    names.push(monitor.name);
-    monitorDomains.set(domain, names);
-  }
-  let ruleDomains: string[] = [];
-  try {
-    ruleDomains = parseWafDomains(domainLines);
-  } catch {
-    // Let the user finish typing; validation errors are shown on save.
-  }
+  const ruleDomains = wafRuleDomains(monitors);
   const hasNewToken = isWafToken(token);
   const rule = ruleDomains.length ? wafSkipExpression(ruleDomains) : '';
-
-  function selectDomain(domain: string, checked: boolean) {
-    setDomains((current) => {
-      const lines = current.split(/\r?\n/);
-      if (checked) {
-        if (lines.some((line) => tryNormalizeDomain(line) === domain)) return current;
-        return `${current}${current && !current.endsWith('\n') ? '\n' : ''}${domain}`;
-      }
-      // Preserve other manual input, including incomplete or invalid lines.
-      return lines.filter((line) => tryNormalizeDomain(line) !== domain).join('\n');
-    });
-  }
 
   function generateToken() {
     const bytes = crypto.getRandomValues(new Uint8Array(32));
@@ -133,7 +73,6 @@ export function GlobalSettingsDialog({
         {
           version: settings.version,
           wafBypassEnabled: enabled,
-          wafBypassDomains: domainLines,
           wafBypassToken: token,
         },
         settings,
@@ -173,7 +112,7 @@ export function GlobalSettingsDialog({
       ) : (
         <form onSubmit={submit} className="monitor-form settings-form">
           <p className="form-intro">
-            从监控列表选择或手动填写生效域名，为 HTTPS 检测添加放行凭据，需配合目标站点的 WAF Skip 规则。
+            为开启单站 WAF 放行的监控提供共享密钥和总开关，需配合目标站点的 WAF Skip 规则。
           </p>
           <fieldset className="settings-fields" disabled={busy}>
             <label className="checkbox-field">
@@ -223,58 +162,6 @@ export function GlobalSettingsDialog({
                 新密钥请在保存前复制，保存后不会回显。留空保留原密钥，更换后需同步更新 WAF 规则。
               </small>
             </div>
-            <fieldset className="settings-domain-picker" aria-describedby="waf-monitor-domains-note">
-              <legend>从监控列表选择</legend>
-              {monitorsError && (
-                <ErrorNotice message={`读取监控列表失败：${monitorsError}`} retry={retryMonitors} />
-              )}
-              {monitorsLoading ? (
-                <p className="settings-domain-status" role="status">
-                  正在读取监控列表…
-                </p>
-              ) : monitorDomains.size ? (
-                <div className="settings-domain-options">
-                  {[...monitorDomains].map(([domain, names]) => (
-                    <label className="checkbox-field settings-domain-option" key={domain}>
-                      <input
-                        type="checkbox"
-                        checked={selectedDomains.has(domain)}
-                        onChange={(event) => selectDomain(domain, event.target.checked)}
-                      />
-                      <span>
-                        <strong>{domain}</strong>
-                        <small>{names.join('、')}</small>
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              ) : !monitorsError ? (
-                <p className="settings-domain-status">暂无可选的 HTTPS 监控域名，可在下方手动填写。</p>
-              ) : (
-                <p className="settings-domain-status">可重试读取监控列表，或在下方手动填写域名。</p>
-              )}
-              <p id="waf-monitor-domains-note" className="settings-domain-note">
-                包含已暂停监控，勾选后需保存设置。新增监控需自行勾选，修改或删除监控不会移除已保存的域名。
-              </p>
-            </fieldset>
-            <div className="field">
-              <label htmlFor="waf-domains">生效域名</label>
-              <textarea
-                id="waf-domains"
-                rows={3}
-                maxLength={12000}
-                spellCheck={false}
-                autoCapitalize="none"
-                value={domains}
-                onChange={(event) => setDomains(event.target.value)}
-                placeholder={'example.com\napi.example.com'}
-                aria-describedby="waf-domains-note"
-              />
-              <small id="waf-domains-note">
-                可手动补充或移除域名，与上方勾选同步。每行一个完整域名，不含协议、端口或路径，不支持通配符。仅向匹配域名的
-                HTTPS 请求发送密钥，重定向也会重新检查。
-              </small>
-            </div>
             <details className="waf-rule-help">
               <summary>Cloudflare Skip 规则配置</summary>
               <p>
@@ -283,6 +170,9 @@ export function GlobalSettingsDialog({
               </p>
               {rule ? (
                 <>
+                  <p>
+                    模板域名来自已开启 WAF 放行的监控，包含已暂停监控。调整监控域名后需同步更新目标站点规则。
+                  </p>
                   <pre aria-label="WAF 规则模板">{rule}</pre>
                   <button
                     type="button"
@@ -305,7 +195,7 @@ export function GlobalSettingsDialog({
                   </p>
                 </>
               ) : (
-                <p>选择或填写有效的生效域名后显示规则模板。</p>
+                <p>在网站监控中开启 WAF 放行并保存后显示规则模板。</p>
               )}
               <p>
                 普通 Bot Fight Mode 无法通过 Skip 跳过。
@@ -334,7 +224,9 @@ export function GlobalSettingsDialog({
               重新加载最新设置（放弃当前编辑）
             </button>
           )}
-          <p className="form-note">保存后应用于新的连接测试及下一轮调度。关闭开关会保留密钥和域名配置。</p>
+          <p className="form-note">
+            保存后应用于新的连接测试及下一轮调度。关闭总开关会保留密钥和单站开关设置。
+          </p>
           <div className="modal-actions">
             <button type="button" className="button secondary" disabled={busy} onClick={close}>
               取消

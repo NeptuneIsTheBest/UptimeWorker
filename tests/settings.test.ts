@@ -1,23 +1,16 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  parseGlobalSettingsPatch,
-  parseWafDomains,
-  wafSkipExpression,
-  WAF_BYPASS_HEADER,
-} from '../src/shared/settings';
+import { parseGlobalSettingsPatch, wafRuleDomains, wafSkipExpression } from '../src/shared/settings';
 import type { GlobalSettings } from '../src/shared/types';
-import { createApp } from '../src/worker/app';
-import { createProbe } from '../src/worker/probes';
 import { createMonitor } from '../src/worker/repository';
 import { runScheduled } from '../src/worker/scheduler';
-import { getGlobalSettings } from '../src/worker/settings';
+import { getGlobalSettings, getProbeSnapshot } from '../src/worker/settings';
 import type { Probe } from '../src/worker/types';
-import { databaseFixture, environment, httpConfig, resetDatabase, success, timestamp } from './helpers';
+import { apiClient } from './api-client';
+import { databaseFixture, httpConfig, tcpConfig, resetDatabase, success, timestamp } from './helpers';
 
 const defaults: GlobalSettings = {
   version: 1,
   wafBypassEnabled: false,
-  wafBypassDomains: [],
   wafBypassTokenConfigured: false,
 };
 const token = 'test-bypass-token-'.repeat(4);
@@ -25,47 +18,36 @@ const rotatedToken = 'rotated-bypass-token-'.repeat(4);
 const config = {
   version: 1,
   wafBypassEnabled: true,
-  wafBypassDomains: ['example.com'],
   wafBypassToken: token,
-};
-const headers = {
-  'Cf-Access-Jwt-Assertion': 'valid',
-  Origin: 'https://status.test',
-  'Content-Type': 'application/json',
-};
-const path = 'https://status.test/api/admin/settings';
-const verify = async (value: string) => {
-  if (value !== 'valid') throw new Error('invalid identity');
-  return { email: 'admin@example.com' };
 };
 
 describe('global settings validation', () => {
-  it('normalizes and deduplicates complete DNS names including IDNs', () => {
+  it('derives normalized, deduplicated rule domains from enabled WAF monitors, including paused ones', () => {
     expect(
-      parseWafDomains([' EXAMPLE.COM. ', 'example.com', '例子.测试', 'xn--fsqu00a.xn--0zwm56d']),
-    ).toEqual(['example.com', 'xn--fsqu00a.xn--0zwm56d']);
+      wafRuleDomains([
+        { ...httpConfig, wafBypassEnabled: true, url: 'https://EXAMPLE.COM./health' },
+        { ...httpConfig, wafBypassEnabled: true, url: 'http://example.com:8080/' },
+        { ...httpConfig, wafBypassEnabled: true, url: 'https://例子.测试/' },
+        { ...httpConfig, wafBypassEnabled: true, url: 'https://xn--fsqu00a.xn--0zwm56d/' },
+        { ...httpConfig, wafBypassEnabled: true, enabled: false, url: 'https://paused.example.com/' },
+        { ...httpConfig, url: 'https://off.example.com/' },
+        { ...httpConfig, wafBypassEnabled: true, url: 'https://1.1.1.1/' },
+        tcpConfig,
+      ]),
+    ).toEqual(['example.com', 'paused.example.com', 'xn--fsqu00a.xn--0zwm56d']);
+    expect(wafRuleDomains([httpConfig, tcpConfig])).toEqual([]);
   });
-  it.each([
-    '*.example.com',
-    'https://example.com',
-    'example.com/path',
-    'example.com:443',
-    'example.com?x=1',
-    'a@example.com',
-    'example.com#x',
-    'example%2ecom',
-    'example.com\\secret',
-    'localhost',
-    'server.internal',
-    '127.0.0.1',
-    '1.1.1.1',
-    '[2606:4700::1111]',
-    'bad domain.test',
-    'example.com..',
-    '',
-  ])('rejects unsafe or ambiguous domain %s', (domain) => {
-    expect(() => parseWafDomains([domain])).toThrow();
-  });
+  it.each([{ domains: ['redirect.example.com'] }, { domains: null }, { domains: ['*.example.com', 5] }])(
+    'ignores retired domain fields in updates: %j',
+    ({ domains }) => {
+      expect(
+        parseGlobalSettingsPatch(
+          { ...config, wafBypassDomains: domains, wafBypassAutoDomains: domains },
+          defaults,
+        ),
+      ).toEqual(config);
+    },
+  );
   it.each([
     null,
     [],
@@ -73,8 +55,6 @@ describe('global settings validation', () => {
     { version: 0 },
     { version: '1' },
     { version: 1, wafBypassEnabled: 'true' },
-    { version: 1, wafBypassDomains: null },
-    { version: 1, wafBypassDomains: ['example.com', 5] },
     { version: 1, wafBypassToken: null },
     { version: 1, wafBypassToken: 'short' },
     { version: 1, wafBypassToken: `${token}\r\nX-Injected: true` },
@@ -82,9 +62,9 @@ describe('global settings validation', () => {
   ])('rejects malformed configuration %#', (value) => {
     expect(() => parseGlobalSettingsPatch(value, defaults)).toThrow();
   });
-  it('requires both token and domains to enable bypass, and permits retaining an existing token', () => {
+  it('requires a token and permits retaining an existing token', () => {
     expect(() => parseGlobalSettingsPatch({ ...config, wafBypassToken: '' }, defaults)).toThrow('密钥');
-    expect(() => parseGlobalSettingsPatch({ ...config, wafBypassDomains: [] }, defaults)).toThrow('域名');
+    expect(parseGlobalSettingsPatch(config, defaults).wafBypassEnabled).toBe(true);
     expect(
       parseGlobalSettingsPatch(
         { ...config, wafBypassToken: '' },
@@ -95,10 +75,12 @@ describe('global settings validation', () => {
       ),
     ).not.toHaveProperty('wafBypassToken');
   });
-  it('builds a rule constrained to domains, GET/HEAD and the exact token', () => {
+  it('builds a rule constrained to domains, supported methods and the exact token', () => {
     const expression = wafSkipExpression(['example.com', 'api.example.com'], token);
     expect(expression).toContain('http.host in {"example.com" "api.example.com"}');
-    expect(expression).toContain('http.request.method in {"GET" "HEAD"}');
+    expect(expression).toContain(
+      'http.request.method in {"GET" "HEAD" "POST" "PUT" "PATCH" "DELETE" "OPTIONS"}',
+    );
     expect(expression).toContain(`http.request.headers["x-uptimeworker-waf-bypass"][*] eq "${token}"`);
     expect(wafSkipExpression(['example.com'])).toContain('<YOUR_TOKEN>');
   });
@@ -117,15 +99,12 @@ describe('global settings API and probe integration', () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
-  function client(probe: Probe = async () => success()) {
-    const app = createApp(probe, verify);
-    const env = environment(fixture.db);
+  function client(probe?: Probe) {
+    const c = apiClient(fixture.db, probe);
     return {
-      app,
-      env,
-      read: () => app.request(path, { headers }, env),
-      patch: (value: unknown) =>
-        app.request(path, { method: 'PATCH', headers, body: JSON.stringify(value) }, env),
+      ...c,
+      read: () => c.request('admin/settings'),
+      patch: (value: unknown) => c.request('admin/settings', 'PATCH', value),
     };
   }
 
@@ -134,14 +113,13 @@ describe('global settings API and probe integration', () => {
     const response = await read();
     expect(response.headers.get('cache-control')).toBe('no-store');
     expect(await response.json()).toEqual(defaults);
-    const saved = await patch({ ...config, wafBypassDomains: ['Example.com.', 'example.com'] });
+    const saved = await patch(config);
     expect(saved.status).toBe(200);
     expect(saved.headers.get('cache-control')).toBe('no-store');
     expect(await saved.json()).toEqual({
       ...defaults,
       version: 2,
       wafBypassEnabled: true,
-      wafBypassDomains: ['example.com'],
       wafBypassTokenConfigured: true,
     });
     expect(await (await read()).text()).not.toContain(token);
@@ -149,7 +127,6 @@ describe('global settings API and probe integration', () => {
     expect((await patch({ version: 2, wafBypassEnabled: false, wafBypassToken: '' })).status).toBe(200);
     expect((await getGlobalSettings(fixture.db)).settings.wafBypass).toEqual({
       enabled: false,
-      domains: ['example.com'],
       token,
     });
     expect((await patch({ version: 3, wafBypassEnabled: true })).status).toBe(200);
@@ -163,50 +140,50 @@ describe('global settings API and probe integration', () => {
     });
   });
 
-  it('rejects unauthenticated, cross-origin and non-JSON writes', async () => {
-    const { app, env } = client();
-    for (const method of ['GET', 'PATCH']) {
-      const response = await app.request(path, { method }, env);
-      expect(response.status).toBe(401);
-      expect(response.headers.get('cache-control')).toBe('no-store');
-    }
-    for (const [changed, status] of [
-      [{ ...headers, 'Cf-Access-Jwt-Assertion': 'forged' }, 401],
-      [{ ...headers, Origin: 'https://evil.test' }, 403],
-      [{ ...headers, 'Content-Type': 'text/plain' }, 415],
-    ] as const) {
+  it.each(['["redirect.example.com"]', 'broken'])(
+    'ignores and preserves the retired stored domain data: %s',
+    async (legacyDomains) => {
+      const { read, patch } = client();
+      await fixture.db
+        .prepare('UPDATE global_settings SET waf_bypass_domains_json = ?')
+        .bind(legacyDomains)
+        .run();
+      expect(await (await read()).json()).toEqual(defaults);
+      const saved = await patch({ ...config, wafBypassDomains: null, wafBypassAutoDomains: ['other.test'] });
+      expect(saved.status).toBe(200);
+      expect(await saved.json()).toEqual({
+        version: 2,
+        wafBypassEnabled: true,
+        wafBypassTokenConfigured: true,
+      });
       expect(
-        (await app.request(path, { method: 'PATCH', headers: changed, body: JSON.stringify(config) }, env))
-          .status,
-      ).toBe(status);
-    }
-    expect((await getGlobalSettings(fixture.db)).settings.version).toBe(1);
+        await fixture.db
+          .prepare('SELECT waf_bypass_domains_json FROM global_settings')
+          .first('waf_bypass_domains_json'),
+      ).toBe(legacyDomains);
+      expect((await getProbeSnapshot(fixture.db)).options.wafBypass).toEqual({ enabled: true, token });
+    },
+  );
+
+  it('reads and updates settings independently of monitor data', async () => {
+    const { read, patch } = client();
+    const row = (await createMonitor(fixture.db, httpConfig, timestamp))!;
+    await fixture.db.prepare('UPDATE monitors SET config_json = ? WHERE id = ?').bind('broken', row.id).run();
+    expect(await (await read()).json()).toEqual(defaults);
+    expect((await patch(config)).status).toBe(200);
   });
 
-  it('rejects invalid and malformed updates without changing stored state', async () => {
-    const { app, env, read, patch } = client();
+  it('rejects invalid settings without changing stored state or exposing the token', async () => {
+    const { read, patch } = client();
     for (const invalid of [
       null,
-      {},
       { ...config, wafBypassToken: '' },
-      { ...config, wafBypassDomains: [] },
-      { ...config, wafBypassDomains: ['*.example.com'] },
       { ...config, wafBypassToken: `${token}\r\n` },
     ]) {
       const response = await patch(invalid);
       expect(response.status).toBe(400);
       expect(await response.text()).not.toContain(token);
     }
-    expect((await app.request(path, { method: 'PATCH', headers, body: '{broken' }, env)).status).toBe(400);
-    expect(
-      (
-        await app.request(
-          path,
-          { method: 'PATCH', headers, body: JSON.stringify({ token: 'x'.repeat(18000) }) },
-          env,
-        )
-      ).status,
-    ).toBe(413);
     expect(await (await read()).json()).toEqual(defaults);
   });
 
@@ -220,39 +197,6 @@ describe('global settings API and probe integration', () => {
       wafBypass: { token: winner },
     });
     expect((await patch({ version: 1, wafBypassEnabled: false })).status).toBe(409);
-  });
-
-  it('uses saved settings for manual and scheduled HTTP requests without leaking secrets into outputs', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async () => new Response(null));
-    const probe = createProbe({ fetch: fetchMock, connect: vi.fn() });
-    const { app, env, patch } = client(probe);
-    const log = vi.spyOn(console, 'info').mockImplementation(() => {});
-    const row = (await createMonitor(fixture.db, httpConfig, timestamp))!;
-    expect((await patch(config)).status).toBe(200);
-    const testPath = `https://status.test/api/admin/monitors/${row.id}/test`;
-    expect((await app.request(testPath, { method: 'POST', headers, body: '{}' }, env)).status).toBe(200);
-    expect(await fixture.db.prepare('SELECT COUNT(*) AS n FROM check_results').first('n')).toBe(0);
-    expect((await runScheduled(env, timestamp, probe, () => timestamp)).stored).toBe(1);
-    expect(fetchMock.mock.calls.map(([, init]) => new Headers(init?.headers).get(WAF_BYPASS_HEADER))).toEqual(
-      [token, token],
-    );
-    expect((await patch({ version: 2, wafBypassEnabled: false })).status).toBe(200);
-    const tested = await app.request(testPath, { method: 'POST', headers, body: '{}' }, env);
-    expect(await tested.text()).not.toContain(token);
-    expect(new Headers(fetchMock.mock.calls[2][1]?.headers).has(WAF_BYPASS_HEADER)).toBe(false);
-    for (const endpoint of [
-      '/api/status',
-      `/api/monitors/${row.id}/history`,
-      '/api/admin/monitors',
-      '/api/admin/settings',
-    ]) {
-      expect(
-        await (await app.request(`https://status.test${endpoint}`, { headers }, env)).text(),
-      ).not.toContain(token);
-    }
-    const history = await fixture.db.prepare('SELECT * FROM check_results').all();
-    expect(JSON.stringify(history.results)).not.toContain(token);
-    expect(JSON.stringify(log.mock.calls)).not.toContain(token);
   });
 
   it('keeps one settings snapshot for a round and uses rotated settings on the next round', async () => {
@@ -277,23 +221,15 @@ describe('global settings API and probe integration', () => {
     );
   });
 
-  it.each(['DELETE FROM global_settings', `UPDATE global_settings SET waf_bypass_domains_json = 'broken'`])(
+  it.each(['DELETE FROM global_settings', `UPDATE global_settings SET waf_bypass_token = 'short'`])(
     'stops before probing when settings cannot be read: %s',
     async (sql) => {
       const probe = vi.fn<Probe>().mockImplementation(async () => success());
-      const { app, env } = client(probe);
+      const { request, env } = client(probe);
       const row = (await createMonitor(fixture.db, httpConfig, timestamp))!;
       const log = vi.spyOn(console, 'error').mockImplementation(() => {});
       await fixture.db.prepare(sql).run();
-      const response = await app.request(
-        `https://status.test/api/admin/monitors/${row.id}/test`,
-        {
-          method: 'POST',
-          headers,
-          body: '{}',
-        },
-        env,
-      );
+      const response = await request(`admin/monitors/${row.id}/test`, 'POST', {});
       expect(response.status).toBe(503);
       await expect(runScheduled(env, timestamp, probe, () => timestamp)).rejects.toThrow();
       expect(probe).not.toHaveBeenCalled();

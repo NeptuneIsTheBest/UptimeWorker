@@ -1,26 +1,19 @@
-import type { GlobalSettings } from './types';
-import { isPublicHostname, ValidationError } from './validation';
+import { HTTP_METHODS, WAF_BYPASS_HEADER, type GlobalSettings, type MonitorConfig } from './types';
+import { ValidationError, wafMonitorDomain } from './validation';
 
-export const WAF_BYPASS_HEADER = 'X-UptimeWorker-WAF-Bypass';
+export { WAF_BYPASS_HEADER } from './types';
 
-export function normalizeWafDomain(value: string): string {
-  const input = value.trim();
-  const invalid = () => new ValidationError('生效域名必须是完整的公网域名，不含协议、端口、路径或通配符');
-  if (!input || /[\s/\\:@?#*%\[\]]/.test(input)) throw invalid();
-  let hostname: string;
-  try {
-    hostname = new URL(`https://${input}`).hostname.toLowerCase().replace(/\.$/, '');
-  } catch {
-    throw invalid();
-  }
-  if (hostname.endsWith('.') || !isPublicHostname(hostname) || /^[\d.]+$/.test(hostname)) throw invalid();
-  return hostname;
-}
-
-export function parseWafDomains(value: unknown): string[] {
-  if (!Array.isArray(value) || value.some((entry) => typeof entry !== 'string'))
-    throw new ValidationError('生效域名必须是字符串列表');
-  return [...new Set(value.map(normalizeWafDomain))];
+// These domains are only used to generate the Cloudflare rule template.
+export function wafRuleDomains(monitors: readonly MonitorConfig[]): string[] {
+  return [
+    ...new Set(
+      monitors.flatMap((monitor) => {
+        if (monitor.type !== 'http' || !monitor.wafBypassEnabled) return [];
+        const domain = wafMonitorDomain(monitor.url);
+        return domain ? [domain] : [];
+      }),
+    ),
+  ].sort();
 }
 
 export function isWafToken(value: string): boolean {
@@ -35,9 +28,6 @@ export function parseGlobalSettingsPatch(value: unknown, current: GlobalSettings
     throw new ValidationError('请携带有效的设置版本号');
   const enabled = v.wafBypassEnabled === undefined ? current.wafBypassEnabled : v.wafBypassEnabled;
   if (typeof enabled !== 'boolean') throw new ValidationError('WAF 放行开关无效');
-  const domains = parseWafDomains(
-    v.wafBypassDomains === undefined ? current.wafBypassDomains : v.wafBypassDomains,
-  );
   let token: string | undefined;
   if (v.wafBypassToken !== undefined && v.wafBypassToken !== '') {
     if (typeof v.wafBypassToken !== 'string' || !isWafToken(v.wafBypassToken))
@@ -46,11 +36,9 @@ export function parseGlobalSettingsPatch(value: unknown, current: GlobalSettings
   }
   if (enabled && !(token || current.wafBypassTokenConfigured))
     throw new ValidationError('启用 WAF 放行前请先配置密钥');
-  if (enabled && !domains.length) throw new ValidationError('启用 WAF 放行前请至少填写一个生效域名');
   return {
     version: Number(v.version),
     wafBypassEnabled: enabled,
-    wafBypassDomains: domains,
     ...(token ? { wafBypassToken: token } : {}),
   };
 }
@@ -58,7 +46,7 @@ export function parseGlobalSettingsPatch(value: unknown, current: GlobalSettings
 export function wafSkipExpression(domains: string[], token = '<YOUR_TOKEN>'): string {
   return [
     `(http.host in {${domains.map((domain) => JSON.stringify(domain)).join(' ')}})`,
-    '(http.request.method in {"GET" "HEAD"})',
+    `(http.request.method in {${HTTP_METHODS.map((method) => JSON.stringify(method)).join(' ')}})`,
     `(any(http.request.headers["${WAF_BYPASS_HEADER.toLowerCase()}"][*] eq ${JSON.stringify(token)}))`,
   ].join(' and\n');
 }

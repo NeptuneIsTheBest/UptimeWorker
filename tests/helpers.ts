@@ -2,7 +2,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { unstable_splitSqlQuery } from 'wrangler';
 import type { MonitorConfig, ProbeResult } from '../src/shared/types';
-import type { Env } from '../src/worker/types';
+import type { Env, ProbeOptions } from '../src/worker/types';
 
 export const timestamp = Date.UTC(2026, 9, 28, 2, 0);
 export const httpConfig: Extract<MonitorConfig, { type: 'http' }> = {
@@ -10,6 +10,10 @@ export const httpConfig: Extract<MonitorConfig, { type: 'http' }> = {
   type: 'http',
   url: 'https://example.com/health',
   method: 'GET',
+  wafBypassEnabled: false,
+  requestHeaders: {},
+  requestBody: null,
+  responseCheck: null,
   expectedStatusMin: 200,
   expectedStatusMax: 299,
   intervalMinutes: 5,
@@ -24,6 +28,9 @@ export const tcpConfig: Extract<MonitorConfig, { type: 'tcp' }> = {
   intervalMinutes: 5,
   timeoutSeconds: 10,
   enabled: true,
+};
+export const bypassOptions: ProbeOptions = {
+  wafBypass: { enabled: true, token: 'test-bypass-token-'.repeat(4) },
 };
 export const success = (checkedAt = timestamp): ProbeResult => ({
   checkedAt,

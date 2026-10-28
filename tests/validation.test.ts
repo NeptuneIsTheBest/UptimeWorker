@@ -51,7 +51,7 @@ describe('monitor validation', () => {
     { timeoutSeconds: 31 },
     { name: '' },
     { expectedStatusMin: 500, expectedStatusMax: 200 },
-    { method: 'POST' },
+    { method: 'TRACE' },
   ])('rejects invalid HTTP configuration %j', (changes) => {
     expect(() => parseMonitorConfig({ ...httpConfig, ...changes })).toThrow();
   });

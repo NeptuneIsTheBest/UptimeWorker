@@ -15,7 +15,7 @@ import {
   updateMonitor,
 } from './repository';
 import type { AppEnv, Probe } from './types';
-import { adminSettings, getGlobalSettings, updateGlobalSettings } from './settings';
+import { adminSettings, getGlobalSettings, getProbeSnapshot, updateGlobalSettings } from './settings';
 
 export function createApp(probe: Probe, verify?: TokenVerifier) {
   const app = new Hono<AppEnv>();
@@ -25,10 +25,15 @@ export function createApp(probe: Probe, verify?: TokenVerifier) {
     c.header('Referrer-Policy', 'same-origin');
     c.header('X-Frame-Options', 'DENY');
   });
-  app.use(
-    '/api/*',
-    bodyLimit({ maxSize: 16 * 1024, onError: (c) => c.json({ error: '请求内容过大。' }, 413) }),
-  );
+  app.use('/api/*', async (c, next) => {
+    const monitorWrite =
+      (c.req.method === 'POST' && c.req.path === '/api/admin/monitors') ||
+      (c.req.method === 'PATCH' && /^\/api\/admin\/monitors\/[^/]+$/.test(c.req.path));
+    return bodyLimit({
+      maxSize: (monitorWrite ? 256 : 16) * 1024,
+      onError: (context) => context.json({ error: '请求内容过大。' }, 413),
+    })(c, next);
+  });
   const auth = requireAccess(verify);
   app.use('/api/admin', auth);
   app.use('/api/admin/*', auth);
@@ -62,9 +67,10 @@ export function createApp(probe: Probe, verify?: TokenVerifier) {
       limit: MAX_MONITORS,
     }),
   );
-  app.get('/api/admin/settings', async (c) =>
-    c.json(adminSettings((await getGlobalSettings(c.env.DB)).settings)),
-  );
+  app.get('/api/admin/settings', async (c) => {
+    const { settings } = await getGlobalSettings(c.env.DB);
+    return c.json(adminSettings(settings));
+  });
   app.patch('/api/admin/settings', async (c) => {
     const body = await c.req.json();
     const { settings } = await getGlobalSettings(c.env.DB);
@@ -97,10 +103,10 @@ export function createApp(probe: Probe, verify?: TokenVerifier) {
     return result.meta.changes ? c.json({ ok: true }) : c.json({ error: '监控不存在。' }, 404);
   });
   app.post('/api/admin/monitors/:id/test', async (c) => {
-    const row = await findMonitor(c.env.DB, c.req.param('id'));
+    const { monitors, options } = await getProbeSnapshot(c.env.DB);
+    const row = monitors.find((monitor) => monitor.id === c.req.param('id'));
     if (!row) return c.json({ error: '监控不存在。' }, 404);
-    const { settings } = await getGlobalSettings(c.env.DB);
-    return c.json(await probe(monitorConfig(row), { wafBypass: settings.wafBypass }));
+    return c.json(await probe(monitorConfig(row), options));
   });
   const adminPage: MiddlewareHandler<AppEnv> = async (c) => {
     // Preserve the navigation URL: /index.html is canonicalized to / by Assets.

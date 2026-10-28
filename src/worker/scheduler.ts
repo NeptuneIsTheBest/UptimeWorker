@@ -1,7 +1,7 @@
 import type { ProbeResult } from '../shared/types';
 import { monitorConfig, utcDay, dayStart } from './repository';
 import type { Env, MonitorRow, Probe } from './types';
-import { getGlobalSettings } from './settings';
+import { getProbeSnapshot } from './settings';
 
 const SLOT = 300_000;
 const DAY = 86_400_000;
@@ -64,17 +64,11 @@ export async function runScheduled(
   if (!lease.results.length) return metrics;
   metrics.claimed = true;
   try {
-    const settingsRead = await getGlobalSettings(env.DB);
-    count([settingsRead]);
-    const options = { wafBypass: settingsRead.settings.wafBypass };
-    const due = await env.DB.prepare(
-      'SELECT * FROM monitors WHERE enabled = 1 AND next_check_at <= ? ORDER BY next_check_at, id LIMIT 10',
-    )
-      .bind(slot)
-      .all<MonitorRow>();
-    count([due]);
+    const { monitors, options, reads } = await getProbeSnapshot(env.DB);
+    count(reads);
+    const due = monitors.filter((row) => row.enabled === 1 && row.next_check_at <= slot).slice(0, 10);
     const results = await mapConcurrent(
-      due.results,
+      due,
       4,
       async (row): Promise<{ row: MonitorRow; result: ProbeResult } | null> => {
         try {

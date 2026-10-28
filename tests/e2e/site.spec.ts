@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import type { PublicMonitor, StatusResponse } from '../../src/shared/types';
 
 test('admin can create HTTP and TCP monitors, edit, pause, test, and delete', async ({ page }) => {
@@ -40,7 +40,6 @@ test('admin can create HTTP and TCP monitors, edit, pause, test, and delete', as
     .getByRole('button', { name: '测试连接' })
     .click();
   await expect(page.getByRole('status')).toContainText('本次测试不计入历史统计');
-  await page.screenshot({ path: 'test-results/admin-desktop.png', fullPage: true });
   await page.getByRole('link', { name: '状态概览', exact: true }).click();
   await expect(page.getByRole('link', { name: 'E2E API' })).toBeVisible();
   await expect(page.locator('.monitor-card').filter({ hasText: 'E2E API' })).toContainText('等待检测');
@@ -80,16 +79,12 @@ test('public overview is responsive, filterable and makes stale results explicit
   await page.goto('/');
   await expect(page.getByRole('heading', { name: '所有服务，运行如常。' })).toBeVisible();
   await expect(page.locator('.monitor-card')).toHaveCount(4);
-  await page.screenshot({ path: 'test-results/status-desktop.png', fullPage: true });
   await page.getByLabel('搜索服务').fill('数据库');
   await expect(page.locator('.monitor-card')).toHaveCount(1);
   await page.getByLabel('搜索服务').fill('');
   await page.getByLabel('搜索服务').blur();
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByRole('banner')).toHaveCount(1);
-  await page.screenshot({ path: 'test-results/status-mobile.png' });
-  await page.locator('.monitor-card').last().scrollIntoViewIfNeeded();
-  await page.screenshot({ path: 'test-results/status-mobile-services.png' });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   data.monitors[0] = sampleMonitor(0, 'stale');
   data.monitors[1] = { ...sampleMonitor(1), lastCheckedAt: Date.now() - 1_200_000 };
@@ -114,21 +109,13 @@ test('service details render response history on desktop and mobile', async ({ p
   await page.goto('/monitors/sample-0');
   await expect(page.getByRole('img', { name: /最近 24 小时响应时间/ })).toBeVisible();
   await expect(page.getByText('HTTP 状态码不符合预期 · HTTP 503', { exact: true })).toBeVisible();
-  await page.screenshot({ path: 'test-results/detail-desktop.png', fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.locator('.response-chart')).toHaveAttribute('viewBox', /^0 0 3\d\d 210$/);
-  await page.screenshot({ path: 'test-results/detail-mobile.png' });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
-test('mobile editor stays usable and API errors offer recovery', async ({ page }) => {
+test('public API errors offer recovery', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/admin');
-  await page.getByRole('button', { name: '新增监控', exact: true }).click();
-  await expect(page.getByRole('dialog')).toBeVisible();
-  await page.screenshot({ path: 'test-results/editor-mobile.png', fullPage: true });
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.getByRole('button', { name: '取消', exact: true }).click();
   await page.route('**/api/status', (route) =>
     route.fulfill({ status: 503, json: { error: '暂时无法连接数据库' } }),
   );

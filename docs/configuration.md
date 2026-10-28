@@ -1,0 +1,77 @@
+# 监控配置与运行策略
+
+[返回 README](../README.md)
+
+## 基本配置
+
+- 支持 HTTP/HTTPS 和 TCP Port 监控，目标必须为公开地址。
+- 默认每 5 分钟检测，可选 5 / 10 / 15 / 30 / 60 分钟间隔，超时范围为 1–30 秒。
+- HTTP 支持 GET / HEAD / POST / PUT / PATCH / DELETE / OPTIONS，并按配置校验期望状态码；TCP 只检查连接建立情况。
+- 后台支持新增、编辑、删除、暂停、恢复和即时连接测试。即时测试使用已保存配置，不改变历史或当前状态。
+- 最多 10 个监控，包括暂停项。配置字段及请求示例见 [API 参考](api.md#监控配置)。
+
+## HTTP 高级配置
+
+新增或编辑监控时展开「高级配置（请求参数与响应校验）」：
+
+- **请求头**：按名称和值填写，合计最多 8 KiB，名称不区分大小写且不能重复。不允许覆盖 WAF 凭据、Host、Content-Length 或逐跳传输头；值不允许换行。可填写 Authorization、Cookie 或自定义 API Key，请求头只通过管理员接口回显。
+- **请求体**：POST / PUT / PATCH / DELETE / OPTIONS 可选择文本或 JSON，最多 16 KiB（按 UTF-8 字节计算）。JSON 校验格式，但原文保持不变；默认内容类型分别为 `text/plain;charset=UTF-8`、`application/json`，自定义 Content-Type 优先。GET / HEAD 不发送请求体。
+- **响应校验**：「必须包含」中的关键词必须全部出现，「不能包含」中的关键词必须全部不出现；每行一个，每组最多 20 个，每个最多 256 字符。默认区分大小写，可勾选忽略大小写；匹配 UTF-8 解码后的响应原文，不解析 HTML、JSON 字段或正则表达式。两组留空时只校验状态码，HEAD 不提供关键词校验。
+- **判定与限制**：状态码和关键词必须同时通过，Cloudflare 挑战页始终失败。仅在需要关键词校验时读取响应正文，最多 1 MiB，超过时返回 `response_too_large`，不将截断内容当作成功；不匹配返回 `content_mismatch`。响应正文不写入检测历史或日志。
+
+重定向遵循 Fetch 方法转换：301/302 对 POST、303 对非 GET/HEAD 请求改为 GET，并移除请求体和相关头；307/308 保留方法与请求体。跨源（协议、域名或端口变化）后移除全部自定义请求头，后续跳转也不恢复；若仍需转发请求体，则返回 `unsafe_redirect`，需直接填写最终地址。每一跳仍校验公网地址，最多跟随三次重定向。
+
+切换请求方法时，编辑器保留当前输入供切回使用，保存时不提交该方法不支持的请求体或关键词配置。所有方法均按监控频率重复执行，手动测试同样使用已保存配置，不新增失败自动重试。
+
+## Cloudflare WAF 放行
+
+在「监控管理 → 全局设置」配置共享密钥和总开关，再在网站监控中打开「启用 WAF 放行」。单站开关默认关闭；旧配置缺少该字段也按关闭处理。只有总开关和单站开关同时开启且配置了密钥，检测才携带放行凭据。可以在创建监控前先准备密钥。
+
+放行范围完全由单站配置决定，无需在全局设置维护域名列表。全局设置中的规则模板根据管理页已有监控数据生成，收集已开启 WAF 的监控域名，包含已暂停监控，并规范化、去重。这些域名仅用于生成 Cloudflare 规则模板，不影响各监控的密钥发送范围；没有符合条件的监控时显示开启单站 WAF 的提示。
+
+仅向**与当前监控配置完整域名匹配的 HTTPS 地址**发送 `X-UptimeWorker-WAF-Bypass` 请求头。每次重定向重新检查协议和域名，跨域跳转不携带密钥，即使目标也是已开启 WAF 的其他监控；跳回当前监控域名的 HTTPS 地址后可以重新携带。HTTP 地址可以开启单站开关，但只有跳转到同域 HTTPS 后才携带密钥，HTTPS 降级到 HTTP 时不携带；TCP 和 IP 地址不支持单站 WAF。匹配时统一大小写、移除尾点并规范化国际化域名，不按端口匹配，也不支持通配符或包含子域名。跨域场景请直接配置最终检测地址。
+
+定时检测每轮以同一份数据库快照读取全局设置与监控配置；新的连接测试读取最新快照。保存后无需重新部署，设置读取失败时不执行检测，也不写入检测样本。旧版数据库的域名列保留但不再读取或更新，无需新增迁移，原有名单不再影响检测。
+
+### 配置步骤
+
+此功能需要你能管理目标站点的 Cloudflare WAF。
+
+1. 在网站监控中开启单站 WAF 并保存。在全局设置中点击「生成随机密钥」（32 字节随机数），或输入 32–256 位字母、数字、下划线、连字符组成的密钥。新密钥请在保存前复制保管。
+2. 展开「Cloudflare Skip 规则配置」，复制完整规则；若使用模板，将 `<YOUR_TOKEN>` 替换为相同密钥。规则示例：
+
+   ```text
+   (http.host in {"example.com" "api.example.com"}) and
+   (http.request.method in {"GET" "HEAD" "POST" "PUT" "PATCH" "DELETE" "OPTIONS"}) and
+   (any(http.request.headers["x-uptimeworker-waf-bypass"][*] eq "<YOUR_TOKEN>"))
+   ```
+
+3. 在每个目标站点的 Cloudflare **Security rules** 中创建自定义规则，填写表达式，操作选择 **Skip**，放在相关拦截规则之前。按拦截来源选择跳过剩余自定义规则、Managed Rules、Rate Limiting 或 Super Bot Fight Mode 等功能，并保留匹配日志以便验收。普通 **Bot Fight Mode 无法通过 Skip 跳过**；Browser Integrity Check 等产品需要单独选择对应的 Skip 选项。[官方配置步骤](https://developers.cloudflare.com/waf/custom-rules/skip/) · [可跳过的功能](https://developers.cloudflare.com/waf/custom-rules/skip/options/)
+4. 保存目标站点规则后，启用本项目的全局总开关并保存设置，确认对应监控的单站开关也已开启。执行「测试连接」，再等待下一轮定时检测，结合 Cloudflare Security Events 确认请求匹配到放行规则。可在自有测试域名上比较开关前后的结果；本地测试不能替代这一步。
+
+### 密钥与规则维护
+
+密钥保存在 D1，保存后接口和页面只显示是否已配置，不回传原密钥，也不写入日志或检测历史。密钥留空表示保留，关闭总开关保留已有密钥和单站开关设置。更换密钥、调整监控域名或从旧版 GET/HEAD 模板升级时，需同步更新目标站点的规则；重新加载设置后只提供含占位符的模板。
+
+如果收到 `cf-mitigated: challenge`，结果为 `cloudflare_challenge`，页面提示检查放行规则；即使 HTTP 状态码处于期望范围，也不会把挑战页计为成功。[挑战响应识别](https://developers.cloudflare.com/cloudflare-challenges/challenge-types/challenge-pages/detect-response/)
+
+## 检测、统计与保留策略
+
+- HTTP 耗时从发起请求开始，包含重定向及最终响应的处理。未配置关键词时直接释放响应体；配置关键词后读取最终响应文本，读取时间也计入检测超时和响应耗时。
+- TCP 耗时为连接建立时间；不执行数据库查询、TLS 握手或应用协议校验。连接成功不代表应用业务正常。
+- TCP 无法连接内网、localhost、Cloudflare IP 或端口 25。Cloudflare 代理后的域名不适合裸 TCP 检测；HTTP 服务应使用 HTTP 检测。[官方限制](https://developers.cloudflare.com/workers/runtime-apis/tcp-sockets/)
+- 检测来自 Cloudflare 调度所在位置，不是固定城市或多地区探针。网络往返时间和调度位置会影响响应耗时。
+- 第一次检测前显示“等待检测”；停用显示“已暂停”；超过两个配置周期没有新结果显示“数据过期”。平台或数据库故障不会自动生成“成功”样本。
+- 可用率 = 成功检测次数 / 完成检测次数。30 日指包含今天的最近 30 个 UTC 自然日，并非精确到秒的故障持续时间；缺失样本和暂停区间不算成功，也不纳入分母。一天存在检测记录但有漏跑时，状态条只代表已有样本。
+- 数据时间戳使用 UTC 毫秒；每日状态条按 UTC 日汇总，检测时间按浏览器时区显示。
+- 保留最近 7 天明细、包含今天的 90 个 UTC 日汇总。每轮最多清理 500 条过期明细和 100 条过期汇总，长期停机后可能需要多轮清理。
+- 编辑监控保留历史，并重置当前状态，等待新配置的下一轮结果；历史会包含编辑前的样本。删除监控会同时删除它的明细与汇总。
+- 公共 API 缓存 60 秒，后台修改在公开页面最多可能延迟约一分钟出现。管理员 API 不缓存。
+
+## 免费额度与运行观测
+
+默认 10 个监控、5 分钟间隔产生最多 2,880 次定时检测 / 天。并发为 4；每轮 HTTP 最多 40 个请求（包含重定向），结果批量写入 D1。
+
+`scheduled_run` 结构化日志包含 `checked`、`stored`、`rowsRead`、`rowsWritten`、`elapsedMs`。`elapsedMs` 是总耗时，不是 CPU 时间；CPU 应在 Cloudflare 仪表盘查看。D1 索引、触发器与清理均产生读写，访问量和多缓存节点也会增加用量。免费账户还有同账户其他应用的共享配额，不能保证所有流量下均免费。[D1 计费](https://developers.cloudflare.com/d1/platform/pricing/)
+
+共享上限定义在 [src/shared/types.ts](../src/shared/types.ts)，调度批量上限定义在 [src/worker/scheduler.ts](../src/worker/scheduler.ts)；扩大规模前需要一起调整，并验证每轮外部请求数、CPU 和数据库用量。

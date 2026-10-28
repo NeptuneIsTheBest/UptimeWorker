@@ -9,20 +9,21 @@ import {
   type StatusResponse,
 } from '../shared/types';
 import type { Env, MonitorRow } from './types';
+import { parseMonitorConfig } from '../shared/validation';
 
 const DAY = 86_400_000;
 export const utcDay = (time: number) => new Date(time).toISOString().slice(0, 10);
 export const dayStart = (time: number) => Math.floor(time / DAY) * DAY;
 
 export function monitorConfig(row: MonitorRow): MonitorConfig {
-  return {
+  return parseMonitorConfig({
     ...JSON.parse(row.config_json),
     name: row.name,
     type: row.type,
     intervalMinutes: row.interval_minutes,
     timeoutSeconds: row.timeout_seconds,
     enabled: row.enabled === 1,
-  };
+  });
 }
 export function currentStatus(row: MonitorRow, now: number): MonitorStatus {
   if (!row.enabled) return 'paused';

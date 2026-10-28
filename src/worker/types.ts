@@ -27,7 +27,6 @@ export interface MonitorRow {
 }
 export interface WafBypassSettings {
   enabled: boolean;
-  domains: readonly string[];
   token: string | null;
 }
 export interface ProbeOptions {

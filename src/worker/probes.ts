@@ -1,5 +1,10 @@
-import type { MonitorConfig, ProbeResult, ErrorCode } from '../shared/types';
-import { parseHttpUrl, ValidationError } from '../shared/validation';
+import {
+  MAX_RESPONSE_BODY_BYTES,
+  type MonitorConfig,
+  type ProbeResult,
+  type ErrorCode,
+} from '../shared/types';
+import { parseHttpUrl, ValidationError, wafMonitorDomain } from '../shared/validation';
 import { WAF_BYPASS_HEADER } from '../shared/settings';
 import type { ProbeOptions } from './types';
 
@@ -27,6 +32,10 @@ export function createProbe(deps: ProbeDependencies) {
     const started = now();
     const controller = new AbortController();
     let socket: TcpSocket | undefined;
+    let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+    const cancelReader = () => {
+      void reader?.cancel().catch(() => {});
+    };
     let closing: Promise<void> | undefined;
     const closeSocket = () => {
       if (socket && !closing)
@@ -41,6 +50,7 @@ export function createProbe(deps: ProbeDependencies) {
       timer = setTimeout(() => {
         reject(new ProbeError('timeout'));
         controller.abort();
+        cancelReader();
         void closeSocket();
       }, config.timeoutSeconds * 1000);
     });
@@ -60,41 +70,107 @@ export function createProbe(deps: ProbeDependencies) {
           return;
         }
         let url = parseHttpUrl(config.url);
+        const wafDomain = config.wafBypassEnabled ? wafMonitorDomain(config.url) : null;
+        let method = config.method;
+        let body = config.requestBody;
+        let customHeaders = new Headers(config.requestHeaders);
         for (let redirects = 0; ; redirects++) {
+          controller.signal.throwIfAborted();
           // Build fresh headers for every hop so redirects cannot forward the token outside its scope.
-          const headers: Record<string, string> = {
+          const headers = new Headers({
             'User-Agent': 'UptimeWorker/1.0',
             'Cache-Control': 'no-cache',
-          };
+          });
+          customHeaders.forEach((value, name) => headers.set(name, value));
+          if (body && !headers.has('Content-Type'))
+            headers.set(
+              'Content-Type',
+              body.format === 'json' ? 'application/json' : 'text/plain;charset=UTF-8',
+            );
           const bypass = options?.wafBypass;
           if (
+            wafDomain &&
             bypass?.enabled &&
             bypass.token &&
             url.protocol === 'https:' &&
-            bypass.domains.includes(url.hostname.toLowerCase().replace(/\.$/, ''))
+            wafDomain === wafMonitorDomain(url.toString())
           )
-            headers[WAF_BYPASS_HEADER] = bypass.token;
+            headers.set(WAF_BYPASS_HEADER, bypass.token);
           const response = await deps.fetch(url.toString(), {
-            method: config.method,
+            method,
+            body: body?.content,
             redirect: 'manual',
             signal: controller.signal,
             headers,
             cf: { cacheTtl: 0, cacheEverything: false },
           });
-          httpStatus = response.status;
-          const location = response.headers.get('location');
-          // Release the body before opening the next connection, including on errors.
-          if (response.body) await response.body.cancel();
-          if (response.headers.get('cf-mitigated') === 'challenge')
-            throw new ProbeError('cloudflare_challenge');
-          if ([301, 302, 303, 307, 308].includes(response.status) && location) {
-            if (redirects >= 3) throw new ProbeError('redirect_limit');
-            url = parseHttpUrl(new URL(location, url).toString());
-            continue;
+          try {
+            controller.signal.throwIfAborted();
+            httpStatus = response.status;
+            if (response.headers.get('cf-mitigated') === 'challenge')
+              throw new ProbeError('cloudflare_challenge');
+            const location = response.headers.get('location');
+            if ([301, 302, 303, 307, 308].includes(response.status) && location) {
+              if (redirects >= 3) throw new ProbeError('redirect_limit');
+              const target = parseHttpUrl(new URL(location, url).toString());
+              if (
+                ([301, 302].includes(response.status) && method === 'POST') ||
+                (response.status === 303 && method !== 'GET' && method !== 'HEAD')
+              ) {
+                method = 'GET';
+                body = null;
+                for (const name of [
+                  'Content-Encoding',
+                  'Content-Language',
+                  'Content-Location',
+                  'Content-Type',
+                ])
+                  customHeaders.delete(name);
+              }
+              if (target.origin !== url.origin) {
+                if (body) throw new ProbeError('unsafe_redirect');
+                customHeaders = new Headers();
+              }
+              url = target;
+              continue;
+            }
+            if (response.status < config.expectedStatusMin || response.status > config.expectedStatusMax)
+              throw new ProbeError('unexpected_status');
+            const check = config.responseCheck;
+            if (check && (check.includes.length || check.excludes.length)) {
+              let text = '';
+              let bytes = 0;
+              const decoder = new TextDecoder();
+              reader = response.body?.getReader();
+              try {
+                while (reader) {
+                  controller.signal.throwIfAborted();
+                  const chunk = await reader.read();
+                  controller.signal.throwIfAborted();
+                  if (chunk.done) break;
+                  bytes += chunk.value.byteLength;
+                  if (bytes > MAX_RESPONSE_BODY_BYTES) throw new ProbeError('response_too_large');
+                  text += decoder.decode(chunk.value, { stream: true });
+                }
+                text += decoder.decode();
+              } finally {
+                cancelReader();
+                reader?.releaseLock();
+                reader = undefined;
+              }
+              const normalize = (value: string) => (check.ignoreCase ? value.toLowerCase() : value);
+              text = normalize(text);
+              if (
+                !check.includes.every((word) => text.includes(normalize(word))) ||
+                check.excludes.some((word) => text.includes(normalize(word)))
+              )
+                throw new ProbeError('content_mismatch');
+            }
+            return;
+          } finally {
+            // Also release redirect, failed and uninspected response bodies.
+            if (response.body && !response.body.locked) await response.body.cancel().catch(() => {});
           }
-          if (response.status < config.expectedStatusMin || response.status > config.expectedStatusMax)
-            throw new ProbeError('unexpected_status');
-          return;
         }
       };
       await Promise.race([operation(), deadline]);
@@ -116,6 +192,7 @@ export function createProbe(deps: ProbeDependencies) {
     } finally {
       clearTimeout(timer);
       controller.abort();
+      cancelReader();
       await closeSocket();
     }
   };

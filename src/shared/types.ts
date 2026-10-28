@@ -1,19 +1,42 @@
 export const INTERVALS = [5, 10, 15, 30, 60] as const;
 export const MAX_MONITORS = 10;
+export const HTTP_METHODS = ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'] as const;
+export type HttpMethod = (typeof HTTP_METHODS)[number];
+export const WAF_BYPASS_HEADER = 'X-UptimeWorker-WAF-Bypass';
+export const MAX_REQUEST_BODY_BYTES = 16 * 1024;
+export const MAX_REQUEST_HEADER_BYTES = 8 * 1024;
+export const MAX_RESPONSE_BODY_BYTES = 1024 * 1024;
+export const MAX_KEYWORDS = 20;
+export const MAX_KEYWORD_LENGTH = 256;
+export interface RequestBody {
+  format: 'text' | 'json';
+  content: string;
+}
+export interface ResponseCheck {
+  includes: string[];
+  excludes: string[];
+  ignoreCase: boolean;
+}
 export type MonitorStatus = 'up' | 'down' | 'unknown' | 'paused' | 'stale';
 export type ErrorCode =
-  'timeout' | 'network' | 'unexpected_status' | 'redirect_limit' | 'blocked_target' | 'cloudflare_challenge';
+  | 'timeout'
+  | 'network'
+  | 'unexpected_status'
+  | 'redirect_limit'
+  | 'blocked_target'
+  | 'cloudflare_challenge'
+  | 'content_mismatch'
+  | 'response_too_large'
+  | 'unsafe_redirect';
 
 export interface GlobalSettings {
   version: number;
   wafBypassEnabled: boolean;
-  wafBypassDomains: string[];
   wafBypassTokenConfigured: boolean;
 }
 export interface GlobalSettingsPatch {
   version: number;
   wafBypassEnabled?: boolean;
-  wafBypassDomains?: string[];
   wafBypassToken?: string;
 }
 
@@ -28,7 +51,11 @@ export type MonitorConfig = CommonConfig &
     | {
         type: 'http';
         url: string;
-        method: 'GET' | 'HEAD';
+        method: HttpMethod;
+        wafBypassEnabled: boolean;
+        requestHeaders: Record<string, string>;
+        requestBody: RequestBody | null;
+        responseCheck: ResponseCheck | null;
         expectedStatusMin: number;
         expectedStatusMax: number;
       }
@@ -90,4 +117,7 @@ export const ERROR_LABELS: Record<ErrorCode, string> = {
   redirect_limit: '重定向超过 3 次',
   blocked_target: '此目标受到网络或 Cloudflare TCP 限制',
   cloudflare_challenge: '请求被 Cloudflare 验证拦截，请检查目标站点的 WAF Skip 规则',
+  content_mismatch: '响应内容不符合关键词要求',
+  response_too_large: '响应内容超过 1 MiB，无法完成关键词校验',
+  unsafe_redirect: '跨源重定向不能转发请求体，请直接配置最终检测地址',
 };
