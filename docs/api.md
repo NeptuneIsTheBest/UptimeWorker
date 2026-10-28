@@ -26,7 +26,9 @@
 
 ## 监控配置
 
-监控 POST / PATCH 的 JSON 请求上限为 256 KiB，其余 API 仍为 16 KiB。HTTP 的 `method` 缺省为 GET，`wafBypassEnabled` 缺省为 false，`requestHeaders` 缺省为空对象，`requestBody`、`responseCheck` 缺省为 null；PATCH 省略字段保留原配置，传 null 可清空请求体或响应校验。新增字段继续保存在 `config_json`，无需新增数据库迁移。
+监控 POST / PATCH 的 JSON 请求上限为 256 KiB，其余 API 仍为 16 KiB。`intervalMinutes` 支持 1–60 的整数分钟，POST 省略时默认 1，PATCH 省略时保留原值；小数、越界值、字符串和 null 均返回 `400`。已有监控不会自动改为 1 分钟。
+
+HTTP 的 `method` 缺省为 GET，`wafBypassEnabled` 缺省为 false，`requestHeaders` 缺省为空对象，`requestBody`、`responseCheck` 缺省为 null；PATCH 省略字段保留原配置，传 null 可清空请求体或响应校验。HTTP 高级字段继续保存在 `config_json`；间隔范围变更需要应用新的数据库迁移。
 
 ### 基本 HTTP 监控
 
@@ -40,7 +42,7 @@ HTTP 创建示例：
   "method": "GET",
   "expectedStatusMin": 200,
   "expectedStatusMax": 299,
-  "intervalMinutes": 5,
+  "intervalMinutes": 1,
   "timeoutSeconds": 10,
   "enabled": true
 }
@@ -64,7 +66,7 @@ HTTP 创建示例：
   "responseCheck": { "includes": ["healthy"], "excludes": ["error"], "ignoreCase": true },
   "expectedStatusMin": 200,
   "expectedStatusMax": 299,
-  "intervalMinutes": 5,
+  "intervalMinutes": 1,
   "timeoutSeconds": 10,
   "enabled": true
 }

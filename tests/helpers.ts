@@ -39,7 +39,11 @@ export const success = (checkedAt = timestamp): ProbeResult => ({
   httpStatus: 200,
   errorCode: null,
 });
-export async function databaseFixture() {
+export async function applyMigration(db: D1Database, file: string) {
+  const sql = await readFile(new URL(`../migrations/${file}`, import.meta.url), 'utf8');
+  await db.batch(unstable_splitSqlQuery(sql).map((statement) => db.prepare(statement)));
+}
+export async function databaseFixture(throughMigration?: string) {
   const mf = new Miniflare(
     convertV4MiniflareOptions({
       cf: false,
@@ -57,8 +61,8 @@ export async function databaseFixture() {
   const db = (await mf.getD1Database('DB')) as unknown as D1Database;
   const migrations = new URL('../migrations/', import.meta.url);
   for (const file of (await readdir(migrations)).filter((file) => file.endsWith('.sql')).sort()) {
-    const sql = await readFile(new URL(file, migrations), 'utf8');
-    await db.batch(unstable_splitSqlQuery(sql).map((statement) => db.prepare(statement)));
+    if (throughMigration && file > throughMigration) break;
+    await applyMigration(db, file);
   }
   return { db, dispose: () => mf.dispose() };
 }

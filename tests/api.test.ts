@@ -1,7 +1,8 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMonitor, findMonitor } from '../src/worker/repository';
+import type { AdminMonitor } from '../src/shared/types';
 import { adminHeaders as headers, apiClient } from './api-client';
-import { databaseFixture, httpConfig, resetDatabase } from './helpers';
+import { databaseFixture, httpConfig, tcpConfig, resetDatabase } from './helpers';
 
 let fixture: Awaited<ReturnType<typeof databaseFixture>>;
 beforeAll(async () => {
@@ -86,9 +87,42 @@ describe('API boundaries', () => {
     const path = `admin/monitors/${row.id}`;
     expect((await request(path, 'PATCH', { version: row.version, enabled: false })).status).toBe(200);
     expect((await request(path, 'PATCH', { version: row.version, enabled: true })).status).toBe(409);
-    expect((await findMonitor(fixture.db, row.id))?.enabled).toBe(0);
+    expect(await findMonitor(fixture.db, row.id)).toMatchObject({ enabled: 0, interval_minutes: 5 });
     expect((await request(path, 'DELETE', {})).status).toBe(200);
     expect((await request(path, 'DELETE', {})).status).toBe(404);
+  });
+
+  it.each([httpConfig, tcpConfig])(
+    'defaults and edits custom intervals for $type monitors',
+    async (config) => {
+      const { request } = apiClient(fixture.db);
+      const created = await request('admin/monitors', 'POST', { ...config, intervalMinutes: undefined });
+      expect(created.status).toBe(201);
+      const row = (await created.json()) as AdminMonitor;
+      expect(row.intervalMinutes).toBe(1);
+      const path = `admin/monitors/${row.id}`;
+      const updated = await request(path, 'PATCH', { version: 1, intervalMinutes: 7 });
+      expect(updated.status).toBe(200);
+      expect(await updated.json()).toMatchObject({ intervalMinutes: 7, version: 2 });
+      const renamed = await request(path, 'PATCH', { version: 2, name: '自定义间隔' });
+      expect(renamed.status).toBe(200);
+      expect(await renamed.json()).toMatchObject({ intervalMinutes: 7, version: 3 });
+      expect(await findMonitor(fixture.db, row.id)).toMatchObject({ interval_minutes: 7, version: 3 });
+    },
+  );
+
+  it('rejects invalid intervals on creation and editing without modifying saved configuration', async () => {
+    const { request } = apiClient(fixture.db);
+    const row = (await createMonitor(fixture.db, { ...httpConfig, intervalMinutes: 2 }))!;
+    for (const intervalMinutes of [0, 61, 1.5, '1', null]) {
+      const created = await request('admin/monitors', 'POST', { ...httpConfig, intervalMinutes });
+      expect(created.status).toBe(400);
+      expect(await created.json()).toHaveProperty('error', '检测间隔需为 1–60 分钟的整数');
+      const updated = await request(`admin/monitors/${row.id}`, 'PATCH', { version: 1, intervalMinutes });
+      expect(updated.status).toBe(400);
+    }
+    expect(await findMonitor(fixture.db, row.id)).toMatchObject({ interval_minutes: 2, version: 1 });
+    expect(await fixture.db.prepare('SELECT COUNT(*) AS n FROM monitors').first('n')).toBe(1);
   });
 
   it('returns JSON errors for malformed writes, missing monitors and unknown API paths', async () => {

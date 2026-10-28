@@ -1,4 +1,6 @@
-export const INTERVALS = [5, 10, 15, 30, 60] as const;
+export const DEFAULT_INTERVAL_MINUTES = 1;
+export const MIN_INTERVAL_MINUTES = 1;
+export const MAX_INTERVAL_MINUTES = 60;
 export const MAX_MONITORS = 10;
 export const HTTP_METHODS = ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'] as const;
 export type HttpMethod = (typeof HTTP_METHODS)[number];

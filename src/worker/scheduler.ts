@@ -3,7 +3,7 @@ import { monitorConfig, utcDay, dayStart } from './repository';
 import type { Env, MonitorRow, Probe } from './types';
 import { getProbeSnapshot } from './settings';
 
-const SLOT = 300_000;
+const SLOT = 60_000;
 const DAY = 86_400_000;
 export interface RunMetrics {
   claimed: boolean;

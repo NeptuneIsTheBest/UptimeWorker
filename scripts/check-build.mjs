@@ -16,7 +16,7 @@ if (
 }
 if (
   !config.d1_databases?.some((db) => db.binding === 'DB') ||
-  !config.triggers?.crons?.includes('*/5 * * * *')
+  !config.triggers?.crons?.includes('* * * * *')
 ) {
   throw new Error('Production Worker is missing D1 or the scheduled trigger');
 }

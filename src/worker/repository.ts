@@ -181,7 +181,7 @@ export async function getHistory(
     db
       .prepare(
         `SELECT checked_at, ok, latency_ms, http_status, error_code FROM check_results
-      WHERE monitor_id = ? AND checked_at >= ? ORDER BY checked_at DESC LIMIT 400`,
+      WHERE monitor_id = ? AND checked_at >= ? ORDER BY checked_at DESC`,
       )
       .bind(id, now - DAY),
   ]);

@@ -18,7 +18,7 @@
       "migrations_dir": "migrations",
     },
   ],
-  "triggers": { "crons": ["*/5 * * * *"] },
+  "triggers": { "crons": ["* * * * *"] },
   "vars": {
     "ACCESS_TEAM_DOMAIN": "",
     "ACCESS_AUD": "",

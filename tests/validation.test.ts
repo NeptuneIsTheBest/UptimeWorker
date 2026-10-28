@@ -9,6 +9,20 @@ describe('monitor validation', () => {
     ).toMatchObject({ name: '官网', url: 'https://example.com/health' });
     expect(parseMonitorConfig(tcpConfig)).toEqual(tcpConfig);
   });
+  it.each([httpConfig, tcpConfig])('defaults $type monitors to one minute when omitted', (config) => {
+    expect(parseMonitorConfig({ ...config, intervalMinutes: undefined }).intervalMinutes).toBe(1);
+  });
+  it.each([1, 2, 7, 60])('accepts an interval of %s minutes for both monitor types', (intervalMinutes) => {
+    for (const config of [httpConfig, tcpConfig])
+      expect(parseMonitorConfig({ ...config, intervalMinutes }).intervalMinutes).toBe(intervalMinutes);
+  });
+  it.each([0, -1, 61, 1.5, '1', '', null, true, NaN, Infinity])(
+    'rejects an invalid interval %j for both monitor types',
+    (intervalMinutes) => {
+      for (const config of [httpConfig, tcpConfig])
+        expect(() => parseMonitorConfig({ ...config, intervalMinutes })).toThrow('检测间隔');
+    },
+  );
   it.each([
     'localhost',
     'localhost.',
@@ -46,7 +60,6 @@ describe('monitor validation', () => {
     expect(() => parseMonitorConfig({ ...tcpConfig, hostname: '[2606:4700::1]:80' })).toThrow();
   });
   it.each([
-    { intervalMinutes: 1 },
     { timeoutSeconds: 0 },
     { timeoutSeconds: 31 },
     { name: '' },

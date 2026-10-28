@@ -1,5 +1,7 @@
 import {
-  INTERVALS,
+  DEFAULT_INTERVAL_MINUTES,
+  MIN_INTERVAL_MINUTES,
+  MAX_INTERVAL_MINUTES,
   HTTP_METHODS,
   MAX_REQUEST_BODY_BYTES,
   MAX_REQUEST_HEADER_BYTES,
@@ -164,14 +166,20 @@ export function parseMonitorConfig(value: unknown): MonitorConfig {
   const v = value as Record<string, unknown>;
   const name = typeof v.name === 'string' ? v.name.trim() : '';
   if (!name || name.length > 80) throw new ValidationError('名称需为 1–80 个字符');
-  if (!INTERVALS.includes(v.intervalMinutes as (typeof INTERVALS)[number]))
-    throw new ValidationError('检测间隔必须为 5、10、15、30 或 60 分钟');
+  const intervalMinutes = v.intervalMinutes === undefined ? DEFAULT_INTERVAL_MINUTES : v.intervalMinutes;
+  if (
+    typeof intervalMinutes !== 'number' ||
+    !Number.isInteger(intervalMinutes) ||
+    intervalMinutes < MIN_INTERVAL_MINUTES ||
+    intervalMinutes > MAX_INTERVAL_MINUTES
+  )
+    throw new ValidationError(`检测间隔需为 ${MIN_INTERVAL_MINUTES}–${MAX_INTERVAL_MINUTES} 分钟的整数`);
   if (!Number.isInteger(v.timeoutSeconds) || Number(v.timeoutSeconds) < 1 || Number(v.timeoutSeconds) > 30)
     throw new ValidationError('超时需为 1–30 秒的整数');
   if (typeof v.enabled !== 'boolean') throw new ValidationError('启用状态无效');
   const common = {
     name,
-    intervalMinutes: Number(v.intervalMinutes),
+    intervalMinutes,
     timeoutSeconds: Number(v.timeoutSeconds),
     enabled: v.enabled,
   };

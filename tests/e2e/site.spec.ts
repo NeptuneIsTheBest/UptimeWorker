@@ -7,24 +7,40 @@ test('admin can create HTTP and TCP monitors, edit, pause, test, and delete', as
   await expect(page.getByText('本地开发身份')).toBeVisible();
   await page.getByRole('button', { name: '新增监控', exact: true }).click();
   let dialog = page.getByRole('dialog', { name: '新增监控' });
+  await expect(dialog.getByLabel('检测间隔')).toHaveValue('1');
   await dialog.getByLabel('服务名称').fill('E2E 官网');
   await dialog.getByLabel('检测地址').fill('https://example.com/health');
   await dialog.getByRole('button', { name: '保存监控' }).click();
   await expect(page.getByRole('heading', { name: 'E2E 官网', exact: true })).toBeVisible();
+  await expect(page.locator('.admin-card').filter({ hasText: 'E2E 官网' })).toContainText('每 1 分钟');
   await page.getByRole('button', { name: '新增监控', exact: true }).click();
   dialog = page.getByRole('dialog', { name: '新增监控' });
   await dialog.getByRole('button', { name: /TCP Port/ }).click();
+  await expect(dialog.getByLabel('检测间隔')).toHaveValue('1');
   await dialog.getByLabel('服务名称').fill('E2E 数据库');
   await dialog.getByLabel('主机地址').fill('db.example.com');
   await dialog.getByLabel('端口', { exact: true }).fill('5432');
   await dialog.getByRole('button', { name: '保存监控' }).click();
   await expect(page.getByRole('heading', { name: 'E2E 数据库', exact: true })).toBeVisible();
+  await expect(page.locator('.admin-card').filter({ hasText: 'E2E 数据库' })).toContainText('每 1 分钟');
+  await page.getByRole('button', { name: '编辑 E2E 数据库', exact: true }).click();
+  dialog = page.getByRole('dialog', { name: '编辑监控' });
+  await dialog.getByLabel('检测间隔').fill('2');
+  await dialog.getByRole('button', { name: '保存监控' }).click();
+  await expect(page.locator('.admin-card').filter({ hasText: 'E2E 数据库' })).toContainText('每 2 分钟');
+  await page.getByRole('button', { name: '编辑 E2E 数据库', exact: true }).click();
+  await expect(page.getByRole('dialog').getByLabel('检测间隔')).toHaveValue('2');
+  await page.getByRole('dialog').getByRole('button', { name: '取消', exact: true }).click();
   await page.getByRole('button', { name: '编辑 E2E 官网', exact: true }).click();
   dialog = page.getByRole('dialog', { name: '编辑监控' });
   await dialog.getByLabel('服务名称').fill('E2E API');
-  await dialog.getByLabel('检测间隔').selectOption('10');
+  await dialog.getByLabel('检测间隔').fill('7');
   await dialog.getByRole('button', { name: '保存监控' }).click();
   await expect(page.getByRole('heading', { name: 'E2E API', exact: true })).toBeVisible();
+  await expect(page.locator('.admin-card').filter({ hasText: 'E2E API' })).toContainText('每 7 分钟');
+  await page.getByRole('button', { name: '编辑 E2E API', exact: true }).click();
+  await expect(page.getByRole('dialog').getByLabel('检测间隔')).toHaveValue('7');
+  await page.getByRole('dialog').getByRole('button', { name: '取消', exact: true }).click();
   await page.getByRole('button', { name: '暂停 E2E API', exact: true }).click();
   await expect(page.getByRole('button', { name: '恢复 E2E API', exact: true })).toBeVisible();
   await page.getByRole('button', { name: '恢复 E2E API', exact: true }).click();
@@ -94,20 +110,24 @@ test('public overview is responsive, filterable and makes stale results explicit
   await expect(page.locator('.monitor-card')).toHaveCount(2);
 });
 
-test('service details render response history on desktop and mobile', async ({ page }) => {
+test('service details render a full day of minute history on desktop and mobile', async ({ page }) => {
   const now = Date.now();
-  const checks = Array.from({ length: 288 }, (_, i) => ({
-    checkedAt: now - (287 - i) * 300_000,
-    ok: i !== 281,
-    latencyMs: i === 281 ? 240 : 100 + Math.round(Math.sin(i / 9) * 24) + (i % 7),
-    httpStatus: i === 281 ? 503 : 200,
-    errorCode: i === 281 ? 'unexpected_status' : null,
+  const checks = Array.from({ length: 1441 }, (_, i) => ({
+    checkedAt: now - (1440 - i) * 60_000,
+    ok: i !== 1433,
+    latencyMs: i === 1433 ? 240 : 100 + Math.round(Math.sin(i / 9) * 24) + (i % 7),
+    httpStatus: i === 1433 ? 503 : 200,
+    errorCode: i === 1433 ? 'unexpected_status' : null,
   }));
   await page.route('**/api/monitors/sample-0/history', (route) =>
-    route.fulfill({ json: { monitor: sampleMonitor(0), generatedAt: now, checks } }),
+    route.fulfill({
+      json: { monitor: { ...sampleMonitor(0), intervalMinutes: 1 }, generatedAt: now, checks },
+    }),
   );
   await page.goto('/monitors/sample-0');
   await expect(page.getByRole('img', { name: /最近 24 小时响应时间/ })).toBeVisible();
+  const chartPath = await page.locator('.response-chart path').getAttribute('d');
+  expect(chartPath?.match(/[ML] /g)).toHaveLength(1441);
   await expect(page.getByText('HTTP 状态码不符合预期 · HTTP 503', { exact: true })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.locator('.response-chart')).toHaveAttribute('viewBox', /^0 0 3\d\d 210$/);

@@ -17,7 +17,7 @@ const count = async (table: string) =>
   fixture.db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).first<number>('n');
 describe('D1 scheduling and aggregation', () => {
   it('migrates an empty database and atomically records a check plus daily stats', async () => {
-    const row = await createMonitor(fixture.db, httpConfig, timestamp);
+    const row = await createMonitor(fixture.db, { ...httpConfig, intervalMinutes: 1 }, timestamp);
     const metrics = await runScheduled(
       { DB: fixture.db },
       timestamp,
@@ -27,7 +27,7 @@ describe('D1 scheduling and aggregation', () => {
     expect(metrics).toMatchObject({ claimed: true, checked: 1, stored: 1 });
     expect(await findMonitor(fixture.db, row!.id)).toMatchObject({
       last_ok: 1,
-      next_check_at: timestamp + 300_000,
+      next_check_at: timestamp + 60_000,
     });
     expect(await fixture.db.prepare('SELECT total, successful FROM daily_stats').first()).toEqual({
       total: 1,
@@ -36,10 +36,13 @@ describe('D1 scheduling and aggregation', () => {
     expect(metrics.rowsWritten).toBeGreaterThan(0);
   });
   it('ignores completed slots and duplicate result writes without inflating aggregates', async () => {
-    await createMonitor(fixture.db, httpConfig, timestamp);
+    await createMonitor(fixture.db, { ...httpConfig, intervalMinutes: 1 }, timestamp);
     const probe = vi.fn(async () => success());
     await runScheduled({ DB: fixture.db }, timestamp, probe, () => timestamp);
     expect((await runScheduled({ DB: fixture.db }, timestamp, probe, () => timestamp)).claimed).toBe(false);
+    expect(
+      (await runScheduled({ DB: fixture.db }, timestamp + 59_999, probe, () => timestamp + 59_999)).claimed,
+    ).toBe(false);
     expect(probe).toHaveBeenCalledOnce();
     await fixture.db.batch([
       fixture.db.prepare('UPDATE scheduler_state SET last_completed_slot = 0'),
@@ -49,23 +52,63 @@ describe('D1 scheduling and aggregation', () => {
     expect(await count('check_results')).toBe(1);
     expect(await fixture.db.prepare('SELECT total FROM daily_stats').first('total')).toBe(1);
   });
-  it('leases prevent overlapping invocations', async () => {
-    await createMonitor(fixture.db, httpConfig, timestamp);
+  it('leases prevent overlapping invocations across minutes and skip missed rounds', async () => {
+    await createMonitor(fixture.db, { ...httpConfig, intervalMinutes: 1 }, timestamp);
+    let now = timestamp;
     let finish!: () => void;
     const gate = new Promise<void>((resolve) => {
       finish = resolve;
     });
     const probe = vi.fn(async () => {
+      const checkedAt = now;
       await gate;
-      return success();
+      return success(checkedAt);
     });
-    const first = runScheduled({ DB: fixture.db }, timestamp, probe, () => timestamp);
+    const first = runScheduled({ DB: fixture.db }, timestamp, probe, () => now);
     await vi.waitFor(() => expect(probe).toHaveBeenCalledOnce());
     const second = await runScheduled({ DB: fixture.db }, timestamp, probe, () => timestamp);
     expect(second.claimed).toBe(false);
+    now = timestamp + 60_000;
+    expect((await runScheduled({ DB: fixture.db }, now, probe, () => now)).claimed).toBe(false);
+    now = timestamp + 90_000;
     finish();
     await first;
-    expect(await count('check_results')).toBe(1);
+    now = timestamp + 120_000;
+    expect((await runScheduled({ DB: fixture.db }, now, probe, () => now)).stored).toBe(1);
+    expect(probe).toHaveBeenCalledTimes(2);
+    expect(
+      (await fixture.db.prepare('SELECT scheduled_at FROM check_results ORDER BY scheduled_at').all())
+        .results,
+    ).toEqual([{ scheduled_at: timestamp }, { scheduled_at: timestamp + 120_000 }]);
+    expect(await fixture.db.prepare('SELECT total FROM daily_stats').first('total')).toBe(2);
+  });
+  it('checks mixed integer intervals only when due on each minute tick', async () => {
+    const intervals = [1, 2, 7, 60];
+    for (const intervalMinutes of intervals)
+      await createMonitor(
+        fixture.db,
+        { ...httpConfig, name: `${intervalMinutes}m`, intervalMinutes },
+        timestamp,
+      );
+    for (let minute = 0; minute <= 60; minute++) {
+      const now = timestamp + minute * 60_000;
+      const metrics = await runScheduled(
+        { DB: fixture.db },
+        now,
+        async () => success(now),
+        () => now,
+      );
+      expect(metrics.stored).toBe(intervals.filter((interval) => minute % interval === 0).length);
+    }
+    const totals = await fixture.db
+      .prepare(
+        `SELECT interval_minutes, total FROM monitors JOIN daily_stats ON monitor_id = id
+        ORDER BY interval_minutes`,
+      )
+      .all();
+    expect(totals.results).toEqual(
+      intervals.map((interval) => ({ interval_minutes: interval, total: Math.floor(60 / interval) + 1 })),
+    );
   });
   it('expires a crashed lease and rejects an expired in-flight result', async () => {
     await createMonitor(fixture.db, httpConfig, timestamp);
@@ -97,12 +140,18 @@ describe('D1 scheduling and aggregation', () => {
     ).toBe(1);
   });
   it('does not let checks started before edits or deletions write stale results', async () => {
-    const row = await createMonitor(fixture.db, httpConfig, timestamp);
+    const row = await createMonitor(fixture.db, { ...httpConfig, intervalMinutes: 1 }, timestamp);
     await runScheduled(
       { DB: fixture.db },
       timestamp,
       async () => {
-        await updateMonitor(fixture.db, row!.id, 1, { ...httpConfig, name: '已修改' }, timestamp);
+        await updateMonitor(
+          fixture.db,
+          row!.id,
+          1,
+          { ...httpConfig, name: '已修改', intervalMinutes: 7 },
+          timestamp,
+        );
         return success();
       },
       () => timestamp,
@@ -111,27 +160,27 @@ describe('D1 scheduling and aggregation', () => {
     expect(await findMonitor(fixture.db, row!.id)).toMatchObject({ version: 2, last_checked_at: null });
     await runScheduled(
       { DB: fixture.db },
-      timestamp + 300_000,
+      timestamp + 60_000,
       async () => {
         await fixture.db.prepare('DELETE FROM monitors WHERE id = ?').bind(row!.id).run();
-        return success(timestamp + 300_000);
+        return success(timestamp + 60_000);
       },
-      () => timestamp + 300_000,
+      () => timestamp + 60_000,
     );
     expect(await count('check_results')).toBe(0);
   });
   it('honors longer intervals, pause and resume', async () => {
-    const config = { ...httpConfig, intervalMinutes: 10 };
+    const config = { ...httpConfig, intervalMinutes: 2 };
     const row = await createMonitor(fixture.db, config, timestamp);
     const probe = vi.fn(async () => success());
     await runScheduled({ DB: fixture.db }, timestamp, probe, () => timestamp);
-    await runScheduled({ DB: fixture.db }, timestamp + 300_000, probe, () => timestamp + 300_000);
+    await runScheduled({ DB: fixture.db }, timestamp + 60_000, probe, () => timestamp + 60_000);
     expect(probe).toHaveBeenCalledOnce();
     await updateMonitor(fixture.db, row!.id, 1, { ...config, enabled: false });
-    await runScheduled({ DB: fixture.db }, timestamp + 600_000, probe, () => timestamp + 600_000);
+    await runScheduled({ DB: fixture.db }, timestamp + 120_000, probe, () => timestamp + 120_000);
     expect(probe).toHaveBeenCalledOnce();
     await updateMonitor(fixture.db, row!.id, 2, config);
-    await runScheduled({ DB: fixture.db }, timestamp + 900_000, probe, () => timestamp + 900_000);
+    await runScheduled({ DB: fixture.db }, timestamp + 180_000, probe, () => timestamp + 180_000);
     expect(probe).toHaveBeenCalledTimes(2);
   });
   it('rolls back counters and current state if a batch fails', async () => {
@@ -202,6 +251,26 @@ describe('D1 scheduling and aggregation', () => {
       () => oldestExpired,
     );
     expect(await count('daily_stats')).toBe(2);
+  });
+  it('returns every minute in the last 24 hours even after switching to a longer interval', async () => {
+    const row = (await createMonitor(fixture.db, { ...httpConfig, intervalMinutes: 1 }, timestamp))!;
+    const checks = Array.from({ length: 1442 }, (_, index) => timestamp - (1441 - index) * 60_000);
+    for (let offset = 0; offset < checks.length; offset += 100)
+      await fixture.db.batch(
+        checks.slice(offset, offset + 100).map((checkedAt) =>
+          fixture.db
+            .prepare(
+              `INSERT INTO check_results
+              (monitor_id, monitor_version, scheduled_at, checked_at, ok, latency_ms) VALUES (?, 1, ?, ?, 1, 42)`,
+            )
+            .bind(row.id, checkedAt, checkedAt),
+        ),
+      );
+    await updateMonitor(fixture.db, row.id, 1, { ...httpConfig, intervalMinutes: 60 }, timestamp);
+    const history = await getHistory(fixture.db, row.id, timestamp);
+    expect(history?.monitor.intervalMinutes).toBe(60);
+    expect(history?.checks.map((check) => check.checkedAt)).toEqual(checks.slice(1));
+    expect(history?.checks).toHaveLength(1441);
   });
   it('limits monitoring to ten targets atomically', async () => {
     const rows = await Promise.all(

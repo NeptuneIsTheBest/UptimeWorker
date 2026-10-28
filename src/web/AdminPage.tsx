@@ -1,7 +1,9 @@
 import { useState, type FormEvent } from 'react';
 import {
   ERROR_LABELS,
-  INTERVALS,
+  DEFAULT_INTERVAL_MINUTES,
+  MIN_INTERVAL_MINUTES,
+  MAX_INTERVAL_MINUTES,
   HTTP_METHODS,
   type GlobalSettings,
   type HttpMethod,
@@ -71,7 +73,9 @@ function MonitorEditor({
   const [port, setPort] = useState(initial?.type === 'tcp' ? initial.port : 443);
   const [min, setMin] = useState(initial?.type === 'http' ? initial.expectedStatusMin : 200);
   const [max, setMax] = useState(initial?.type === 'http' ? initial.expectedStatusMax : 299);
-  const [intervalMinutes, setInterval] = useState(initial?.intervalMinutes ?? 5);
+  const [intervalMinutes, setInterval] = useState<number | ''>(
+    initial?.intervalMinutes ?? DEFAULT_INTERVAL_MINUTES,
+  );
   const [timeoutSeconds, setTimeoutSeconds] = useState(initial?.timeoutSeconds ?? 10);
   const [enabled, setEnabled] = useState(initial?.enabled ?? true);
   const [busy, setBusy] = useState(false);
@@ -401,14 +405,21 @@ function MonitorEditor({
         )}
         <div className="form-columns">
           <label className="field">
-            检测间隔
-            <select value={intervalMinutes} onChange={(e) => setInterval(Number(e.target.value))}>
-              {INTERVALS.map((n) => (
-                <option value={n} key={n}>
-                  每 {n} 分钟
-                </option>
-              ))}
-            </select>
+            检测间隔（分钟）
+            <input
+              required
+              type="number"
+              min={MIN_INTERVAL_MINUTES}
+              max={MAX_INTERVAL_MINUTES}
+              step={1}
+              value={intervalMinutes}
+              aria-describedby="interval-note"
+              onChange={(e) => setInterval(e.target.value === '' ? '' : Number(e.target.value))}
+            />
+            <small id="interval-note">
+              支持 {MIN_INTERVAL_MINUTES}–{MAX_INTERVAL_MINUTES} 的整数，新建默认 {DEFAULT_INTERVAL_MINUTES}{' '}
+              分钟。
+            </small>
           </label>
           <label className="field">
             超时时间（秒）
@@ -646,7 +657,7 @@ export function AdminPage() {
       )}
       <div className="info-strip">
         <Icon name="clock" size={17} />
-        <span>定时任务每 5 分钟检查到期的监控。连接测试即时执行，不改变当前状态和可用率。</span>
+        <span>定时任务每分钟检查到期的监控。连接测试即时执行，不改变当前状态和可用率。</span>
       </div>
       {settingsOpen && (
         <GlobalSettingsDialog
