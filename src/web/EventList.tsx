@@ -14,29 +14,44 @@ export const eventTime = (time: number) =>
 
 export function EventList<T extends StatusEvent>({
   events,
-  title = '最近事件',
+  title,
+  variant = 'all',
   actions,
 }: {
   events: T[];
   title?: string;
+  variant?: 'all' | 'open' | 'history';
   actions?: (event: T) => ReactNode;
 }) {
   const now = useNow();
+  const visibleEvents = events.filter(
+    (event) => variant === 'all' || (variant === 'open' ? event.status === 'open' : event.status !== 'open'),
+  );
+  if (variant === 'open' && !visibleEvents.length) return null;
+  const heading =
+    title ?? (variant === 'open' ? '进行中与计划事件' : variant === 'history' ? '历史事件' : '最近事件');
   return (
-    <section className="events-section" aria-label={title}>
+    <section
+      className={`events-section${variant === 'open' ? ' events-section-open' : ''}`}
+      aria-label={heading}
+    >
       <div className="section-heading">
         <div>
-          <h2>{title}</h2>
-          <p>维护安排与故障进展 · 时间按浏览器时区显示</p>
+          <h2>{heading}</h2>
+          <p>
+            {variant === 'history' ? '已结束的维护与故障记录' : '维护安排与故障进展'} · 时间按浏览器时区显示
+          </p>
         </div>
       </div>
-      {!events.length ? (
-        <Empty title="暂无关联事件" icon="clock">
-          发布的维护安排和故障进展将在这里展示。
+      {!visibleEvents.length ? (
+        <Empty title={variant === 'history' ? '暂无历史事件' : '暂无关联事件'} icon="clock">
+          {variant === 'history'
+            ? '已完成、已恢复和已停止跟踪的事件将在这里展示。'
+            : '发布的维护安排和故障进展将在这里展示。'}
         </Empty>
       ) : (
         <div className="event-list">
-          {events.map((event) => (
+          {visibleEvents.map((event) => (
             <article className="event-card" key={event.id}>
               <div className="event-heading">
                 <div className="event-tags">

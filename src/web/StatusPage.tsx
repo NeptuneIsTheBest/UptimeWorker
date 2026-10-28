@@ -115,6 +115,7 @@ export function StatusPage() {
   );
   return (
     <Layout siteName={data?.siteName}>
+      <EventList events={data?.events ?? []} variant="open" />
       <div className="page-eyebrow">
         <span className="eyebrow-line" /> SERVICE STATUS{' '}
         <span className="eyebrow-right">持续检测 · 即刻知悉</span>
@@ -276,7 +277,7 @@ export function StatusPage() {
           <span>空白区间表示没有检测数据，不计为成功。</span>
         </div>
       </section>
-      <EventList events={data?.events ?? []} />
+      <EventList events={data?.events ?? []} variant="history" />
       <div className="info-strip">
         <Icon name="info" size={17} />
         <span>状态来自定时连接检测。数据超过两个检测周期未更新时，将标记为过期。</span>

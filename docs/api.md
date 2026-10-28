@@ -6,7 +6,7 @@
 
 | 方法                 | 路径                            | 说明                                             |
 | -------------------- | ------------------------------- | ------------------------------------------------ |
-| GET                  | `/api/status`                   | 站点信息、分组、当前状态、每日可用率、最近事件   |
+| GET                  | `/api/status`                   | 站点信息、分组、当前状态、每日可用率、未结束与历史事件   |
 | GET                  | `/api/monitors/:id/history`     | 服务展示数据、最近 24 小时明细、关联事件         |
 | GET                  | `/api/admin/monitors`           | 完整监控配置、分组、身份与数量上限               |
 | POST                 | `/api/admin/monitors`           | 创建监控                                         |
@@ -63,7 +63,7 @@ GET / PATCH 返回下表字段。PATCH 须携带当前 `version`，其余字段�
 
 `GET /api/admin/events` 返回 `{events, nextCursor, pageRefreshSeconds}`，每页 20 条；将非空 `nextCursor` URL 编码后作为 `?cursor=` 获取下一页。管理事件含 `version`，公开事件不含管理版本、身份或监控目标。
 
-`/api/status` 返回 `groups` 和最新 20 条 `events`；`/api/monitors/:id/history` 返回 `checks` 和最新 20 条关联 `events`。自动事件文案仅使用节点名称及通用检测描述。
+`/api/status` 返回 `groups` 和 `events`；`/api/monitors/:id/history` 返回 `checks` 和仅关联该节点的 `events`。公开 `events` 包含全部 `status = open` 的事件，以及最近 20 条已结束事件（`resolved` / `stopped`），合计可以超过 20 条；整体按 `updatedAt` 倒序、同时间按 `id` 倒序排列。未结束事件不受历史条数限制，待开始及已过计划时间但尚未确认完成的维护仍包含在内。自动事件文案仅使用节点名称及通用检测描述。
 
 ## 监控配置
 

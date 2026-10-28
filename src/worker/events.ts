@@ -111,6 +111,25 @@ async function readEvents(
 export async function getEvent(db: D1Database, id: string) {
   return (await readEvents(db, 'SELECT e.* FROM events e WHERE e.id = ?', [id]))[0] ?? null;
 }
+export async function listPublicEvents(db: D1Database, monitorId?: string): Promise<StatusEvent[]> {
+  const rows = await readEvents(
+    db,
+    `WITH scoped AS (
+      SELECT e.* FROM events e ${
+        monitorId
+          ? 'WHERE EXISTS (SELECT 1 FROM event_monitors em WHERE em.event_id = e.id AND em.monitor_id = ?)'
+          : ''
+      }
+    )
+    SELECT * FROM scoped
+    WHERE status = 'open' OR id IN (
+      SELECT id FROM scoped WHERE status != 'open' ORDER BY updated_at DESC, id DESC LIMIT 20
+    )
+    ORDER BY updated_at DESC, id DESC`,
+    monitorId ? [monitorId] : [],
+  );
+  return rows.map(publicEvent);
+}
 export async function listEvents(db: D1Database, options: { monitorId?: string; cursor?: string } = {}) {
   const predicates: string[] = [];
   const values: (string | number)[] = [];

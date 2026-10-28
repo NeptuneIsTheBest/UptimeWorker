@@ -35,6 +35,7 @@ export function DetailPage({ id }: { id: string }) {
       ) : (
         data && (
           <>
+            <EventList events={data.events ?? []} variant="open" />
             <div className="detail-heading">
               <div>
                 <div className="page-eyebrow">SERVICE INSIGHTS · {data.monitor.type.toUpperCase()}</div>
@@ -75,7 +76,7 @@ export function DetailPage({ id }: { id: string }) {
               </div>
               <HistoryBars days={data.monitor.days} />
             </section>
-            <EventList events={data.events ?? []} title="关联事件" />
+            <EventList events={data.events ?? []} variant="history" />
           </>
         )
       )}

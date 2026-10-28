@@ -11,7 +11,7 @@ import {
 import type { Env, MonitorRow } from './types';
 import { parseMonitorConfig } from '../shared/validation';
 import { getPageRefreshSeconds } from './settings';
-import { assertGroup, listEvents, listGroups, publicEvent } from './events';
+import { assertGroup, listGroups, listPublicEvents } from './events';
 
 const DAY = 86_400_000;
 export const utcDay = (time: number) => new Date(time).toISOString().slice(0, 10);
@@ -185,12 +185,12 @@ export async function getStatus(env: Env, now = Date.now()): Promise<StatusRespo
     ]),
     getPageRefreshSeconds(env.DB),
     listGroups(env.DB),
-    listEvents(env.DB),
+    listPublicEvents(env.DB),
   ]);
   const daily = stats.results as unknown as DailyRow[];
   return {
     groups: groups.map(({ version: _version, ...group }) => group),
-    events: events.events.map(publicEvent),
+    events,
     siteName: env.SITE_NAME || 'UptimeWorker',
     pageRefreshSeconds,
     generatedAt: now,
@@ -223,10 +223,10 @@ export async function getHistory(
         .bind(id, now - DAY),
     ]),
     getPageRefreshSeconds(db),
-    listEvents(db, { monitorId: id }),
+    listPublicEvents(db, id),
   ]);
   return {
-    events: events.events.map(publicEvent),
+    events,
     monitor: publicMonitor(row, daily.results as unknown as DailyRow[], now),
     pageRefreshSeconds,
     generatedAt: now,

@@ -60,7 +60,8 @@ test('admin can create HTTP and TCP monitors, edit, pause, test, and delete', as
   await expect(page.getByRole('link', { name: 'E2E API' })).toBeVisible();
   await expect(page.locator('.monitor-card').filter({ hasText: 'E2E API' })).toContainText('等待检测');
   await page.getByRole('link', { name: 'E2E API' }).click();
-  await expect(page.getByRole('heading', { name: '暂无关联事件' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '暂无历史事件' })).toBeVisible();
+  await expect(page.getByRole('region', { name: '进行中与计划事件', exact: true })).toHaveCount(0);
   await page.getByRole('link', { name: '监控管理', exact: true }).click();
   for (const name of ['E2E API', 'E2E 数据库']) {
     await page.getByRole('button', { name: `删除 ${name}`, exact: true }).click();
@@ -99,6 +100,8 @@ test('public overview is responsive, filterable and makes stale results explicit
   await page.route('**/api/status', (route) => route.fulfill({ json: data }));
   await page.goto('/');
   await expect(page.getByRole('heading', { name: '所有服务，运行如常。' })).toBeVisible();
+  await expect(page.getByRole('region', { name: '进行中与计划事件', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: '暂无历史事件' })).toBeVisible();
   await expect(page.locator('.monitor-card')).toHaveCount(4);
   await page.getByLabel('搜索服务').fill('数据库');
   await expect(page.locator('.monitor-card')).toHaveCount(1);
@@ -138,7 +141,7 @@ test('service details render a full day of minute history on desktop and mobile'
   await expect(page.getByRole('img', { name: /最近 24 小时响应时间/ })).toBeVisible();
   const chartPath = await page.locator('.response-chart path').getAttribute('d');
   expect(chartPath?.match(/[ML] /g)).toHaveLength(1441);
-  await expect(page.getByRole('heading', { name: '关联事件', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '历史事件', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: '最近检测', exact: true })).toHaveCount(0);
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.locator('.response-chart')).toHaveAttribute('viewBox', /^0 0 3\d\d 210$/);

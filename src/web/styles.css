@@ -1872,6 +1872,9 @@ td {
 .events-section {
   margin-top: 40px;
 }
+.events-section-open {
+  margin: 0 0 32px;
+}
 .event-list {
   display: grid;
   gap: 16px;

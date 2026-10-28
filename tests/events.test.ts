@@ -13,7 +13,7 @@ import {
 import { runScheduled } from '../src/worker/scheduler';
 import { apiClient } from './api-client';
 import { databaseFixture, environment, httpConfig, resetDatabase, success, timestamp } from './helpers';
-import type { EventConfig } from '../src/shared/types';
+import type { AdminEvent, EventConfig, StatusEvent } from '../src/shared/types';
 
 let fixture: Awaited<ReturnType<typeof databaseFixture>>;
 beforeAll(async () => {
@@ -237,6 +237,9 @@ describe('events and groups', () => {
       monitors: [{ id: null, name: row.name }],
       updates: [{ status: 'stopped' }],
     });
+    expect((await getStatus(environment(fixture.db))).events).toMatchObject([
+      { id: event.id, status: 'stopped', monitors: event.monitors, updates: event.updates },
+    ]);
     expect((await fixture.db.prepare('PRAGMA foreign_key_check').all()).results).toEqual([]);
   });
   it('applies multi-node edits and progress atomically and rejects stale writers', async () => {
@@ -379,6 +382,57 @@ describe('events and groups', () => {
     expect(await recent()).toHaveLength(0);
     for (let n = 12; n <= 16; n++) await tick(n);
     expect((await recent())[0].startedAt).toBe(at(11));
+  });
+  it('returns all open events and the latest 20 closed events within each public scope', async () => {
+    const first = await node();
+    const second = await node();
+    const open: AdminEvent[] = [];
+    const closed: AdminEvent[] = [];
+    for (let index = 0; index < 24; index++) {
+      open.push(
+        await createEvent(
+          fixture.db,
+          config(first.id, {
+            title: `未结束 ${index}`,
+            monitorIds: index === 0 ? [first.id, second.id] : [first.id],
+            ...(index < 3
+              ? { type: 'maintenance', startsAt: at(index * 40), endsAt: at(index * 40 + 20) }
+              : {}),
+          }),
+          at(0),
+        ),
+      );
+    }
+    for (let index = 0; index < 22; index++) {
+      const event = await createEvent(fixture.db, config(first.id, { title: `已结束 ${index}` }), at(1));
+      closed.push(await appendEventUpdate(fixture.db, event.id, 1, '处理完成', true, at(10 + (index % 3))));
+    }
+    const unrelatedOpen = await createEvent(fixture.db, config(second.id, { title: '其他节点故障' }), at(30));
+    const unrelated = await createEvent(fixture.db, config(second.id, { title: '其他节点已恢复' }), at(31));
+    const unrelatedClosed = await appendEventUpdate(fixture.db, unrelated.id, 1, '已恢复', true, at(32));
+    const newestFirst = (a: AdminEvent, b: AdminEvent) =>
+      b.updatedAt - a.updatedAt || b.id.localeCompare(a.id);
+    closed.sort(newestFirst);
+    expect(open.slice(0, 3).map((event) => eventLabel(event, at(50)))).toEqual([
+      '已过计划时间',
+      '维护进行中',
+      '待开始',
+    ]);
+    const { request } = apiClient(fixture.db);
+    const cases: [string, AdminEvent[]][] = [
+      ['status', [...open, unrelatedOpen, unrelatedClosed, ...closed.slice(0, 19)]],
+      [`monitors/${first.id}/history`, [...open, ...closed.slice(0, 20)]],
+      [`monitors/${second.id}/history`, [open[0], unrelatedOpen, unrelatedClosed]],
+    ];
+    for (const [path, expected] of cases) {
+      const response = await request(path, 'GET', undefined, { headers: {} });
+      expect(response.status).toBe(200);
+      const { events } = (await response.json()) as { events: StatusEvent[] };
+      expect(events).toEqual(expected.sort(newestFirst).map(({ version: _version, ...event }) => event));
+      expect(new Set(events.map((event) => event.id)).size).toBe(events.length);
+      expect(JSON.stringify(events)).not.toContain(httpConfig.url);
+    }
+    expect((await listEvents(fixture.db)).events).toHaveLength(20);
   });
   it('paginates identical timestamps without duplicates and protects management APIs', async () => {
     const row = await node();
