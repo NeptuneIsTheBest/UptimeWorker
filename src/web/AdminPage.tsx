@@ -8,6 +8,7 @@ import {
 } from '../shared/types';
 import { parseMonitorConfig } from '../shared/validation';
 import { api, useRemote } from './api';
+import { GlobalSettingsDialog } from './GlobalSettingsDialog';
 import {
   Empty,
   ErrorNotice,
@@ -244,6 +245,7 @@ export function AdminPage() {
   const { data, error, loading, refresh } = useRemote<AdminResponse>('/api/admin/monitors');
   const [editor, setEditor] = useState<AdminMonitor | 'new' | null>(null);
   const [deleting, setDeleting] = useState<AdminMonitor | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ text: string; error: boolean } | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -295,14 +297,20 @@ export function AdminPage() {
           <h1>监控管理</h1>
           <p className="muted">配置监控目标、检测间隔与期望响应。</p>
         </div>
-        <button
-          className="button primary"
-          onClick={() => setEditor('new')}
-          disabled={!data || data.monitors.length >= data.limit}
-        >
-          <Icon name="plus" size={18} />
-          新增监控
-        </button>
+        <div className="admin-heading-actions">
+          <button className="button secondary" onClick={() => setSettingsOpen(true)}>
+            <Icon name="shield" size={18} />
+            全局设置
+          </button>
+          <button
+            className="button primary"
+            onClick={() => setEditor('new')}
+            disabled={!data || data.monitors.length >= data.limit}
+          >
+            <Icon name="plus" size={18} />
+            新增监控
+          </button>
+        </div>
       </div>
       {data && (
         <div className="access-strip">
@@ -439,6 +447,19 @@ export function AdminPage() {
         <Icon name="clock" size={17} />
         <span>定时任务每 5 分钟检查到期的监控。连接测试即时执行，不改变当前状态和可用率。</span>
       </div>
+      {settingsOpen && (
+        <GlobalSettingsDialog
+          monitors={data?.monitors ?? []}
+          monitorsLoading={loading}
+          monitorsError={error}
+          retryMonitors={refresh}
+          close={() => setSettingsOpen(false)}
+          saved={() => {
+            setSettingsOpen(false);
+            setNotice({ text: '全局设置已保存，将应用于新的连接测试及下一轮调度。', error: false });
+          }}
+        />
+      )}
       {editor && (
         <MonitorEditor
           initial={editor === 'new' ? undefined : editor}

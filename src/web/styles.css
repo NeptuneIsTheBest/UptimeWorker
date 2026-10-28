@@ -61,6 +61,7 @@ select {
 button:focus-visible,
 a:focus-visible,
 input:focus-visible,
+textarea:focus-visible,
 select:focus-visible {
   outline: 2px solid var(--green);
 }
@@ -1089,7 +1090,8 @@ td {
   min-width: 0;
 }
 .field input,
-.field select {
+.field select,
+.field textarea {
   width: 100%;
   border: 1px solid #dfe8e2;
   border-radius: 7px;
@@ -1097,6 +1099,116 @@ td {
   min-height: 40px;
   font-size: 12px;
   color: var(--text);
+}
+.field textarea {
+  resize: vertical;
+  line-height: 1.6;
+}
+.admin-heading-actions,
+.settings-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.settings-fields {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.settings-configured {
+  margin-left: 10px;
+  color: var(--green);
+}
+.settings-load-error {
+  padding: 20px 25px;
+}
+.settings-domain-picker {
+  border: 0;
+  padding: 0;
+  margin: 0 0 17px;
+  min-width: 0;
+}
+.settings-domain-picker legend {
+  padding: 0;
+  font-size: 11px;
+  color: #668171;
+}
+.settings-domain-options {
+  display: grid;
+  gap: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+  margin-top: 8px;
+}
+.checkbox-field.settings-domain-option {
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 10px 12px;
+}
+.settings-domain-option:has(input:checked) {
+  border-color: #9dc7b5;
+  background: #f0f8f3;
+}
+.settings-domain-option input {
+  flex-shrink: 0;
+}
+.settings-domain-option span {
+  min-width: 0;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.settings-domain-option strong {
+  display: block;
+  font-weight: 500;
+}
+.settings-domain-option small {
+  display: block;
+  margin-top: 3px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.settings-domain-status,
+.settings-domain-note {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.settings-domain-note {
+  font-size: 10px;
+}
+.waf-rule-help {
+  margin-bottom: 18px;
+  font-size: 11px;
+  line-height: 1.8;
+  color: var(--muted);
+}
+.waf-rule-help summary {
+  cursor: pointer;
+  color: var(--green);
+}
+.waf-rule-help p {
+  margin: 10px 0;
+}
+.waf-rule-help pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #f6f9f7;
+  font-size: 10px;
+}
+.settings-copy-notice {
+  font-size: 11px;
+  color: var(--green);
+  line-height: 1.8;
+  margin-bottom: 15px;
+}
+.settings-reload {
+  margin-bottom: 15px;
 }
 .field small {
   font-size: 10px;
@@ -1509,7 +1621,11 @@ td {
   .admin-heading p {
     font-size: 11px;
   }
-  .admin-heading > .button {
+  .admin-heading {
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  .admin-heading-actions .button {
     font-size: 11px;
     padding: 9px 11px;
   }
@@ -1587,7 +1703,8 @@ td {
     width: 14px;
   }
   .field input,
-  .field select {
+  .field select,
+  .field textarea {
     font-size: 16px;
     padding: 10px;
   }

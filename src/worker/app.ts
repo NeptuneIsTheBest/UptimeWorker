@@ -2,6 +2,7 @@ import { Hono, type MiddlewareHandler } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { parseMonitorConfig, ValidationError } from '../shared/validation';
 import { MAX_MONITORS } from '../shared/types';
+import { parseGlobalSettingsPatch } from '../shared/settings';
 import { requireAccess, type TokenVerifier } from './auth';
 import {
   adminMonitor,
@@ -14,6 +15,7 @@ import {
   updateMonitor,
 } from './repository';
 import type { AppEnv, Probe } from './types';
+import { adminSettings, getGlobalSettings, updateGlobalSettings } from './settings';
 
 export function createApp(probe: Probe, verify?: TokenVerifier) {
   const app = new Hono<AppEnv>();
@@ -60,6 +62,20 @@ export function createApp(probe: Probe, verify?: TokenVerifier) {
       limit: MAX_MONITORS,
     }),
   );
+  app.get('/api/admin/settings', async (c) =>
+    c.json(adminSettings((await getGlobalSettings(c.env.DB)).settings)),
+  );
+  app.patch('/api/admin/settings', async (c) => {
+    const body = await c.req.json();
+    const { settings } = await getGlobalSettings(c.env.DB);
+    const patch = parseGlobalSettingsPatch(body, adminSettings(settings));
+    if (patch.version !== settings.version)
+      return c.json({ error: '全局设置已被修改，请重新加载后重试。' }, 409);
+    const updated = await updateGlobalSettings(c.env.DB, patch);
+    return updated
+      ? c.json(adminSettings(updated))
+      : c.json({ error: '全局设置已被修改，请重新加载后重试。' }, 409);
+  });
   app.post('/api/admin/monitors', async (c) => {
     const config = parseMonitorConfig(await c.req.json());
     const row = await createMonitor(c.env.DB, config);
@@ -82,7 +98,9 @@ export function createApp(probe: Probe, verify?: TokenVerifier) {
   });
   app.post('/api/admin/monitors/:id/test', async (c) => {
     const row = await findMonitor(c.env.DB, c.req.param('id'));
-    return row ? c.json(await probe(monitorConfig(row))) : c.json({ error: '监控不存在。' }, 404);
+    if (!row) return c.json({ error: '监控不存在。' }, 404);
+    const { settings } = await getGlobalSettings(c.env.DB);
+    return c.json(await probe(monitorConfig(row), { wafBypass: settings.wafBypass }));
   });
   const adminPage: MiddlewareHandler<AppEnv> = async (c) => {
     // Preserve the navigation URL: /index.html is canonicalized to / by Assets.

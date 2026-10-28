@@ -1,5 +1,7 @@
 import type { MonitorConfig, ProbeResult, ErrorCode } from '../shared/types';
 import { parseHttpUrl, ValidationError } from '../shared/validation';
+import { WAF_BYPASS_HEADER } from '../shared/settings';
+import type { ProbeOptions } from './types';
 
 export interface TcpSocket {
   opened: Promise<unknown>;
@@ -20,7 +22,7 @@ class ProbeError extends Error {
 }
 
 export function createProbe(deps: ProbeDependencies) {
-  return async (config: MonitorConfig): Promise<ProbeResult> => {
+  return async (config: MonitorConfig, options?: ProbeOptions): Promise<ProbeResult> => {
     const now = deps.now ?? Date.now;
     const started = now();
     const controller = new AbortController();
@@ -59,17 +61,32 @@ export function createProbe(deps: ProbeDependencies) {
         }
         let url = parseHttpUrl(config.url);
         for (let redirects = 0; ; redirects++) {
+          // Build fresh headers for every hop so redirects cannot forward the token outside its scope.
+          const headers: Record<string, string> = {
+            'User-Agent': 'UptimeWorker/1.0',
+            'Cache-Control': 'no-cache',
+          };
+          const bypass = options?.wafBypass;
+          if (
+            bypass?.enabled &&
+            bypass.token &&
+            url.protocol === 'https:' &&
+            bypass.domains.includes(url.hostname.toLowerCase().replace(/\.$/, ''))
+          )
+            headers[WAF_BYPASS_HEADER] = bypass.token;
           const response = await deps.fetch(url.toString(), {
             method: config.method,
             redirect: 'manual',
             signal: controller.signal,
-            headers: { 'User-Agent': 'UptimeWorker/1.0', 'Cache-Control': 'no-cache' },
+            headers,
             cf: { cacheTtl: 0, cacheEverything: false },
           });
           httpStatus = response.status;
           const location = response.headers.get('location');
           // Release the body before opening the next connection, including on errors.
           if (response.body) await response.body.cancel();
+          if (response.headers.get('cf-mitigated') === 'challenge')
+            throw new ProbeError('cloudflare_challenge');
           if ([301, 302, 303, 307, 308].includes(response.status) && location) {
             if (redirects >= 3) throw new ProbeError('redirect_limit');
             url = parseHttpUrl(new URL(location, url).toString());

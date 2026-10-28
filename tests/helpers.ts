@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { unstable_splitSqlQuery } from 'wrangler';
 import type { MonitorConfig, ProbeResult } from '../src/shared/types';
@@ -48,8 +48,11 @@ export async function databaseFixture() {
     }),
   );
   const db = (await mf.getD1Database('DB')) as unknown as D1Database;
-  const sql = await readFile(new URL('../migrations/0001_initial.sql', import.meta.url), 'utf8');
-  await db.batch(unstable_splitSqlQuery(sql).map((statement) => db.prepare(statement)));
+  const migrations = new URL('../migrations/', import.meta.url);
+  for (const file of (await readdir(migrations)).filter((file) => file.endsWith('.sql')).sort()) {
+    const sql = await readFile(new URL(file, migrations), 'utf8');
+    await db.batch(unstable_splitSqlQuery(sql).map((statement) => db.prepare(statement)));
+  }
   return { db, dispose: () => mf.dispose() };
 }
 export function environment(db: D1Database): Env {
@@ -67,5 +70,7 @@ export async function resetDatabase(db: D1Database) {
   await db.batch([
     db.prepare('DELETE FROM monitors'),
     db.prepare('UPDATE scheduler_state SET lease_owner = NULL, lease_until = 0, last_completed_slot = 0'),
+    db.prepare(`INSERT INTO global_settings(id) VALUES (1) ON CONFLICT(id) DO UPDATE SET
+      waf_bypass_enabled = 0, waf_bypass_token = NULL, waf_bypass_domains_json = '[]', version = 1`),
   ]);
 }

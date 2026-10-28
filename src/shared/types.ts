@@ -1,7 +1,21 @@
 export const INTERVALS = [5, 10, 15, 30, 60] as const;
 export const MAX_MONITORS = 10;
 export type MonitorStatus = 'up' | 'down' | 'unknown' | 'paused' | 'stale';
-export type ErrorCode = 'timeout' | 'network' | 'unexpected_status' | 'redirect_limit' | 'blocked_target';
+export type ErrorCode =
+  'timeout' | 'network' | 'unexpected_status' | 'redirect_limit' | 'blocked_target' | 'cloudflare_challenge';
+
+export interface GlobalSettings {
+  version: number;
+  wafBypassEnabled: boolean;
+  wafBypassDomains: string[];
+  wafBypassTokenConfigured: boolean;
+}
+export interface GlobalSettingsPatch {
+  version: number;
+  wafBypassEnabled?: boolean;
+  wafBypassDomains?: string[];
+  wafBypassToken?: string;
+}
 
 export interface CommonConfig {
   name: string;
@@ -75,4 +89,5 @@ export const ERROR_LABELS: Record<ErrorCode, string> = {
   unexpected_status: 'HTTP 状态码不符合预期',
   redirect_limit: '重定向超过 3 次',
   blocked_target: '此目标受到网络或 Cloudflare TCP 限制',
+  cloudflare_challenge: '请求被 Cloudflare 验证拦截，请检查目标站点的 WAF Skip 规则',
 };

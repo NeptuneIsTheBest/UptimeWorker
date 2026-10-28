@@ -1,6 +1,7 @@
 import type { ProbeResult } from '../shared/types';
 import { monitorConfig, utcDay, dayStart } from './repository';
 import type { Env, MonitorRow, Probe } from './types';
+import { getGlobalSettings } from './settings';
 
 const SLOT = 300_000;
 const DAY = 86_400_000;
@@ -48,7 +49,7 @@ export async function runScheduled(
     rowsWritten: 0,
     elapsedMs: 0,
   };
-  const count = (results: D1Result[]) =>
+  const count = (results: Pick<D1Result, 'meta'>[]) =>
     results.forEach(({ meta }) => {
       metrics.rowsRead += meta.rows_read ?? 0;
       metrics.rowsWritten += meta.rows_written ?? 0;
@@ -63,6 +64,9 @@ export async function runScheduled(
   if (!lease.results.length) return metrics;
   metrics.claimed = true;
   try {
+    const settingsRead = await getGlobalSettings(env.DB);
+    count([settingsRead]);
+    const options = { wafBypass: settingsRead.settings.wafBypass };
     const due = await env.DB.prepare(
       'SELECT * FROM monitors WHERE enabled = 1 AND next_check_at <= ? ORDER BY next_check_at, id LIMIT 10',
     )
@@ -74,7 +78,7 @@ export async function runScheduled(
       4,
       async (row): Promise<{ row: MonitorRow; result: ProbeResult } | null> => {
         try {
-          return { row, result: await probe(monitorConfig(row)) };
+          return { row, result: await probe(monitorConfig(row), options) };
         } catch {
           console.error(JSON.stringify({ event: 'probe_internal_error', monitorId: row.id }));
           return null;

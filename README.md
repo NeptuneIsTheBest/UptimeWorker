@@ -1,6 +1,6 @@
 # UptimeWorker
 
-部署在 Cloudflare Workers 上的轻量服务监控网站：公开状态页、Cloudflare Access 管理后台、HTTP/HTTPS 与 TCP Port 检测、D1 历史数据，以及 GitHub Actions 自动部署。
+部署在 Cloudflare Workers 上的轻量服务监控网站：公开状态页、Cloudflare Access 管理后台、HTTP/HTTPS 与 TCP Port 检测、D1 历史数据，以及 GitHub Actions 手动触发部署。
 
 ## 功能
 
@@ -84,9 +84,9 @@ Access 配置同时存在于 Variables 和 Secrets 时，优先使用 Variables 
 
 Worker / D1 名称使用小写字母、数字与连字符，字母开头，最长 63 个字符。每个实例应使用自己的名称；不要将不相关的数据库命名为相同名称。
 
-推送到 `main`，或在 **Actions → Verify and deploy → Run workflow** 选择 `main` 运行。
+在 **Actions → Verify and deploy → Run workflow** 选择 `main` 手动运行。PR 和任何分支推送都不会自动触发该工作流。
 
-工作流会：
+选择 `main` 手动运行后，工作流会：
 
 1. 使用 lockfile 安装依赖，运行类型检查、单元 / D1 集成测试、生产构建和 Chromium 浏览器测试。
 2. 检查部署变量，通过 Cloudflare API 查找完全匹配名称的 D1；不存在则创建，存在则复用。
@@ -94,7 +94,7 @@ Worker / D1 名称使用小写字母、数字与连字符，字母开头，最�
 4. 执行 `wrangler d1 migrations apply DB --remote --config wrangler.deploy.json`。
 5. 仅在迁移成功后发布 Worker 和静态资源，启用每 5 分钟的 Cron。
 
-PR 只验证，不部署，也无法使用生产密钥。生产发布串行执行，正在运行的发布不会被新推送取消。配置、查库、构建或迁移失败都会阻止发布；数据库不会被自动删除或重建。
+手动选择其他分支时只执行验证；仅 `main` 分支验证通过后才会部署。生产发布串行执行，正在运行的发布不会被后续手动运行取消。验证、配置、查库、构建或迁移失败都会阻止发布；数据库不会被自动删除或重建。
 
 部署地址为 `https://<WORKER_NAME>.<你的子域名>.workers.dev`。首次添加 Cron 后可能需要数分钟传播，参见 [Cron Triggers](https://developers.cloudflare.com/workers/configuration/cron-triggers/)。
 
@@ -119,6 +119,32 @@ PR 只验证，不部署，也无法使用生产密钥。生产发布串行执�
 - 编辑监控保留历史，并重置当前状态，等待新配置的下一轮结果；历史会包含编辑前的样本。删除监控会同时删除它的明细与汇总。
 - 公共 API 缓存 60 秒，后台修改在公开页面最多可能延迟约一分钟出现。管理员 API 不缓存。
 
+### 全局 Cloudflare WAF 放行
+
+在「监控管理 → 全局设置」中配置放行密钥、生效域名和开关。默认关闭；定时检测和「测试连接」都使用此设置，保存后无需重新部署。每轮调度读取一次设置，新的连接测试读取最新设置；设置读取失败时不执行检测，也不写入检测样本。
+
+可以直接在「从监控列表选择」中勾选已有 HTTPS 监控的域名，列表同时显示对应监控名称，包含已暂停监控。同域名合并为一项，不列出 HTTP、TCP 或 IP 地址。勾选与下方「生效域名」输入框同步，也可手动补充列表外的域名；点击「保存设置」后生效。新增监控需自行勾选，修改或删除监控不会自动修改已保存的放行名单。监控列表读取失败时可重试，仍可手动编辑生效域名。
+
+仅向生效列表中**完整域名匹配的 HTTPS 地址**发送 `X-UptimeWorker-WAF-Bypass` 请求头。域名每行一个，自动统一大小写、移除尾点、规范化国际化域名并去重；不支持通配符、协议、端口或路径。`example.com` 不包含 `api.example.com`，需要分别添加。每次重定向重新检查协议和域名，名单外地址或 HTTP 地址不携带密钥。TCP 检测不受开关影响。
+
+此功能需要你能管理目标站点的 Cloudflare WAF。配置步骤：
+
+1. 在全局设置中点击「生成随机密钥」（32 字节随机数），或输入 32–256 位字母、数字、下划线、连字符组成的密钥，并从监控列表勾选或手动填写生效域名。新密钥请在保存前复制保管。
+2. 展开「Cloudflare Skip 规则配置」，复制完整规则；若使用模板，将 `<YOUR_TOKEN>` 替换为相同密钥。规则示例：
+
+   ```text
+   (http.host in {"example.com" "api.example.com"}) and
+   (http.request.method in {"GET" "HEAD"}) and
+   (any(http.request.headers["x-uptimeworker-waf-bypass"][*] eq "<YOUR_TOKEN>"))
+   ```
+
+3. 在每个目标站点的 Cloudflare **Security rules** 中创建自定义规则，填写表达式，操作选择 **Skip**，放在相关拦截规则之前。按拦截来源选择跳过剩余自定义规则、Managed Rules、Rate Limiting 或 Super Bot Fight Mode 等功能，并保留匹配日志以便验收。普通 **Bot Fight Mode 无法通过 Skip 跳过**；Browser Integrity Check 等产品需要单独选择对应的 Skip 选项。[官方配置步骤](https://developers.cloudflare.com/waf/custom-rules/skip/) · [可跳过的功能](https://developers.cloudflare.com/waf/custom-rules/skip/options/)
+4. 保存目标站点规则后，启用本项目的开关并保存设置。执行「测试连接」，再等待下一轮定时检测，结合 Cloudflare Security Events 确认请求匹配到放行规则。可在自有测试域名上比较开关前后的结果；本地测试不能替代这一步。
+
+密钥保存在 D1，保存后接口和页面只显示是否已配置，不回传原密钥，也不写入日志或检测历史。密钥留空表示保留，关闭开关保留已有密钥和域名。更换密钥需同步更新目标站点的规则；重新加载设置后只提供含占位符的模板。
+
+如果收到 `cf-mitigated: challenge`，结果为 `cloudflare_challenge`，页面提示检查放行规则；即使 HTTP 状态码处于期望范围，也不会把挑战页计为成功。[挑战响应识别](https://developers.cloudflare.com/cloudflare-challenges/challenge-types/challenge-pages/detect-response/)
+
 ### 免费额度与运行观测
 
 默认 10 个监控、5 分钟间隔产生最多 2,880 次定时检测 / 天。并发为 4；每轮 HTTP 最多 40 个请求（包含重定向），结果批量写入 D1。
@@ -129,17 +155,21 @@ PR 只验证，不部署，也无法使用生产密钥。生产发布串行执�
 
 ## 接口
 
-| 方法   | 路径                           | 说明                             |
-| ------ | ------------------------------ | -------------------------------- |
-| GET    | `/api/status`                  | 站点信息、当前状态、每日可用率   |
-| GET    | `/api/monitors/:id/history`    | 服务展示数据、最近 24 小时明细   |
-| GET    | `/api/admin/monitors`          | 监控完整配置、身份与数量限制     |
-| POST   | `/api/admin/monitors`          | 创建监控                         |
-| PATCH  | `/api/admin/monitors/:id`      | 更新配置，必须携带当前 `version` |
-| DELETE | `/api/admin/monitors/:id`      | 删除监控及历史                   |
-| POST   | `/api/admin/monitors/:id/test` | 只测试已保存目标，不写入统计     |
+| 方法   | 路径                           | 说明                                       |
+| ------ | ------------------------------ | ------------------------------------------ |
+| GET    | `/api/status`                  | 站点信息、当前状态、每日可用率             |
+| GET    | `/api/monitors/:id/history`    | 服务展示数据、最近 24 小时明细             |
+| GET    | `/api/admin/monitors`          | 监控完整配置、身份与数量限制               |
+| POST   | `/api/admin/monitors`          | 创建监控                                   |
+| PATCH  | `/api/admin/monitors/:id`      | 更新配置，必须携带当前 `version`           |
+| DELETE | `/api/admin/monitors/:id`      | 删除监控及历史                             |
+| POST   | `/api/admin/monitors/:id/test` | 只测试已保存目标，不写入统计               |
+| GET    | `/api/admin/settings`          | 全局设置、版本及密钥是否已配置，不返回密钥 |
+| PATCH  | `/api/admin/settings`          | 更新全局设置，必须携带当前 `version`       |
 
 管理接口必须通过 Access；写请求必须携带同源 `Origin` 和 `Content-Type: application/json`，DELETE / 测试可发送 `{}`。公开接口不返回目标地址、配置、JWT 或原始异常。错误统一为 `{ "error": "说明" }`，未知 API 返回 JSON 404。
+
+全局设置的 GET / PATCH 响应为 `version`、`wafBypassEnabled`、`wafBypassDomains`、`wafBypassTokenConfigured`。PATCH 必须携带当前 `version`，其余字段可按需提交；`wafBypassToken` 仅用于写入，省略或空字符串保留原密钥。配置不合法返回 `400`，版本冲突返回 `409`，需重新读取设置后提交。
 
 HTTP 创建示例：
 

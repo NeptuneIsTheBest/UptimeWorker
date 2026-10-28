@@ -1,6 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createProbe, type TcpSocket } from '../src/worker/probes';
 import { httpConfig, tcpConfig } from './helpers';
+import { WAF_BYPASS_HEADER } from '../src/shared/settings';
+import type { ProbeOptions } from '../src/worker/types';
+
+const bypassOptions: ProbeOptions = {
+  wafBypass: {
+    enabled: true,
+    domains: ['example.com', 'api.example.com', 'xn--fsqu00a.xn--0zwm56d'],
+    token: 'test-bypass-token-'.repeat(4),
+  },
+};
 
 afterEach(() => vi.useRealTimers());
 describe('HTTP probes', () => {
@@ -12,6 +22,7 @@ describe('HTTP probes', () => {
     expect(result).toMatchObject({ ok: true, httpStatus: 200, errorCode: null });
     expect(cancel).toHaveBeenCalledOnce();
     expect(fetchMock.mock.calls[0][1]).toMatchObject({ method: 'GET', redirect: 'manual' });
+    expect(new Headers(fetchMock.mock.calls[0][1]?.headers).has(WAF_BYPASS_HEADER)).toBe(false);
   });
   it('supports HEAD and configurable expected statuses', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 204 }));
@@ -77,6 +88,146 @@ describe('HTTP probes', () => {
     })(httpConfig);
     expect(result.errorCode).toBe('network');
     expect(JSON.stringify(result)).not.toContain('secret');
+  });
+});
+describe('WAF bypass requests', () => {
+  it.each([
+    ['https://example.com/health', true, true],
+    ['https://example.com/health', false, false],
+    ['http://example.com/health', true, false],
+    ['https://other.test/health', true, false],
+    ['https://child.example.com/health', true, false],
+    ['https://example.com.evil.test/health', true, false],
+    ['https://EXAMPLE.COM./health', true, true],
+    ['https://例子.测试/health', true, true],
+  ])('scopes the token for %s with enabled=%s', async (url, enabled, expected) => {
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async () => new Response(null));
+    const probe = createProbe({ fetch: fetchMock, connect: vi.fn() });
+    for (const method of ['GET', 'HEAD'] as const) {
+      expect(
+        (
+          await probe(
+            { ...httpConfig, url, method },
+            {
+              wafBypass: { ...bypassOptions.wafBypass, enabled },
+            },
+          )
+        ).ok,
+      ).toBe(true);
+    }
+    for (const [, init] of fetchMock.mock.calls) {
+      const headers = new Headers(init?.headers);
+      expect(headers.get(WAF_BYPASS_HEADER)).toBe(expected ? bypassOptions.wafBypass.token : null);
+      expect(headers.get('User-Agent')).toBe('UptimeWorker/1.0');
+      expect(init?.redirect).toBe('manual');
+    }
+  });
+
+  it('rebuilds headers at each cross-domain and HTTPS downgrade redirect', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(null, { status: 302, headers: { location: 'https://other.test/path' } }),
+      )
+      .mockResolvedValueOnce(
+        new Response(null, { status: 302, headers: { location: 'https://api.example.com/path' } }),
+      )
+      .mockResolvedValueOnce(
+        new Response(null, { status: 302, headers: { location: 'http://api.example.com/path' } }),
+      )
+      .mockResolvedValueOnce(new Response(null));
+    const result = await createProbe({ fetch: fetchMock, connect: vi.fn() })(httpConfig, bypassOptions);
+    expect(result.ok).toBe(true);
+    expect(fetchMock.mock.calls.map(([, init]) => new Headers(init?.headers).get(WAF_BYPASS_HEADER))).toEqual(
+      [bypassOptions.wafBypass.token, null, bypassOptions.wafBypass.token, null],
+    );
+  });
+
+  it('adds the token only after an HTTP upgrade, then retains it on a relative redirect', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(null, { status: 301, headers: { location: 'https://example.com/health' } }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 307, headers: { location: '/ready' } }))
+      .mockResolvedValueOnce(new Response(null));
+    expect(
+      (
+        await createProbe({ fetch: fetchMock, connect: vi.fn() })(
+          {
+            ...httpConfig,
+            url: 'http://example.com/health',
+          },
+          bypassOptions,
+        )
+      ).ok,
+    ).toBe(true);
+    expect(fetchMock.mock.calls.map(([, init]) => new Headers(init?.headers).get(WAF_BYPASS_HEADER))).toEqual(
+      [null, bypassOptions.wafBypass.token, bypassOptions.wafBypass.token],
+    );
+  });
+
+  it('still rejects a redirect to a private address without opening another connection', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(null, {
+        status: 302,
+        headers: { location: 'https://127.0.0.1/health' },
+      }),
+    );
+    expect(
+      (await createProbe({ fetch: fetchMock, connect: vi.fn() })(httpConfig, bypassOptions)).errorCode,
+    ).toBe('blocked_target');
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it.each([200, 302, 403, 503])(
+    'rejects a challenge with HTTP %s even inside the expected status range',
+    async (status) => {
+      const cancel = vi.fn();
+      const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+        new Response(new ReadableStream({ cancel }), {
+          status,
+          headers: { 'cf-mitigated': 'challenge', location: '/challenge' },
+        }),
+      );
+      const result = await createProbe({ fetch: fetchMock, connect: vi.fn() })(
+        {
+          ...httpConfig,
+          expectedStatusMin: 100,
+          expectedStatusMax: 599,
+        },
+        bypassOptions,
+      );
+      expect(result).toMatchObject({ ok: false, httpStatus: status, errorCode: 'cloudflare_challenge' });
+      expect(cancel).toHaveBeenCalledOnce();
+      expect(fetchMock).toHaveBeenCalledOnce();
+      expect(JSON.stringify(result)).not.toContain(bypassOptions.wafBypass.token);
+    },
+  );
+
+  it('sanitizes exceptions that mention the token', async () => {
+    const result = await createProbe({
+      fetch: vi
+        .fn<typeof fetch>()
+        .mockRejectedValue(new Error(`request failed: ${bypassOptions.wafBypass.token}`)),
+      connect: vi.fn(),
+    })(httpConfig, bypassOptions);
+    expect(result.errorCode).toBe('network');
+    expect(JSON.stringify(result)).not.toContain(bypassOptions.wafBypass.token);
+  });
+
+  it('does not change TCP connection options or perform HTTP requests', async () => {
+    const fetchMock = vi.fn<typeof fetch>();
+    const socket: TcpSocket = {
+      opened: Promise.resolve(),
+      closed: Promise.resolve(),
+      close: vi.fn(async () => {}),
+    };
+    const connect = vi.fn(() => socket);
+    expect((await createProbe({ fetch: fetchMock, connect })(tcpConfig, bypassOptions)).ok).toBe(true);
+    expect(connect).toHaveBeenCalledWith({ hostname: tcpConfig.hostname, port: tcpConfig.port });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(socket.close).toHaveBeenCalledOnce();
   });
 });
 describe('TCP probes', () => {

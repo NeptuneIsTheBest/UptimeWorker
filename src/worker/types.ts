@@ -25,7 +25,15 @@ export interface MonitorRow {
   last_latency_ms: number | null;
   last_error_code: ErrorCode | null;
 }
-export type Probe = (config: MonitorConfig) => Promise<ProbeResult>;
+export interface WafBypassSettings {
+  enabled: boolean;
+  domains: readonly string[];
+  token: string | null;
+}
+export interface ProbeOptions {
+  wafBypass: WafBypassSettings;
+}
+export type Probe = (config: MonitorConfig, options?: ProbeOptions) => Promise<ProbeResult>;
 export interface Identity {
   email: string;
 }
