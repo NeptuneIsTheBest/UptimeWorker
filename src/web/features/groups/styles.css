@@ -1,7 +1,7 @@
 .group-manager-list {
   display: grid;
   gap: 12px;
-  margin: 24px 0;
+  margin: 16px 0;
 }
 .group-manager-row {
   display: flex;
@@ -17,6 +17,7 @@
 }
 .group-manager-row small {
   display: block;
+  font-size: 12px;
   color: var(--muted);
   margin-top: 4px;
 }
@@ -37,4 +38,12 @@
     align-items: flex-start;
     flex-direction: column;
   }
+}
+
+.group-manager-row > div {
+  flex-wrap: wrap;
+}
+.group-manager-row .button {
+  overflow-wrap: anywhere;
+  min-width: 0;
 }

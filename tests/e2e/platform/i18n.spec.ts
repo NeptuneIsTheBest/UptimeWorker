@@ -1,3 +1,4 @@
+import { checkDialogLayout, checkPageLayout } from '../support/layout';
 import { test, expect, createMonitor } from '../support/fixtures';
 import { sampleMonitor } from '../support/status-data';
 import type { StatusEvent } from '../../../src/shared/events/types';
@@ -97,7 +98,7 @@ test.describe('English interface and language switching', () => {
     await expect(page.locator('.monitor-card')).toHaveCount(1);
     for (const language of ['zh-CN', 'en']) {
       await page.locator('.language-select').selectOption(language);
-      for (const width of [320, 390, 1440]) {
+      for (const width of [320, 390, 768, 1440]) {
         await page.setViewportSize({ width, height: width === 1440 ? 1000 : 844 });
         await page.evaluate(() => window.scrollTo(0, 0));
         await page.evaluate(
@@ -108,6 +109,10 @@ test.describe('English interface and language switching', () => {
         );
         await expect(page.locator('.language-select')).toBeVisible();
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+        if (width === 390) {
+          await expect(page.locator('.monitor-card').first().locator('.monitor-name')).toBeInViewport();
+          await expect(page.locator('.monitor-card').first().locator('.status-badge')).toBeInViewport();
+        }
         if (width !== 320)
           await page.screenshot({
             path: info.outputPath(`overview-${language}-${width}.png`),
@@ -129,7 +134,10 @@ test.describe('English interface and language switching', () => {
     await expect(page.locator('.event-last-updated time')).toContainText('minute ago');
     await page.setViewportSize({ width: 390, height: 844 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await page.screenshot({ path: info.outputPath('timeline-en-390.png'), fullPage: true });
+    await checkPageLayout(page, info, 'timeline-en');
+    await page.locator('.language-select').selectOption('zh-CN');
+    await checkPageLayout(page, info, 'timeline-zh-CN');
+    await page.locator('.language-select').selectOption('en');
     await page.reload();
     await expect(page.locator('html')).toHaveAttribute('lang', 'en');
     await page.route(`**/api/monitors/${monitors[0].id}/history`, (route) =>
@@ -149,7 +157,10 @@ test.describe('English interface and language switching', () => {
     await expect(page.getByRole('img', { name: /Response time chart for the last 24 hours/ })).toBeVisible();
     await expect(page.locator('.response-chart title')).toContainText('Check succeeded');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await page.screenshot({ path: info.outputPath('monitor-detail-en-390.png'), fullPage: true });
+    await checkPageLayout(page, info, 'monitor-detail-en');
+    await page.locator('.language-select').selectOption('zh-CN');
+    await checkPageLayout(page, info, 'monitor-detail-zh-CN');
+    await page.locator('.language-select').selectOption('en');
     await page.goto('/monitors/missing');
     await expect(page.getByRole('alert')).toContainText('Monitor not found.');
     await page.locator('.language-select').selectOption('zh-CN');
@@ -235,8 +246,13 @@ test.describe('English interface and language switching', () => {
   }, info) => {
     await createMonitor(request, { name: 'English service', wafBypassEnabled: false });
     await page.goto('/admin');
+    await checkPageLayout(page, info, 'admin-en');
+    await page.locator('.language-select').selectOption('zh-CN');
+    await checkPageLayout(page, info, 'admin-zh-CN');
+    await page.locator('.language-select').selectOption('en');
     await page.getByRole('button', { name: 'Manage groups', exact: true }).click();
     const groups = page.getByRole('dialog', { name: 'Manage groups', exact: true });
+    await checkDialogLayout(page, groups, info, 'groups-en');
     await groups.getByLabel('Group name', { exact: true }).fill('Operations');
     await groups.getByRole('button', { name: 'Save group', exact: true }).click();
     await expect(groups.getByRole('button', { name: 'Edit Operations', exact: true })).toBeVisible();
@@ -244,6 +260,7 @@ test.describe('English interface and language switching', () => {
     await page.getByRole('button', { name: 'Edit English service', exact: true }).click();
     const editor = page.getByRole('dialog', { name: 'Edit monitor', exact: true });
     await editor.getByRole('combobox', { name: 'Group', exact: true }).selectOption({ label: 'Operations' });
+    await checkDialogLayout(page, editor, info, 'monitor-editor-en');
     await page.setViewportSize({ width: 390, height: 844 });
     expect(await editor.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
     await page.screenshot({ path: info.outputPath('monitor-editor-en-390.png'), fullPage: true });
@@ -257,6 +274,7 @@ test.describe('English interface and language switching', () => {
     );
     await editor.getByRole('button', { name: 'Save monitor', exact: true }).click();
     await expect(editor.getByRole('alert')).toContainText('The monitor has changed. Refresh and try again.');
+    await expect(editor.getByRole('alert')).toBeInViewport();
     await expect(
       editor.getByRole('combobox', { name: 'Group', exact: true }).locator('option:checked'),
     ).toHaveText('Operations');
@@ -265,6 +283,7 @@ test.describe('English interface and language switching', () => {
     await page.getByRole('button', { name: 'Global settings', exact: true }).click();
     const settings = page.getByRole('dialog', { name: 'Global settings', exact: true });
     await settings.getByLabel('Refresh interval', { exact: true }).selectOption('15');
+    await checkDialogLayout(page, settings, info, 'settings-en');
     expect(await settings.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
     await page.screenshot({ path: info.outputPath('settings-en-390.png'), fullPage: true });
     await settings.getByRole('button', { name: 'Save settings', exact: true }).click();
@@ -272,12 +291,14 @@ test.describe('English interface and language switching', () => {
     await page.getByRole('tab', { name: 'Events', exact: true }).click();
     await page.getByRole('button', { name: 'Publish event', exact: true }).click();
     const event = page.getByRole('dialog', { name: 'Publish event', exact: true });
+    await checkDialogLayout(page, event, info, 'event-editor-en');
     await event.getByLabel('Event title', { exact: true }).fill('人工事件原文');
     await event.getByLabel('Event description', { exact: true }).fill('管理员填写的说明不翻译。');
     await event.getByLabel('English service', { exact: true }).check();
     await event.getByRole('button', { name: 'Publish event', exact: true }).click();
     await page.getByRole('button', { name: 'Add update', exact: true }).click();
     const progress = page.getByRole('dialog', { name: 'Add event update', exact: true });
+    await checkDialogLayout(page, progress, info, 'progress-en');
     await progress.getByRole('combobox', { name: 'Progress stage', exact: true }).selectOption('Resolved');
     await progress.getByLabel('Progress description', { exact: true }).fill('恢复说明原文。');
     await progress.getByRole('button', { name: 'Save update', exact: true }).click();

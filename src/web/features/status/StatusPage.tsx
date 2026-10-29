@@ -49,30 +49,18 @@ export function StatusPage() {
   );
   return (
     <Layout siteName={data?.siteName}>
-      <EventList events={data?.events ?? []} variant="open" />
-      <div className="page-eyebrow">
-        <span className="eyebrow-line" /> {t('page.observability')}{' '}
-        <span className="eyebrow-right">{t('status.tagline')}</span>
-      </div>
       <section className={`status-hero ${summary.tone}`}>
+        <span className="status-symbol" aria-hidden="true">
+          <Icon name={summary.icon} size={24} />
+        </span>
         <div className="hero-copy">
-          <span className="hero-tag">
-            <span className="status-dot" />
-            {summary.label}
-          </span>
           <h1>{summary.title}</h1>
-          <p>{summary.description}</p>
-        </div>
-        <div className="hero-art" aria-hidden="true">
-          <div className="hero-orbit" />
-          <div className="hero-orbit inner" />
-          <div className="hero-symbol">
-            <Icon name={summary.icon} size={36} />
-          </div>
-          <span className="orbit-dot" />
+          {summary.description && <p>{summary.description}</p>}
         </div>
       </section>
       {error && <ErrorNotice message={error} retry={refresh} />}
+      <RefreshStatus {...remote} />
+      <EventList events={data?.events ?? []} variant="open" />
       <section className="stats-grid" aria-label={t('status.overview')}>
         <div className="stat-card">
           <span className="stat-label">
@@ -83,9 +71,11 @@ export function StatusPage() {
             {number(up, locale)}
             <span className="stat-denominator"> / {number(active, locale)}</span>
           </div>
-          <span className="stat-note">
-            {t('status.pausedCount', { count: statuses.filter((s) => s === 'paused').length })}
-          </span>
+          {statuses.includes('paused') && (
+            <span className="stat-note">
+              {t('status.pausedCount', { count: statuses.filter((s) => s === 'paused').length })}
+            </span>
+          )}
         </div>
         <div className="stat-card">
           <span className="stat-label">
@@ -102,7 +92,6 @@ export function StatusPage() {
               '—'
             )}
           </div>
-          <span className="stat-note">{t('status.uptimeNote')}</span>
         </div>
         <div className="stat-card">
           <span className="stat-label">
@@ -119,9 +108,7 @@ export function StatusPage() {
               '—'
             )}
           </div>
-          <span className="stat-note">{t('status.latencyNote')}</span>
         </div>
-        <RefreshStatus {...remote} card />
       </section>
       <section className="services-section">
         <div className="section-heading">
@@ -130,7 +117,6 @@ export function StatusPage() {
               {t('status.services')}
               <span className="count-badge">{monitors.length.toString().padStart(2, '0')}</span>
             </h2>
-            <p>{t('status.historyNote')}</p>
           </div>
           {monitors.length > 0 && (
             <div className="filter-controls">
@@ -201,9 +187,11 @@ export function StatusPage() {
                       {group.name}
                       <span className="count-badge">{number(members.length, locale)}</span>
                     </h3>
-                    {members.map((monitor) => (
-                      <MonitorCard key={monitor.id} monitor={monitor} now={now} />
-                    ))}
+                    <div className="monitor-group-list">
+                      {members.map((monitor) => (
+                        <MonitorCard key={monitor.id} monitor={monitor} now={now} />
+                      ))}
+                    </div>
                   </section>
                 )
               );
@@ -212,18 +200,15 @@ export function StatusPage() {
         </div>
         <div className="list-footnote">
           <Legend />
-          <span>{t('status.gapNote')}</span>
+          <details className="inline-help">
+            <summary>{t('history.daily')}</summary>
+            <p>
+              {t('status.gapNote')} {t('status.methodNote')}
+            </p>
+          </details>
         </div>
       </section>
       <EventList events={data?.events ?? []} variant="history" />
-      <div className="info-strip">
-        <Icon name="info" size={17} />
-        <span>{t('status.methodNote')}</span>
-        <a href="/admin">
-          {t('status.manage')}
-          <Icon name="arrow" size={13} />
-        </a>
-      </div>
     </Layout>
   );
 }

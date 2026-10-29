@@ -17,7 +17,6 @@ export function HistoryBars({ days }: { days: DailyStat[] }) {
       </div>
       <div className="history-labels">
         <span>{t('history.start')}</span>
-        <span>{t('history.daily')}</span>
         <span>{t('history.today')}</span>
       </div>
     </div>

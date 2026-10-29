@@ -3,7 +3,7 @@ import type { PublicMonitor } from '../../../shared/monitors/types';
 import { HistoryBars } from './HistoryBars';
 import { Icon } from '../../components/Icon';
 import { StatusBadge, effectiveStatus } from './status';
-import { formatTime, latency, percent } from '../../lib/format';
+import { latency, percent } from '../../lib/format';
 
 export function MonitorCard({ monitor, now }: { monitor: PublicMonitor; now: number }) {
   const { t, locale } = useI18n();
@@ -21,10 +21,6 @@ export function MonitorCard({ monitor, now }: { monitor: PublicMonitor; now: num
             </a>
             <div className="monitor-meta">
               <span className="protocol">{monitor.type === 'http' ? 'HTTP' : 'TCP'}</span>
-              <span>{t('monitor.interval', { count: monitor.intervalMinutes })}</span>
-              <span className="last-check">
-                {t('monitor.lastCheck', { time: formatTime(monitor.lastCheckedAt, false, locale) })}
-              </span>
             </div>
           </div>
         </div>

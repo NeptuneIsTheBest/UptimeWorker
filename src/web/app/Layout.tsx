@@ -43,10 +43,6 @@ export function Layout({
             </a>
           </nav>
           <LanguageSelect />
-          <span className="header-note">
-            <span className="live-dot" />
-            {t('nav.live')}
-          </span>
         </div>
       </header>
       <main className="main-content">{children}</main>
@@ -54,8 +50,6 @@ export function Layout({
         <span>
           <Icon size={15} /> UptimeWorker
         </span>
-        <span>{t('footer.tagline')}</span>
-        <span>{t('footer.utc')}</span>
       </footer>
     </>
   );

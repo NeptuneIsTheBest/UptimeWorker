@@ -9,13 +9,11 @@ export function RefreshStatus({
   pageRefreshSeconds,
   refreshing,
   refresh,
-  card = false,
 }: {
   lastRefreshedAt: number | null;
   pageRefreshSeconds: number;
   refreshing: boolean;
   refresh: () => void;
-  card?: boolean;
 }) {
   const { t, locale } = useI18n();
   const [now, setNow] = useState(Date.now);
@@ -32,40 +30,37 @@ export function RefreshStatus({
   }, [lastRefreshedAt]);
 
   return (
-    <div
-      className={`refresh-status ${card ? 'stat-card refresh-card' : 'refresh-strip'}`}
-      aria-label={t('refresh.label')}
-    >
-      <div className="refresh-time">
-        <span className="stat-label">
-          <Icon name="clock" size={16} />
-          {t('refresh.last')}
-        </span>
-        {lastRefreshedAt === null ? (
-          <span className="refresh-pending">{t('refresh.pending')}</span>
-        ) : (
-          <time
-            className={card ? 'stat-value time-value' : 'tabular'}
-            dateTime={new Date(lastRefreshedAt).toISOString()}
-            title={new Date(lastRefreshedAt).toLocaleString(intlLocale(locale), { hour12: false })}
-          >
-            {formatTime(lastRefreshedAt, false, locale)}
-          </time>
-        )}
-      </div>
-      <div className="refresh-details">
-        {lastRefreshedAt !== null && (
-          <span className="refresh-elapsed tabular">
-            {t('refresh.elapsed', { duration: elapsedTime(now - lastRefreshedAt, locale) })}
-          </span>
-        )}
-        <span className="refresh-interval">
-          {pageRefreshSeconds === 0
-            ? t('refresh.disabled')
-            : t('refresh.interval', { count: pageRefreshSeconds })}
-        </span>
-      </div>
-      <button type="button" className="text-button refresh-button" onClick={refresh} aria-busy={refreshing}>
+    <div className="refresh-status" aria-label={t('refresh.label')}>
+      <details className="refresh-disclosure">
+        <summary className="refresh-time">
+          <Icon name="clock" size={14} />
+          <span>{t('refresh.last')}</span>
+          {lastRefreshedAt === null ? (
+            <span className="refresh-pending">{t('refresh.pending')}</span>
+          ) : (
+            <time
+              className="tabular"
+              dateTime={new Date(lastRefreshedAt).toISOString()}
+              title={new Date(lastRefreshedAt).toLocaleString(intlLocale(locale), { hour12: false })}
+            >
+              {formatTime(lastRefreshedAt, false, locale)}
+            </time>
+          )}
+          <Icon name="chevron" size={12} />
+        </summary>
+        <div className="refresh-details">
+          {lastRefreshedAt !== null && (
+            <span className="refresh-elapsed tabular">
+              {t('refresh.elapsed', { duration: elapsedTime(now - lastRefreshedAt, locale) })}
+            </span>
+          )}
+          {pageRefreshSeconds !== 0 && (
+            <span className="refresh-interval">{t('refresh.interval', { count: pageRefreshSeconds })}</span>
+          )}
+        </div>
+      </details>
+      {pageRefreshSeconds === 0 && <span className="refresh-interval">{t('refresh.disabled')}</span>}
+      <button type="button" className="refresh-button" onClick={refresh} aria-busy={refreshing}>
         {refreshing ? <span className="spinner" /> : <Icon name="refresh" size={14} />}
         {t('refresh.now')}
       </button>

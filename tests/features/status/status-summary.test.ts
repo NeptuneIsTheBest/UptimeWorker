@@ -31,8 +31,7 @@ describe('homepage status summary', () => {
       const summary = getStatusSummary(['up', 'paused'], [event({ source })], now, false);
       expect(summary).toMatchObject({
         tone: 'attention',
-        title: '部分服务需要关注。',
-        label: '需要关注',
+        title: '部分服务需要关注',
         icon: 'info',
       });
       expect(summary.description).toContain('1 条未解决故障');
@@ -65,8 +64,7 @@ describe('homepage status summary', () => {
     ];
     expect(getStatusSummary(['up'], events, now, false)).toMatchObject({
       tone: 'healthy',
-      title: '所有服务，运行如常。',
-      label: '全部服务正常',
+      title: '全部服务正常',
       icon: 'check',
     });
     expect(getStatusSummary(['down'], events, now, false).tone).toBe('attention');
@@ -77,8 +75,7 @@ describe('homepage status summary', () => {
     expect(getStatusSummary(['up'], [maintenance], now - 1, false).tone).toBe('healthy');
     expect(getStatusSummary(['up'], [maintenance], now, false)).toMatchObject({
       tone: 'maintenance',
-      title: '部分服务正在维护。',
-      label: '维护进行中',
+      title: '维护进行中',
       icon: 'info',
     });
     expect(getStatusSummary(['up'], [maintenance], now + 59_999, false).description).not.toContain(
@@ -104,17 +101,16 @@ describe('homepage status summary', () => {
       expect(getStatusSummary([status], [maintenance], now, false).tone).toBe('attention');
     expect(getStatusSummary(['down'], [maintenance, event()], now, true)).toMatchObject({
       tone: 'attention',
-      title: '状态数据暂时不可用。',
-      label: '需要关注',
+      title: '状态暂时不可用',
       icon: 'info',
     });
   });
 
   it.each<{ statuses: MonitorStatus[]; title: string }>([
-    { statuses: ['up', 'paused'], title: '所有服务，运行如常。' },
-    { statuses: ['up', 'unknown'], title: '正在等待第一条心跳。' },
-    { statuses: ['paused'], title: '监控已暂停。' },
-    { statuses: [], title: '从第一条监控开始。' },
+    { statuses: ['up', 'paused'], title: '全部服务正常' },
+    { statuses: ['up', 'unknown'], title: '等待首次检测' },
+    { statuses: ['paused'], title: '监控已暂停' },
+    { statuses: [], title: '暂无监控' },
   ])('preserves the existing summary for $statuses without active events', ({ statuses, title }) => {
     expect(getStatusSummary(statuses, [], now, false).title).toBe(title);
   });

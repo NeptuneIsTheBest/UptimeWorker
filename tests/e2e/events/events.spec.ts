@@ -1,3 +1,4 @@
+import { checkDialogLayout } from '../support/layout';
 import { test, expect, createMonitor, origin } from '../support/fixtures';
 import type { PublicMonitor } from '../../../src/shared/monitors/types';
 import type { StatusEvent } from '../../../src/shared/events/types';
@@ -10,7 +11,7 @@ const localTime = (time: number) => {
 test('admin manages groups, publishes multi-node maintenance and follows progress on public pages', async ({
   page,
   request,
-}) => {
+}, info) => {
   const first = await createMonitor(request, { name: '香港节点', wafBypassEnabled: false });
   const second = await createMonitor(request, { name: '东京节点', wafBypassEnabled: false });
   await page.goto('/admin');
@@ -20,10 +21,12 @@ test('admin manages groups, publishes multi-node maintenance and follows progres
   await groups.getByLabel('排序', { exact: true }).fill('1');
   await groups.getByRole('button', { name: '保存分组', exact: true }).click();
   await expect(groups.getByRole('button', { name: '编辑 亚洲区域', exact: true })).toBeVisible();
+  await checkDialogLayout(page, groups, info, 'groups-zh-CN');
   await groups.getByRole('button', { name: '关闭', exact: true }).click();
   await page.getByRole('button', { name: '编辑 香港节点', exact: true }).click();
   const monitor = page.getByRole('dialog', { name: '编辑监控' });
   await monitor.getByLabel('所属分组').selectOption({ label: '亚洲区域' });
+  await checkDialogLayout(page, monitor, info, 'monitor-editor-zh-CN');
   await monitor.getByRole('button', { name: '保存监控' }).click();
   await expect(page.locator('.admin-card').filter({ hasText: '香港节点' })).toContainText('亚洲区域');
   await page.getByRole('tab', { name: '事件', exact: true }).click();
@@ -32,6 +35,7 @@ test('admin manages groups, publishes multi-node maintenance and follows progres
   await editor.getByLabel('事件标题').fill('网络设备升级');
   await editor.getByLabel('事件正文').fill('升级网络设备，期间可能短暂断开。\n我们会同步进度。');
   await editor.getByLabel('事件类型').selectOption('maintenance');
+  await checkDialogLayout(page, editor, info, 'event-editor-zh-CN');
   await editor.getByLabel('香港节点', { exact: true }).check();
   await editor.getByLabel('东京节点', { exact: true }).check();
   await editor.getByLabel('计划开始时间').fill(localTime(Date.now() - 60_000));
@@ -43,6 +47,7 @@ test('admin manages groups, publishes multi-node maintenance and follows progres
   await expect(card.locator('.event-body')).toContainText('升级网络设备');
   await card.getByRole('button', { name: '追加进展' }).click();
   const progress = page.getByRole('dialog', { name: '追加事件进展' });
+  await checkDialogLayout(page, progress, info, 'progress-zh-CN');
   await expect(progress.getByLabel('进展阶段')).toHaveValue('Updated');
   await expect(progress.getByLabel('进展阶段').locator('option')).toHaveText([
     '计划维护',
@@ -210,7 +215,7 @@ test('event drafts survive refresh, editing persists, and the global threshold i
   await page.getByRole('tab', { name: '事件', exact: true }).click();
   await page.locator('.event-card').getByRole('button', { name: '删除事件' }).click();
   await page.getByRole('dialog', { name: '删除事件' }).getByRole('button', { name: '确认删除事件' }).click();
-  await expect(page.getByRole('heading', { name: '暂无关联事件', exact: true })).toBeVisible();
+  await expect(page.getByText('暂无关联事件', { exact: true })).toBeVisible();
 });
 
 test('admin can page through older events', async ({ page, request }) => {
@@ -239,12 +244,12 @@ test('admin can page through older events', async ({ page, request }) => {
     await expect(page.getByRole('region', { name: '进行中与计划事件' }).locator('.event-card')).toHaveCount(
       21,
     );
-    await expect(page.getByRole('heading', { name: '暂无历史事件' })).toBeVisible();
+    await expect(page.getByText('暂无历史事件', { exact: true })).toBeVisible();
   }
 });
 
 for (const view of ['overview', 'detail'] as const) {
-  test(`${view} keeps open events above the summary and moves them to history after refresh`, async ({
+  test(`${view} keeps open events prominent and moves them to history after refresh`, async ({
     page,
   }, testInfo) => {
     const now = Date.UTC(2026, 9, 28, 2, 0);
@@ -340,7 +345,13 @@ for (const view of ['overview', 'detail'] as const) {
       const summary = (await page
         .locator(view === 'overview' ? '.status-hero' : '.detail-heading')
         .boundingBox())!;
-      expect(top.y + top.height).toBeLessThan(summary.y);
+      if (view === 'overview') {
+        expect(summary.y + summary.height).toBeLessThan(top.y);
+        const services = (await page.locator('.services-section').boundingBox())!;
+        expect(top.y + top.height).toBeLessThan(services.y);
+      } else {
+        expect(top.y + top.height).toBeLessThan(summary.y);
+      }
       if (view === 'detail') {
         const back = (await page.getByRole('link', { name: '返回状态概览' }).boundingBox())!;
         expect(back.y + back.height).toBeLessThan(top.y);

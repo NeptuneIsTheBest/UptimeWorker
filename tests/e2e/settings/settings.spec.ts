@@ -1,3 +1,4 @@
+import { checkDialogLayout } from '../support/layout';
 import { test, expect, clearMonitors, createMonitor, origin } from '../support/fixtures';
 import type { GlobalSettings } from '../../../src/shared/settings/types';
 
@@ -5,7 +6,7 @@ test('global settings persist, redact tokens and work on desktop and mobile', as
   page,
   context,
   request,
-}) => {
+}, info) => {
   await createMonitor(request);
   await createMonitor(request, { name: 'API 站点', url: 'https://api.example.com/' });
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
@@ -14,6 +15,7 @@ test('global settings persist, redact tokens and work on desktop and mobile', as
   const dialog = page.getByRole('dialog', { name: '全局设置' });
   const toggle = dialog.getByLabel('启用 Cloudflare WAF 放行');
   const token = dialog.getByLabel('放行密钥', { exact: false });
+  await checkDialogLayout(page, dialog, info, 'settings-zh-CN');
   await expect(toggle).not.toBeChecked();
   await expect(dialog.getByRole('group', { name: '自动纳入的域名' })).toHaveCount(0);
   await expect(dialog.getByLabel('手动补充域名')).toHaveCount(0);

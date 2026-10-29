@@ -118,326 +118,330 @@ export function MonitorEditor({
       wide
     >
       <form noValidate onSubmit={submit} className="monitor-form">
-        <p className="form-intro">{t('monitor.editorDescription')}</p>
-        <div className="type-picker" role="group" aria-label={t('monitor.type')}>
-          <button
-            type="button"
-            className={type === 'http' ? 'selected' : ''}
-            onClick={() => setType('http')}
-            aria-pressed={type === 'http'}
-          >
-            <Icon name="globe" />
-            <span>
-              HTTP / HTTPS<small>{t('monitor.httpDescription')}</small>
-            </span>
-            {type === 'http' && <Icon name="check" size={16} />}
-          </button>
-          <button
-            type="button"
-            className={type === 'tcp' ? 'selected' : ''}
-            onClick={() => setType('tcp')}
-            aria-pressed={type === 'tcp'}
-          >
-            <Icon name="server" />
-            <span>
-              TCP Port<small>{t('monitor.tcpDescription')}</small>
-            </span>
-            {type === 'tcp' && <Icon name="check" size={16} />}
-          </button>
-        </div>
-        <label className="field">
-          {t('monitor.name')}
-          <input
-            required
-            maxLength={80}
-            autoFocus
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder={t('monitor.namePlaceholder')}
-          />
-        </label>
-        <label className="field">
-          {t('monitor.group')}
-          <select value={groupId} onChange={(e) => setGroupId(e.target.value)}>
-            <option value="">{t('groups.ungrouped')}</option>
-            {groups.map((group) => (
-              <option key={group.id} value={group.id}>
-                {group.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        {type === 'http' ? (
-          <>
-            <label className="field">
-              {t('monitor.url')}
-              <input
-                required
-                type="url"
-                maxLength={2048}
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                placeholder="https://example.com/health"
-              />
-              <small>{t('monitor.urlNote')}</small>
-            </label>
-            <div className="form-columns">
+        <div className="modal-scroll">
+          <div className="type-picker" role="group" aria-label={t('monitor.type')}>
+            <button
+              type="button"
+              className={type === 'http' ? 'selected' : ''}
+              onClick={() => setType('http')}
+              aria-pressed={type === 'http'}
+            >
+              <Icon name="globe" />
+              <span>HTTP / HTTPS</span>
+              {type === 'http' && <Icon name="check" size={16} />}
+            </button>
+            <button
+              type="button"
+              className={type === 'tcp' ? 'selected' : ''}
+              onClick={() => setType('tcp')}
+              aria-pressed={type === 'tcp'}
+            >
+              <Icon name="server" />
+              <span>TCP Port</span>
+              {type === 'tcp' && <Icon name="check" size={16} />}
+            </button>
+          </div>
+          <label className="field">
+            {t('monitor.name')}
+            <input
+              required
+              maxLength={80}
+              autoFocus
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder={t('monitor.namePlaceholder')}
+            />
+          </label>
+          <label className="field">
+            {t('monitor.group')}
+            <select value={groupId} onChange={(e) => setGroupId(e.target.value)}>
+              <option value="">{t('groups.ungrouped')}</option>
+              {groups.map((group) => (
+                <option key={group.id} value={group.id}>
+                  {group.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          {type === 'http' ? (
+            <>
               <label className="field">
-                {t('monitor.method')}
-                <select value={method} onChange={(e) => setMethod(e.target.value as HttpMethod)}>
-                  {HTTP_METHODS.map((value) => (
-                    <option key={value}>{value}</option>
-                  ))}
-                </select>
+                {t('monitor.url')}
+                <input
+                  required
+                  type="url"
+                  maxLength={2048}
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  placeholder="https://example.com/health"
+                />
+                <small>{t('monitor.urlNote')}</small>
               </label>
-              <div className="field">
-                <span>{t('monitor.statusRange')}</span>
-                <div className="range-input">
-                  <input
-                    aria-label={t('monitor.statusMin')}
-                    type="number"
-                    min={100}
-                    max={599}
-                    required
-                    value={min}
-                    onChange={(e) => setMin(Number(e.target.value))}
-                  />
-                  <span>—</span>
-                  <input
-                    aria-label={t('monitor.statusMax')}
-                    type="number"
-                    min={100}
-                    max={599}
-                    required
-                    value={max}
-                    onChange={(e) => setMax(Number(e.target.value))}
-                  />
+              <div className="form-columns">
+                <label className="field">
+                  {t('monitor.method')}
+                  <select value={method} onChange={(e) => setMethod(e.target.value as HttpMethod)}>
+                    {HTTP_METHODS.map((value) => (
+                      <option key={value}>{value}</option>
+                    ))}
+                  </select>
+                </label>
+                <div className="field">
+                  <span>{t('monitor.statusRange')}</span>
+                  <div className="range-input">
+                    <input
+                      aria-label={t('monitor.statusMin')}
+                      type="number"
+                      min={100}
+                      max={599}
+                      required
+                      value={min}
+                      onChange={(e) => setMin(Number(e.target.value))}
+                    />
+                    <span>—</span>
+                    <input
+                      aria-label={t('monitor.statusMax')}
+                      type="number"
+                      min={100}
+                      max={599}
+                      required
+                      value={max}
+                      onChange={(e) => setMax(Number(e.target.value))}
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
-            {wafDomain && (
-              <div className="monitor-waf">
-                <label className="checkbox-field">
-                  <input
-                    type="checkbox"
-                    checked={wafBypassEnabled}
-                    onChange={(e) => setWafBypassEnabled(e.target.checked)}
-                  />
-                  <span>{t('monitor.waf')}</span>
-                </label>
-                <p className="form-note">{t('monitor.wafNote', { domain: wafDomain })}</p>
-                {wafBypassEnabled &&
-                  (settings.loading ? (
-                    <p className="form-note" role="status">
-                      {t('monitor.wafLoading')}
-                    </p>
-                  ) : settings.error ? (
-                    <ErrorNotice
-                      message={t('monitor.wafError', { error: displayMessage(settings.error, locale) })}
-                      retry={settings.refresh}
+              {wafDomain && (
+                <div className="monitor-waf">
+                  <label className="checkbox-field">
+                    <input
+                      type="checkbox"
+                      checked={wafBypassEnabled}
+                      onChange={(e) => setWafBypassEnabled(e.target.checked)}
                     />
-                  ) : (
-                    <p className="form-note" role="status">
-                      {!settings.data?.wafBypassTokenConfigured
-                        ? t('monitor.wafMissing')
-                        : !settings.data.wafBypassEnabled
-                          ? t('monitor.wafDisabled')
-                          : t('monitor.wafReady')}
-                    </p>
-                  ))}
-              </div>
-            )}
-            <details className="advanced-config">
-              <summary>{t('monitor.advanced')}</summary>
-              <div className="advanced-fields">
-                <fieldset className="request-headers">
-                  <legend>{t('monitor.headers')}</legend>
-                  {requestHeaders.map(([name, value], index) => (
-                    <div className="request-header-row" key={index}>
-                      <input
-                        aria-label={t('monitor.headerName', { count: index + 1 })}
-                        value={name}
-                        placeholder="Authorization"
-                        autoCapitalize="none"
-                        spellCheck={false}
-                        onChange={(e) =>
-                          setRequestHeaders((rows) =>
-                            rows.map((row, i) => (i === index ? [e.target.value, row[1]] : row)),
-                          )
-                        }
+                    <span>{t('monitor.waf')}</span>
+                  </label>
+                  {wafBypassEnabled && (
+                    <p className="form-note">{t('monitor.wafNote', { domain: wafDomain })}</p>
+                  )}
+                  {wafBypassEnabled &&
+                    (settings.loading ? (
+                      <p className="form-note" role="status">
+                        {t('monitor.wafLoading')}
+                      </p>
+                    ) : settings.error ? (
+                      <ErrorNotice
+                        message={t('monitor.wafError', { error: displayMessage(settings.error, locale) })}
+                        retry={settings.refresh}
                       />
-                      <input
-                        aria-label={t('monitor.headerValue', { count: index + 1 })}
-                        value={value}
-                        placeholder="Bearer …"
-                        autoComplete="off"
-                        spellCheck={false}
-                        onChange={(e) =>
-                          setRequestHeaders((rows) =>
-                            rows.map((row, i) => (i === index ? [row[0], e.target.value] : row)),
-                          )
-                        }
-                      />
-                      <button
-                        type="button"
-                        className="icon-button danger"
-                        aria-label={t('monitor.removeHeader', { count: index + 1 })}
-                        onClick={() => setRequestHeaders((rows) => rows.filter((_, i) => i !== index))}
-                      >
-                        <Icon name="trash" size={16} />
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    className="button small secondary"
-                    onClick={() => setRequestHeaders((rows) => [...rows, ['', '']])}
-                  >
-                    {t('monitor.addHeader')}
-                  </button>
-                  <p className="form-note">{t('monitor.headersNote')}</p>
-                </fieldset>
-                {hasBody ? (
-                  <>
-                    <label className="field">
-                      {t('monitor.bodyFormat')}
-                      <select
-                        value={bodyFormat}
-                        onChange={(e) => setBodyFormat(e.target.value as typeof bodyFormat)}
-                      >
-                        <option value="none">{t('monitor.noBody')}</option>
-                        <option value="text">{t('monitor.textBody')}</option>
-                        <option value="json">JSON</option>
-                      </select>
-                    </label>
-                    {bodyFormat !== 'none' && (
-                      <label className="field">
-                        {t('monitor.body')}
-                        <textarea
-                          rows={5}
-                          value={bodyContent}
-                          spellCheck={false}
+                    ) : (
+                      <p className="form-note" role="status">
+                        {!settings.data?.wafBypassTokenConfigured
+                          ? t('monitor.wafMissing')
+                          : !settings.data.wafBypassEnabled
+                            ? t('monitor.wafDisabled')
+                            : t('monitor.wafReady')}
+                      </p>
+                    ))}
+                </div>
+              )}
+              <details className="advanced-config">
+                <summary>{t('monitor.advanced')}</summary>
+                <div className="advanced-fields">
+                  <fieldset className="request-headers">
+                    <legend>{t('monitor.headers')}</legend>
+                    {requestHeaders.map(([name, value], index) => (
+                      <div className="request-header-row" key={index}>
+                        <input
+                          aria-label={t('monitor.headerName', { count: index + 1 })}
+                          value={name}
+                          placeholder="Authorization"
                           autoCapitalize="none"
-                          maxLength={16384}
-                          onChange={(e) => setBodyContent(e.target.value)}
-                          placeholder={
-                            bodyFormat === 'json' ? '{"check": true}' : t('monitor.bodyPlaceholder')
+                          spellCheck={false}
+                          onChange={(e) =>
+                            setRequestHeaders((rows) =>
+                              rows.map((row, i) => (i === index ? [e.target.value, row[1]] : row)),
+                            )
                           }
                         />
-                        <small>{t('monitor.bodyNote')}</small>
-                      </label>
-                    )}
-                  </>
-                ) : (
-                  <p className="form-note">{t('monitor.bodyUnsupported', { method })}</p>
-                )}
-                {method !== 'HEAD' ? (
-                  <>
-                    <div className="form-columns">
-                      <label className="field">
-                        {t('monitor.includes')}
-                        <textarea
-                          rows={4}
-                          value={includes}
-                          onChange={(e) => setIncludes(e.target.value)}
-                          placeholder={t('monitor.includesPlaceholder')}
+                        <input
+                          aria-label={t('monitor.headerValue', { count: index + 1 })}
+                          value={value}
+                          placeholder="Bearer …"
+                          autoComplete="off"
+                          spellCheck={false}
+                          onChange={(e) =>
+                            setRequestHeaders((rows) =>
+                              rows.map((row, i) => (i === index ? [row[0], e.target.value] : row)),
+                            )
+                          }
                         />
-                      </label>
+                        <button
+                          type="button"
+                          className="icon-button danger"
+                          aria-label={t('monitor.removeHeader', { count: index + 1 })}
+                          onClick={() => setRequestHeaders((rows) => rows.filter((_, i) => i !== index))}
+                        >
+                          <Icon name="trash" size={16} />
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      className="button small secondary"
+                      onClick={() => setRequestHeaders((rows) => [...rows, ['', '']])}
+                    >
+                      {t('monitor.addHeader')}
+                    </button>
+                    <p className="form-note">{t('monitor.headersNote')}</p>
+                  </fieldset>
+                  {hasBody ? (
+                    <>
                       <label className="field">
-                        {t('monitor.excludes')}
-                        <textarea
-                          rows={4}
-                          value={excludes}
-                          onChange={(e) => setExcludes(e.target.value)}
-                          placeholder={t('monitor.excludesPlaceholder')}
-                        />
+                        {t('monitor.bodyFormat')}
+                        <select
+                          value={bodyFormat}
+                          onChange={(e) => setBodyFormat(e.target.value as typeof bodyFormat)}
+                        >
+                          <option value="none">{t('monitor.noBody')}</option>
+                          <option value="text">{t('monitor.textBody')}</option>
+                          <option value="json">JSON</option>
+                        </select>
                       </label>
-                    </div>
-                    <label className="checkbox-field">
-                      <input
-                        type="checkbox"
-                        checked={ignoreCase}
-                        onChange={(e) => setIgnoreCase(e.target.checked)}
-                      />
-                      <span>{t('monitor.ignoreCase')}</span>
-                    </label>
-                    <p className="form-note">{t('monitor.keywordsNote')}</p>
-                  </>
-                ) : (
-                  <p className="form-note">{t('monitor.headNote')}</p>
-                )}
+                      {bodyFormat !== 'none' && (
+                        <label className="field">
+                          {t('monitor.body')}
+                          <textarea
+                            rows={5}
+                            value={bodyContent}
+                            spellCheck={false}
+                            autoCapitalize="none"
+                            maxLength={16384}
+                            onChange={(e) => setBodyContent(e.target.value)}
+                            placeholder={
+                              bodyFormat === 'json' ? '{"check": true}' : t('monitor.bodyPlaceholder')
+                            }
+                          />
+                          <small>{t('monitor.bodyNote')}</small>
+                        </label>
+                      )}
+                    </>
+                  ) : (
+                    <p className="form-note">{t('monitor.bodyUnsupported', { method })}</p>
+                  )}
+                  {method !== 'HEAD' ? (
+                    <>
+                      <div className="form-columns">
+                        <label className="field">
+                          {t('monitor.includes')}
+                          <textarea
+                            rows={4}
+                            value={includes}
+                            onChange={(e) => setIncludes(e.target.value)}
+                            placeholder={t('monitor.includesPlaceholder')}
+                          />
+                        </label>
+                        <label className="field">
+                          {t('monitor.excludes')}
+                          <textarea
+                            rows={4}
+                            value={excludes}
+                            onChange={(e) => setExcludes(e.target.value)}
+                            placeholder={t('monitor.excludesPlaceholder')}
+                          />
+                        </label>
+                      </div>
+                      <label className="checkbox-field">
+                        <input
+                          type="checkbox"
+                          checked={ignoreCase}
+                          onChange={(e) => setIgnoreCase(e.target.checked)}
+                        />
+                        <span>{t('monitor.ignoreCase')}</span>
+                      </label>
+                      <p className="form-note">{t('monitor.keywordsNote')}</p>
+                    </>
+                  ) : (
+                    <p className="form-note">{t('monitor.headNote')}</p>
+                  )}
+                </div>
+              </details>
+            </>
+          ) : (
+            <>
+              <div className="form-columns host-columns">
+                <label className="field">
+                  {t('monitor.host')}
+                  <input
+                    required
+                    value={hostname}
+                    onChange={(e) => setHostname(e.target.value)}
+                    placeholder="db.example.com"
+                  />
+                </label>
+                <label className="field">
+                  {t('monitor.port')}
+                  <input
+                    type="number"
+                    min={1}
+                    max={65535}
+                    required
+                    value={port}
+                    onChange={(e) => setPort(Number(e.target.value))}
+                  />
+                </label>
               </div>
+              <div className="form-hint">
+                <Icon name="info" size={16} />
+                <span>{t('monitor.tcpNote')}</span>
+              </div>
+            </>
+          )}
+          <div className="form-columns">
+            <label className="field">
+              {t('monitor.intervalInput')}
+              <input
+                required
+                type="number"
+                min={MIN_INTERVAL_MINUTES}
+                max={MAX_INTERVAL_MINUTES}
+                step={1}
+                value={intervalMinutes}
+                aria-describedby="interval-note"
+                onChange={(e) => setInterval(e.target.value === '' ? '' : Number(e.target.value))}
+              />
+              <small id="interval-note">
+                {t('monitor.intervalNote', {
+                  min: MIN_INTERVAL_MINUTES,
+                  max: MAX_INTERVAL_MINUTES,
+                  default: DEFAULT_INTERVAL_MINUTES,
+                })}
+              </small>
+            </label>
+            <label className="field">
+              {t('monitor.timeoutInput')}
+              <input
+                required
+                type="number"
+                min={1}
+                max={30}
+                value={timeoutSeconds}
+                onChange={(e) => setTimeoutSeconds(Number(e.target.value))}
+              />
+            </label>
+          </div>
+          <label className="checkbox-field">
+            <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
+            <span>{t('monitor.enabled')}</span>
+          </label>
+          {initial && (
+            <details className="form-help">
+              <summary>{t('monitor.checkHelp')}</summary>
+              <p>{t('monitor.editNote')}</p>
             </details>
-          </>
-        ) : (
-          <>
-            <div className="form-columns host-columns">
-              <label className="field">
-                {t('monitor.host')}
-                <input
-                  required
-                  value={hostname}
-                  onChange={(e) => setHostname(e.target.value)}
-                  placeholder="db.example.com"
-                />
-              </label>
-              <label className="field">
-                {t('monitor.port')}
-                <input
-                  type="number"
-                  min={1}
-                  max={65535}
-                  required
-                  value={port}
-                  onChange={(e) => setPort(Number(e.target.value))}
-                />
-              </label>
-            </div>
-            <div className="form-hint">
-              <Icon name="info" size={16} />
-              <span>{t('monitor.tcpNote')}</span>
-            </div>
-          </>
-        )}
-        <div className="form-columns">
-          <label className="field">
-            {t('monitor.intervalInput')}
-            <input
-              required
-              type="number"
-              min={MIN_INTERVAL_MINUTES}
-              max={MAX_INTERVAL_MINUTES}
-              step={1}
-              value={intervalMinutes}
-              aria-describedby="interval-note"
-              onChange={(e) => setInterval(e.target.value === '' ? '' : Number(e.target.value))}
-            />
-            <small id="interval-note">
-              {t('monitor.intervalNote', {
-                min: MIN_INTERVAL_MINUTES,
-                max: MAX_INTERVAL_MINUTES,
-                default: DEFAULT_INTERVAL_MINUTES,
-              })}
-            </small>
-          </label>
-          <label className="field">
-            {t('monitor.timeoutInput')}
-            <input
-              required
-              type="number"
-              min={1}
-              max={30}
-              value={timeoutSeconds}
-              onChange={(e) => setTimeoutSeconds(Number(e.target.value))}
-            />
-          </label>
+          )}
+          {error && <ErrorNotice message={error} />}
         </div>
-        <label className="checkbox-field">
-          <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
-          <span>{t('monitor.enabled')}</span>
-        </label>
-        {initial && <p className="form-note">{t('monitor.editNote')}</p>}
-        {error && <ErrorNotice message={error} />}
         <div className="modal-actions">
           <button type="button" className="button secondary" disabled={busy} onClick={close}>
             {t('common.cancel')}

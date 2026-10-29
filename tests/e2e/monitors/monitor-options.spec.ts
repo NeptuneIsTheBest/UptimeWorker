@@ -20,7 +20,7 @@ test('advanced monitor options persist and remain usable on mobile', async ({ pa
   await dialog.getByLabel('检测地址').fill('https://api.example.com/health');
   await expect(dialog.getByLabel('启用 WAF 放行', { exact: true })).not.toBeChecked();
   await dialog.getByLabel('启用 WAF 放行', { exact: true }).check();
-  await expect(dialog.getByText('跨域场景请直接配置最终检测地址', { exact: false })).toBeVisible();
+  await expect(dialog.getByText('跨域请填写最终地址', { exact: false })).toBeVisible();
   await expect(dialog.getByRole('status')).toContainText('尚未配置共享密钥');
   await expect(dialog.getByLabel('请求方法').locator('option')).toHaveText([
     'GET',
@@ -32,7 +32,7 @@ test('advanced monitor options persist and remain usable on mobile', async ({ pa
     'OPTIONS',
   ]);
   await dialog.getByLabel('请求方法').selectOption('POST');
-  await dialog.getByText('高级配置（请求参数与响应校验）', { exact: true }).click();
+  await dialog.getByText('高级配置', { exact: true }).click();
   await dialog.getByRole('button', { name: '添加请求头' }).click();
   await dialog.getByLabel('请求头名称 1').fill('Authorization');
   await dialog.getByLabel('请求头值 1').fill('Bearer private-value');
@@ -62,7 +62,7 @@ test('advanced monitor options persist and remain usable on mobile', async ({ pa
   dialog = page.getByRole('dialog', { name: '编辑监控' });
   await expect(dialog.getByLabel('请求方法')).toHaveValue('POST');
   await expect(dialog.getByLabel('启用 WAF 放行', { exact: true })).toBeChecked();
-  await dialog.getByText('高级配置（请求参数与响应校验）', { exact: true }).click();
+  await dialog.getByText('高级配置', { exact: true }).click();
   await expect(dialog.getByLabel('请求头值 1')).toHaveValue('Bearer private-value');
   await expect(dialog.getByLabel('请求体内容')).toHaveValue('{ "health": true }');
   await expect(dialog.getByLabel('必须包含')).toHaveValue('healthy\n服务正常');
@@ -99,10 +99,10 @@ test('WAF controls are unavailable for IPs and TCP, and header errors preserve t
   await expect(dialog.getByLabel('启用 WAF 放行', { exact: true })).toHaveCount(0);
   await dialog.getByRole('button', { name: /TCP Port/ }).click();
   await expect(dialog.getByLabel('启用 WAF 放行', { exact: true })).toHaveCount(0);
-  await expect(dialog.getByText('高级配置（请求参数与响应校验）')).toHaveCount(0);
+  await expect(dialog.getByText('高级配置')).toHaveCount(0);
   await dialog.getByRole('button', { name: /HTTP \/ HTTPS/ }).click();
   await dialog.getByLabel('检测地址').fill('https://example.com/');
-  await dialog.getByText('高级配置（请求参数与响应校验）', { exact: true }).click();
+  await dialog.getByText('高级配置', { exact: true }).click();
   await dialog.getByRole('button', { name: '添加请求头' }).click();
   await dialog.getByLabel('请求头名称 1').fill('X-UptimeWorker-WAF-Bypass');
   await dialog.getByLabel('请求头值 1').fill('secret');

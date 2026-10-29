@@ -69,7 +69,6 @@ export function EventManager({
   return (
     <div className="event-manager">
       <div className="event-toolbar">
-        <p className="muted">{t('event.manageDescription')}</p>
         <button className="button primary" disabled={!monitors.length} onClick={() => setEditor('new')}>
           {t('event.publish')}
         </button>
@@ -151,8 +150,10 @@ export function EventManager({
             if (!busy) setDeleting(null);
           }}
         >
-          <p>{t('event.deleteQuestion', { title: localizedEventTitle(deleting, locale) })}</p>
-          {error && <ErrorNotice message={error} />}
+          <div className="modal-scroll delete-body">
+            <p>{t('event.deleteQuestion', { title: localizedEventTitle(deleting, locale) })}</p>
+            {error && <ErrorNotice message={error} />}
+          </div>
           <div className="modal-actions">
             <button className="button secondary" disabled={busy} onClick={() => setDeleting(null)}>
               {t('common.cancel')}

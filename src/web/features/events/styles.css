@@ -1,8 +1,8 @@
 .events-section {
-  margin-top: 40px;
+  margin-top: 28px;
 }
 .events-section-open {
-  margin: 0 0 32px;
+  margin: 4px 0 24px;
 }
 .event-list {
   display: grid;
@@ -10,14 +10,14 @@
 }
 .event-card {
   border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 24px;
+  border-radius: var(--radius);
+  padding: 20px 24px;
   background: var(--surface);
   overflow-wrap: anywhere;
   min-width: 0;
 }
 .event-card h3 {
-  margin: 14px 0 12px;
+  margin: 10px 0;
   font-size: 18px;
   line-height: 1.5;
 }
@@ -110,7 +110,7 @@
 }
 .event-excerpt {
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
   margin: 8px 0 12px;
@@ -126,31 +126,27 @@
 .event-detail {
   max-width: 960px;
   margin: 0 auto 24px;
-  padding: 40px 44px;
+  padding: 28px 32px;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: var(--radius);
   overflow-wrap: anywhere;
 }
 .event-detail-header {
   border-bottom: 1px solid var(--line);
-  padding-bottom: 30px;
+  padding-bottom: 24px;
 }
 .event-last-updated {
   color: var(--muted);
   font-size: 14px;
-  margin-bottom: 24px;
+  margin-bottom: 16px;
 }
 .event-detail h1 {
-  font-size: 36px;
+  font-size: 28px;
   letter-spacing: -0.8px;
-  margin: 16px 0 10px;
+  margin: 12px 0;
 }
-.event-id {
-  font-size: 13px;
-  color: var(--muted);
-  line-height: 1.8;
-}
+
 .event-detail-header .event-monitors {
   margin-top: 18px;
 }
@@ -178,10 +174,10 @@
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 8px;
-  margin: 32px 0;
+  margin: 24px 0;
 }
 .event-timeline h2 {
-  font-size: 24px;
+  font-size: 18px;
 }
 .event-timeline ol {
   margin: 0;
@@ -190,7 +186,7 @@
 }
 .event-timeline-entry {
   position: relative;
-  padding: 0 0 36px 44px;
+  padding: 0 0 28px 28px;
   min-height: 80px;
 }
 .event-timeline-entry:last-child {
@@ -199,18 +195,18 @@
 .event-timeline-entry:not(:last-child)::before {
   content: '';
   position: absolute;
-  left: 10px;
-  top: 26px;
+  left: 5px;
+  top: 19px;
   bottom: -4px;
   width: 2px;
   background: var(--line);
 }
 .event-timeline-dot {
   position: absolute;
-  top: 4px;
+  top: 7px;
   left: 0;
-  width: 22px;
-  height: 22px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
   background: var(--empty);
   box-shadow: 0 0 0 4px var(--surface);
@@ -225,7 +221,7 @@
   gap: 6px 14px;
 }
 .event-timeline h3 {
-  font-size: 20px;
+  font-size: 16px;
   line-height: 1.5;
 }
 .event-timeline-meta {
@@ -235,7 +231,7 @@
   line-height: 1.8;
 }
 .event-timeline .event-body {
-  font-size: 15px;
+  font-size: 14px;
   margin: 10px 0 0;
 }
 .event-legacy-title {
@@ -254,7 +250,7 @@
 .event-toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 16px;
   margin: 12px 0 20px;
 }
@@ -275,10 +271,10 @@
     padding: 24px 18px;
   }
   .event-detail h1 {
-    font-size: 27px;
+    font-size: 24px;
   }
   .event-timeline-entry {
-    padding-left: 34px;
+    padding-left: 26px;
   }
   .event-timeline h3 {
     font-size: 18px;
@@ -294,13 +290,20 @@
   .event-toolbar {
     align-items: flex-start;
   }
-  .event-toolbar > p {
-    margin: 0;
-  }
   .event-toolbar > button {
     flex-shrink: 0;
   }
   .event-node-picker {
     padding: 12px;
   }
+}
+
+.event-manager .events-section {
+  margin-top: 16px;
+}
+.event-node-picker {
+  margin: 0 0 16px;
+}
+.event-node-picker .checkbox-field {
+  margin-bottom: 4px;
 }

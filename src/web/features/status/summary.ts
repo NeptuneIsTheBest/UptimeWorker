@@ -5,8 +5,7 @@ import type { StatusEvent } from '../../../shared/events/types';
 interface StatusSummary {
   tone: 'healthy' | 'attention' | 'maintenance' | 'waiting';
   title: string;
-  description: string;
-  label: string;
+  description?: string;
   icon: 'check' | 'info' | 'pulse';
 }
 
@@ -18,12 +17,11 @@ export function getStatusSummary(
   locale: Locale = 'zh-CN',
 ): StatusSummary {
   const t = translator(locale);
-  const attention = { tone: 'attention', label: t('summary.attentionLabel'), icon: 'info' } as const;
+  const attention = { tone: 'attention', icon: 'info' } as const;
   if (hasError)
     return {
       ...attention,
       title: t('summary.unavailable'),
-      description: t('summary.unavailableDescription'),
     };
 
   const open = events.filter((event) => event.status === 'open');
@@ -39,10 +37,7 @@ export function getStatusSummary(
     return {
       ...attention,
       title: t('summary.attention'),
-      description: t('summary.attentionDescription', {
-        reasons: reasons.join(locale === 'en' ? ', ' : '，'),
-        location: t(incidents ? 'summary.eventsAndServices' : 'summary.services'),
-      }),
+      description: reasons.join(locale === 'en' ? ', ' : '，'),
     };
   }
 
@@ -54,13 +49,10 @@ export function getStatusSummary(
     return {
       tone: 'maintenance',
       title: t('summary.maintenance'),
-      description: t('summary.maintenanceDescription', {
-        details: [
-          t('summary.maintenanceCount', { count: maintenance.length }),
-          ...(overdue ? [t('summary.overdueCount', { count: overdue })] : []),
-        ].join(locale === 'en' ? ', ' : '，'),
-      }),
-      label: t('summary.maintenanceLabel'),
+      description: [
+        t('summary.maintenanceCount', { count: maintenance.length }),
+        ...(overdue ? [t('summary.overdueCount', { count: overdue })] : []),
+      ].join(locale === 'en' ? ', ' : '，'),
       icon: 'info',
     };
   }
@@ -70,27 +62,22 @@ export function getStatusSummary(
     return {
       tone: 'healthy',
       title: t('summary.healthy'),
-      description: t('summary.healthyDescription'),
-      label: t('summary.healthyLabel'),
       icon: 'check',
     };
 
-  const waiting = { tone: 'waiting', label: t('summary.waitingLabel'), icon: 'pulse' } as const;
+  const waiting = { tone: 'waiting', icon: 'pulse' } as const;
   if (statuses.includes('unknown'))
     return {
       ...waiting,
       title: t('summary.waiting'),
-      description: t('summary.waitingDescription'),
     };
   return statuses.length
     ? {
         ...waiting,
         title: t('monitor.paused'),
-        description: t('summary.pausedDescription'),
       }
     : {
         ...waiting,
         title: t('summary.empty'),
-        description: t('summary.emptyDescription'),
       };
 }

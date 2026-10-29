@@ -2,12 +2,11 @@ import { test, expect } from '../support/fixtures';
 
 test('admin can create HTTP and TCP monitors, edit, pause, test, and delete', async ({ page }) => {
   await page.goto('/admin');
-  await expect(page.getByRole('heading', { name: '让你的服务开始被看见' })).toBeVisible();
-  await expect(page.getByText('本地开发身份')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '暂无监控' })).toBeVisible();
+  await expect(page.getByTitle('本地开发身份')).toBeVisible();
   await page.getByRole('tab', { name: '事件', exact: true }).click();
-  await page.getByRole('button', { name: '新增监控', exact: true }).click();
-  await expect(page.getByRole('dialog', { name: '新增监控' })).toBeVisible();
-  await page.getByRole('dialog').getByRole('button', { name: '取消', exact: true }).click();
+  await expect(page.getByRole('button', { name: '新增监控', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '发布事件', exact: true })).toBeVisible();
   await page.getByRole('tab', { name: '监控', exact: true }).click();
   await page.getByRole('button', { name: '新增监控', exact: true }).click();
   let dialog = page.getByRole('dialog', { name: '新增监控' });
@@ -64,7 +63,7 @@ test('admin can create HTTP and TCP monitors, edit, pause, test, and delete', as
   await expect(page.getByRole('link', { name: 'E2E API' })).toBeVisible();
   await expect(page.locator('.monitor-card').filter({ hasText: 'E2E API' })).toContainText('等待检测');
   await page.getByRole('link', { name: 'E2E API' }).click();
-  await expect(page.getByRole('heading', { name: '暂无历史事件' })).toBeVisible();
+  await expect(page.getByText('暂无历史事件', { exact: true })).toBeVisible();
   await expect(page.getByRole('region', { name: '进行中与计划事件', exact: true })).toHaveCount(0);
   await page.getByRole('link', { name: '监控管理', exact: true }).click();
   for (const name of ['E2E API', 'E2E 数据库']) {

@@ -77,7 +77,7 @@ test('opens a shareable timeline with latest-only cards, legacy text and full lo
   await expect(card).not.toContainText(legacyTitle);
   await expect(card.locator('details')).toHaveCount(0);
   expect(await card.locator('.event-excerpt').evaluate((el) => getComputedStyle(el).webkitLineClamp)).toBe(
-    '3',
+    '2',
   );
   await card.getByRole('link', { name: event.title, exact: true }).focus();
   await page.keyboard.press('Enter');
@@ -102,7 +102,9 @@ test('opens a shareable timeline with latest-only cards, legacy text and full lo
   await expect(page.locator('.event-timeline h3')).toHaveText(['维护进行中', '进展更新', '计划维护']);
   for (const [width, height] of [
     [1440, 1000],
+    [768, 1000],
     [390, 844],
+    [320, 844],
   ]) {
     await page.setViewportSize({ width, height });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

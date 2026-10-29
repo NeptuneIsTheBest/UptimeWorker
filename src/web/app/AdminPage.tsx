@@ -23,13 +23,9 @@ export function AdminPage() {
   const [notice, setNotice] = useState<MonitorNotice | null>(null);
   return (
     <Layout admin>
-      <div className="page-eyebrow">
-        <span className="eyebrow-line" /> {t('page.console')}
-      </div>
       <div className="admin-heading">
         <div>
           <h1>{t('nav.admin')}</h1>
-          <p className="muted">{t('admin.description')}</p>
         </div>
         <div className="admin-heading-actions">
           <button className="button secondary" disabled={!data} onClick={() => setGroupsOpen(true)}>
@@ -39,14 +35,16 @@ export function AdminPage() {
             <Icon name="shield" size={18} />
             {t('settings.title')}
           </button>
-          <button
-            className="button primary"
-            onClick={() => setEditor('new')}
-            disabled={!data || data.monitors.length >= data.limit}
-          >
-            <Icon name="plus" size={18} />
-            {t('monitors.add')}
-          </button>
+          {tab === 'monitors' && (
+            <button
+              className="button primary"
+              onClick={() => setEditor('new')}
+              disabled={!data || data.monitors.length >= data.limit}
+            >
+              <Icon name="plus" size={18} />
+              {t('monitors.add')}
+            </button>
+          )}
         </div>
       </div>
       <div className="admin-tabs" role="tablist" aria-label={t('admin.content')}>

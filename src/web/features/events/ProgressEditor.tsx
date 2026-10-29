@@ -49,39 +49,43 @@ export function ProgressEditor({
       }}
     >
       <form noValidate className="monitor-form" onSubmit={submit}>
-        <p>{localizedEventTitle(event, locale)}</p>
-        <label className="field">
-          {t('progress.stage')}
-          <select
-            autoFocus
-            required
-            value={title}
-            onChange={(e) => setTitle(e.target.value as EventProgressTitle)}
-          >
-            {eventProgressOptions(event).map((option) => (
-              <option key={option} value={option}>
-                {t(PROGRESS_LABELS[option])}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="field">
-          {t('progress.body')}
-          <textarea
-            required
-            rows={5}
-            maxLength={4000}
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-          />
-        </label>
-        {(title === 'Completed' || title === 'Resolved') && (
-          <p className="form-note">
-            {t(event.type === 'maintenance' ? 'progress.completesMaintenance' : 'progress.resolvesIncident')}
-          </p>
-        )}
-        {event.source === 'automatic' && <p className="form-note">{t('progress.automaticNote')}</p>}
-        {error && <ErrorNotice message={error} />}
+        <div className="modal-scroll">
+          <p>{localizedEventTitle(event, locale)}</p>
+          <label className="field">
+            {t('progress.stage')}
+            <select
+              autoFocus
+              required
+              value={title}
+              onChange={(e) => setTitle(e.target.value as EventProgressTitle)}
+            >
+              {eventProgressOptions(event).map((option) => (
+                <option key={option} value={option}>
+                  {t(PROGRESS_LABELS[option])}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            {t('progress.body')}
+            <textarea
+              required
+              rows={5}
+              maxLength={4000}
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+            />
+          </label>
+          {(title === 'Completed' || title === 'Resolved') && (
+            <p className="form-note">
+              {t(
+                event.type === 'maintenance' ? 'progress.completesMaintenance' : 'progress.resolvesIncident',
+              )}
+            </p>
+          )}
+          {event.source === 'automatic' && <p className="form-note">{t('progress.automaticNote')}</p>}
+          {error && <ErrorNotice message={error} />}
+        </div>
         <div className="modal-actions">
           <button type="button" className="button secondary" disabled={busy} onClick={close}>
             {t('common.cancel')}

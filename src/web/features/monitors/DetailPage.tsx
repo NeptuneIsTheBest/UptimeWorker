@@ -33,9 +33,6 @@ export function DetailPage({ id }: { id: string }) {
             <EventList events={data.events ?? []} variant="open" />
             <div className="detail-heading">
               <div>
-                <div className="page-eyebrow">
-                  {t('page.insights')} · {data.monitor.type.toUpperCase()}
-                </div>
                 <h1>{data.monitor.name}</h1>
                 <p className="muted">
                   {t('monitor.detailSchedule', {
@@ -71,9 +68,12 @@ export function DetailPage({ id }: { id: string }) {
             <section className="panel">
               <div className="panel-heading">
                 <h2>{t('monitor.history')}</h2>
-                <Legend />
               </div>
               <HistoryBars days={data.monitor.days} />
+              <div className="list-footnote">
+                <Legend />
+                <span>{t('history.daily')}</span>
+              </div>
             </section>
             <EventList events={data.events ?? []} variant="history" />
           </>

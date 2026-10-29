@@ -64,80 +64,86 @@ export function EventEditor({
       wide
     >
       <form noValidate className="monitor-form" onSubmit={submit}>
-        <p className="form-note">{t('event.publishNote')}</p>
-        <label className="field">
-          {t('event.title')}
-          <input
-            autoFocus
-            required
-            maxLength={120}
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-          />
-        </label>
-        <label className="field">
-          {t('event.type')}
-          <select value={type} onChange={(e) => setType(e.target.value as EventConfig['type'])}>
-            <option value="incident">{t('event.incident')}</option>
-            <option value="maintenance">{t('event.maintenance')}</option>
-          </select>
-        </label>
-        <label className="field">
-          {t('event.body')}
-          <textarea
-            required
-            rows={5}
-            maxLength={4000}
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-          />
-        </label>
-        <fieldset className="event-node-picker">
-          <legend>{t('event.monitors')}</legend>
-          {!monitors.length && !deletedMonitors.length && (
-            <p className="muted">{t('event.addMonitorsFirst')}</p>
+        <div className="modal-scroll">
+          <p className="form-note">{t('event.publishNote')}</p>
+          <label className="field">
+            {t('event.title')}
+            <input
+              autoFocus
+              required
+              maxLength={120}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+            />
+          </label>
+          <label className="field">
+            {t('event.type')}
+            <select value={type} onChange={(e) => setType(e.target.value as EventConfig['type'])}>
+              <option value="incident">{t('event.incident')}</option>
+              <option value="maintenance">{t('event.maintenance')}</option>
+            </select>
+          </label>
+          <label className="field">
+            {t('event.body')}
+            <textarea
+              required
+              rows={5}
+              maxLength={4000}
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+            />
+          </label>
+          <fieldset className="event-node-picker">
+            <legend>{t('event.monitors')}</legend>
+            {!monitors.length && !deletedMonitors.length && (
+              <p className="muted">{t('event.addMonitorsFirst')}</p>
+            )}
+            {deletedMonitors.length > 0 && (
+              <p className="form-note">
+                {t('event.deletedAssociations', {
+                  names: deletedMonitors.map((monitor) => monitor.name).join(locale === 'en' ? ', ' : '、'),
+                })}
+              </p>
+            )}
+            {monitors.map((monitor) => (
+              <label className="checkbox-field" key={monitor.id}>
+                <input
+                  type="checkbox"
+                  checked={ids.includes(monitor.id)}
+                  onChange={(e) =>
+                    setIds((current) =>
+                      e.target.checked ? [...current, monitor.id] : current.filter((id) => id !== monitor.id),
+                    )
+                  }
+                />
+                <span>{monitor.name}</span>
+              </label>
+            ))}
+          </fieldset>
+          {type === 'maintenance' && (
+            <>
+              <label className="field">
+                {t('event.startInput')}
+                <input
+                  required
+                  type="datetime-local"
+                  value={start}
+                  onChange={(e) => setStart(e.target.value)}
+                />
+              </label>
+              <label className="field">
+                {t('event.endInput')}
+                <input required type="datetime-local" value={end} onChange={(e) => setEnd(e.target.value)} />
+              </label>
+              <p className="form-note">{t('event.timeNote')}</p>
+              <details className="form-help">
+                <summary>{t('event.maintenanceHelp')}</summary>
+                <p>{t('event.timeDetails')}</p>
+              </details>
+            </>
           )}
-          {deletedMonitors.length > 0 && (
-            <p className="form-note">
-              {t('event.deletedAssociations', {
-                names: deletedMonitors.map((monitor) => monitor.name).join(locale === 'en' ? ', ' : '、'),
-              })}
-            </p>
-          )}
-          {monitors.map((monitor) => (
-            <label className="checkbox-field" key={monitor.id}>
-              <input
-                type="checkbox"
-                checked={ids.includes(monitor.id)}
-                onChange={(e) =>
-                  setIds((current) =>
-                    e.target.checked ? [...current, monitor.id] : current.filter((id) => id !== monitor.id),
-                  )
-                }
-              />
-              <span>{monitor.name}</span>
-            </label>
-          ))}
-        </fieldset>
-        {type === 'maintenance' && (
-          <>
-            <label className="field">
-              {t('event.startInput')}
-              <input
-                required
-                type="datetime-local"
-                value={start}
-                onChange={(e) => setStart(e.target.value)}
-              />
-            </label>
-            <label className="field">
-              {t('event.endInput')}
-              <input required type="datetime-local" value={end} onChange={(e) => setEnd(e.target.value)} />
-            </label>
-            <p className="form-note">{t('event.timeNote')}</p>
-          </>
-        )}
-        {error && <ErrorNotice message={error} />}
+          {error && <ErrorNotice message={error} />}
+        </div>
         <div className="modal-actions">
           <button type="button" className="button secondary" disabled={busy} onClick={close}>
             {t('common.cancel')}

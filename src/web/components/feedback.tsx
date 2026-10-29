@@ -1,12 +1,16 @@
 import { displayMessage, type DisplayMessage } from '../i18n/core';
 import { useI18n } from '../i18n/I18nProvider';
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { Icon } from './Icon';
 
 export function ErrorNotice({ message, retry }: { message: DisplayMessage; retry?: () => void }) {
   const { t, locale } = useI18n();
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (ref.current?.closest('dialog')) ref.current.scrollIntoView({ block: 'nearest' });
+  }, [message, locale]);
   return (
-    <div className="error-notice" role="alert">
+    <div ref={ref} className="error-notice" role="alert">
       <Icon name="info" />
       <span>{displayMessage(message, locale)}</span>
       {retry && (

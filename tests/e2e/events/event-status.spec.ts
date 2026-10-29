@@ -63,9 +63,8 @@ test('homepage reflects incidents while probe metrics and filtered nodes remain 
   );
   await page.goto('/');
   const hero = page.locator('.status-hero');
-  await expect(hero.getByRole('heading')).toHaveText('部分服务需要关注。');
+  await expect(hero.getByRole('heading')).toHaveText('部分服务需要关注');
   await expect(hero).toHaveClass('status-hero attention');
-  await expect(hero.locator('.hero-tag')).toHaveText('需要关注');
   await expect(hero.locator('p')).toContainText('2 条未解决故障');
   await expect(hero.locator('p')).not.toContainText('0 项');
   await expect(page.locator('.monitor-card .status-badge')).toHaveText(['运行正常', '运行正常']);
@@ -96,13 +95,12 @@ test('homepage reflects incidents while probe metrics and filtered nodes remain 
   await expect(hero.locator('p')).toContainText('1 条未解决故障');
   events[1] = { ...events[1], status: 'stopped', endedAt: now };
   await refresh();
-  await expect(hero.getByRole('heading')).toHaveText('所有服务，运行如常。');
+  await expect(hero.getByRole('heading')).toHaveText('全部服务正常');
   await expect(hero).toHaveClass('status-hero healthy');
-  await expect(hero.locator('.hero-tag')).toHaveText('全部服务正常');
 
   monitors[0].status = 'down';
   await refresh();
-  await expect(hero.getByRole('heading')).toHaveText('部分服务需要关注。');
+  await expect(hero.getByRole('heading')).toHaveText('部分服务需要关注');
   await expect(hero.locator('p')).toContainText('1 项服务异常');
   await expect(hero.locator('p')).not.toContainText('未解决故障');
   monitors[0].status = 'stale';
@@ -110,12 +108,12 @@ test('homepage reflects incidents while probe metrics and filtered nodes remain 
   await expect(hero.locator('p')).toContainText('1 项数据过期');
   fail = true;
   await refresh();
-  await expect(hero.getByRole('heading')).toHaveText('状态数据暂时不可用。');
+  await expect(hero.getByRole('heading')).toHaveText('状态暂时不可用');
   await expect(page.getByRole('alert')).toContainText('状态刷新失败');
   fail = false;
   monitors[0].status = 'up';
   await refresh();
-  await expect(hero.getByRole('heading')).toHaveText('所有服务，运行如常。');
+  await expect(hero.getByRole('heading')).toHaveText('全部服务正常');
 });
 
 test('homepage advances maintenance by the page clock and waits for explicit completion', async ({
@@ -139,18 +137,17 @@ test('homepage advances maintenance by the page clock and waits for explicit com
   });
   await page.goto('/');
   const hero = page.locator('.status-hero');
-  await expect(hero.getByRole('heading')).toHaveText('所有服务，运行如常。');
+  await expect(hero.getByRole('heading')).toHaveText('全部服务正常');
   await expect(page.locator('.event-status')).toHaveText('待开始');
   await expect(page.locator('.refresh-button')).toHaveAttribute('aria-busy', 'false');
   const initialReads = reads;
   await page.clock.runFor(30_000);
-  await expect(hero.getByRole('heading')).toHaveText('部分服务正在维护。');
+  await expect(hero.getByRole('heading')).toHaveText('维护进行中');
   await expect(hero).toHaveClass('status-hero maintenance');
-  await expect(hero.locator('.hero-tag')).toHaveText('维护进行中');
   await expect(hero.locator('p')).not.toContainText('已过计划时间');
   await expect(page.locator('.event-status')).toHaveText('维护进行中');
   await page.clock.runFor(30_000);
-  await expect(hero.getByRole('heading')).toHaveText('部分服务正在维护。');
+  await expect(hero.getByRole('heading')).toHaveText('维护进行中');
   await expect(hero.locator('p')).toContainText('1 项维护尚未完成，其中 1 项已过计划时间');
   await expect(page.locator('.event-status')).toHaveText('已过计划时间');
   expect(reads).toBe(initialReads);
@@ -170,11 +167,11 @@ test('homepage advances maintenance by the page clock and waits for explicit com
   }
   events.push(event('维护期间故障'));
   await refresh();
-  await expect(hero.getByRole('heading')).toHaveText('部分服务需要关注。');
+  await expect(hero.getByRole('heading')).toHaveText('部分服务需要关注');
   events[1] = { ...events[1], status: 'resolved', endedAt: now + 60_000 };
   await refresh();
-  await expect(hero.getByRole('heading')).toHaveText('部分服务正在维护。');
+  await expect(hero.getByRole('heading')).toHaveText('维护进行中');
   events[0] = { ...events[0], status: 'resolved', endedAt: now + 60_000 };
   await refresh();
-  await expect(hero.getByRole('heading')).toHaveText('所有服务，运行如常。');
+  await expect(hero.getByRole('heading')).toHaveText('全部服务正常');
 });

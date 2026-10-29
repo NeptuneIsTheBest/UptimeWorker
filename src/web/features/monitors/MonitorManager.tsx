@@ -81,8 +81,11 @@ export function MonitorManager({
           <div className="access-strip">
             <span>
               <Icon name="shield" size={17} />
-              {data.identity.email === 'local@development' ? t('admin.local') : t('admin.verified')}
-              <strong>{data.identity.email}</strong>
+              <strong
+                title={data.identity.email === 'local@development' ? t('admin.local') : t('admin.verified')}
+              >
+                {data.identity.email}
+              </strong>
             </span>
             <span>
               {t('admin.monitorCount', { count: data.monitors.length, limit: data.limit })}
@@ -229,10 +232,6 @@ export function MonitorManager({
             </section>
           )
         )}
-        <div className="info-strip">
-          <Icon name="clock" size={17} />
-          <span>{t('monitor.schedulerNote')}</span>
-        </div>
       </div>
       {editor && (
         <MonitorEditor
@@ -249,7 +248,7 @@ export function MonitorManager({
             if (!busy) setDeleting(null);
           }}
         >
-          <div className="delete-body">
+          <div className="modal-scroll delete-body">
             <p>{t('monitor.deleteQuestion', { name: deleting.name })}</p>
             <p className="muted">{t('monitor.deleteNote')}</p>
             {deleteError && <ErrorNotice message={deleteError} />}

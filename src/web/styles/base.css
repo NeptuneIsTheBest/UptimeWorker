@@ -7,22 +7,24 @@
     'PingFang SC',
     'Microsoft YaHei',
     sans-serif;
-  color: #1e3230;
-  background: #f7f9f8;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--background);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
-  --green: #07856e;
-  --green-dark: #066653;
-  --green-soft: #eaf5f0;
-  --text: #1e3230;
-  --muted: #7a8885;
-  --line: #e6ece9;
+  --text: #20242c;
+  --muted: #667085;
+  --line: #e3e6eb;
   --surface: #fff;
-  --background: #f7f9f8;
-  --red: #d95858;
-  --amber: #d2a14a;
-  --empty: #e8eeeb;
+  --background: #f6f7f9;
+  --subtle: #f3f4f6;
+  --green: #137b5b;
+  --green-dark: #106247;
+  --green-soft: #edf7f1;
+  --red: #bd3f42;
+  --amber: #966215;
+  --empty: #e6e9ee;
   --radius: 12px;
 }
 * {
@@ -30,43 +32,46 @@
 }
 body {
   margin: 0;
+  line-height: 1.6;
 }
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 button,
 a,
 input,
-select {
+select,
+summary {
   -webkit-tap-highlight-color: transparent;
 }
 a {
   color: inherit;
   text-decoration: none;
 }
-button {
+button,
+summary {
   cursor: pointer;
+}
+button {
+  border: 0;
 }
 button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 button,
+a,
 input,
-select {
-  outline-offset: 4px;
+select,
+textarea,
+summary {
+  outline-offset: 3px;
 }
-button:focus-visible,
-a:focus-visible,
-input:focus-visible,
-textarea:focus-visible,
-select:focus-visible {
+:focus-visible {
   outline: 2px solid var(--green);
-}
-button {
-  border: 0;
 }
 svg {
   flex-shrink: 0;
@@ -74,29 +79,39 @@ svg {
 h1,
 h2,
 h3,
+h4,
 p {
   margin: 0;
 }
 h1 {
-  font-size: 32px;
+  font-size: 28px;
   font-weight: 650;
-  letter-spacing: -1.3px;
-  line-height: 1.45;
+  letter-spacing: -0.7px;
+  line-height: 1.35;
 }
 h2 {
   font-size: 18px;
   font-weight: 650;
-  letter-spacing: -0.3px;
+  line-height: 1.5;
 }
 h3 {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
+  line-height: 1.5;
 }
 input,
-select {
+select,
+textarea {
   color: var(--text);
   background: var(--surface);
 }
-input::placeholder {
-  color: #a4b0aa;
+input::placeholder,
+textarea::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+@media (max-width: 760px) {
+  h1 {
+    font-size: 24px;
+  }
 }

@@ -2,7 +2,6 @@ import { useI18n } from '../../i18n/I18nProvider';
 import type { ReactNode } from 'react';
 import type { StatusEvent } from '../../../shared/events/types';
 import { eventLabel } from './labels';
-import { Empty } from '../../components/feedback';
 import { Icon } from '../../components/Icon';
 import { useNow } from '../../hooks/useNow';
 import {
@@ -58,16 +57,10 @@ export function EventList<T extends StatusEvent>({
       <div className="section-heading">
         <div>
           <h2>{heading}</h2>
-          <p>
-            {variant === 'history' ? t('event.historyDescription') : t('event.description')} ·{' '}
-            {t('time.browserZone')}
-          </p>
         </div>
       </div>
       {!visibleEvents.length ? (
-        <Empty title={variant === 'history' ? t('event.noHistory') : t('event.noEvents')} icon="clock">
-          {variant === 'history' ? t('event.noHistoryDescription') : t('event.noEventsDescription')}
-        </Empty>
+        <p className="empty-inline">{variant === 'history' ? t('event.noHistory') : t('event.noEvents')}</p>
       ) : (
         <div className="event-list">
           {visibleEvents.map((event) => {

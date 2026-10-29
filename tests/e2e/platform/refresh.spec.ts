@@ -340,3 +340,23 @@ test('settings persist, apply immediately and polling preserves monitor and sett
   await expect(page.locator('.refresh-interval')).toHaveText('每 30 秒自动刷新');
   expect(calls).toBe(1);
 });
+
+test('refresh details open with the keyboard while the last successful time stays visible', async ({
+  page,
+}) => {
+  await page.route('**/api/status', (route) => route.fulfill({ json: statusData() }));
+  await page.goto('/');
+  await refreshed(page);
+  const details = page.locator('.refresh-disclosure');
+  await expect(page.locator('.refresh-details')).not.toBeVisible();
+  await details.locator('summary').focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.refresh-interval')).toBeVisible();
+  await expect(page.locator('.refresh-elapsed')).toBeVisible();
+  await page.clock.runFor(1000);
+  await expect(page.locator('.refresh-elapsed')).toHaveText('已过去 1 秒');
+  await page.keyboard.press('Space');
+  await expect(page.locator('.refresh-details')).not.toBeVisible();
+  await expect(page.locator('.refresh-status time')).toBeVisible();
+  await expect(page.locator('.refresh-button')).toBeVisible();
+});

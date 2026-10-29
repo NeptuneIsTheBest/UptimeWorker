@@ -55,7 +55,6 @@ export function EventDetailPage({ id }: { id: string }) {
                 </span>
               </div>
               <h1>{localizedEventTitle(event, locale)}</h1>
-              <p className="event-id">{t('event.id', { id: event.id })}</p>
               <EventMonitors event={event} />
               <dl className="event-detail-times">
                 {event.type === 'maintenance' ? (
