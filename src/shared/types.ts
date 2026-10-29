@@ -135,10 +135,19 @@ export interface EventConfig {
   endsAt: number | null;
 }
 export type EventStatus = 'open' | 'resolved' | 'stopped';
+export type EventProgressTitle =
+  | 'Scheduled'
+  | 'Updated'
+  | 'In Progress'
+  | 'Completed'
+  | 'Investigating'
+  | 'Identified'
+  | 'Monitoring'
+  | 'Resolved';
 export interface EventUpdateConfig {
-  title: string | null;
+  title: EventProgressTitle | null;
   body: string;
-  resolve: boolean;
+  resolve?: boolean;
 }
 export interface EventUpdate {
   id: string;
@@ -165,6 +174,11 @@ export interface AdminEvent extends StatusEvent {
 export interface EventsResponse extends PageRefreshSettings {
   events: AdminEvent[];
   nextCursor: string | null;
+}
+export interface EventDetailResponse extends PageRefreshSettings {
+  siteName: string;
+  event: StatusEvent;
+  generatedAt: number;
 }
 export const STATUS_LABELS: Record<MonitorStatus, string> = {
   up: '运行正常',

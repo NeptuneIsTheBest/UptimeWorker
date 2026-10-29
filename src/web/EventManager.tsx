@@ -1,6 +1,18 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import type { AdminEvent, AdminMonitor, EventConfig, EventsResponse, GlobalSettings } from '../shared/types';
-import { parseEventConfig, parseEventUpdateConfig } from '../shared/events';
+import type {
+  AdminEvent,
+  AdminMonitor,
+  EventConfig,
+  EventProgressTitle,
+  EventsResponse,
+  GlobalSettings,
+} from '../shared/types';
+import {
+  EVENT_PROGRESS_LABELS,
+  eventProgressOptions,
+  parseEventConfig,
+  parseEventUpdateConfig,
+} from '../shared/events';
 import { api, useRemote } from './api';
 import { ErrorNotice, Loading, Modal } from './components';
 import { EventList } from './EventList';
@@ -155,9 +167,8 @@ function ProgressEditor({
   saved: () => void;
   close: () => void;
 }) {
-  const [title, setTitle] = useState('');
+  const [title, setTitle] = useState<EventProgressTitle>('Updated');
   const [body, setBody] = useState('');
-  const [resolve, setResolve] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   async function submit(e: FormEvent) {
@@ -165,7 +176,7 @@ function ProgressEditor({
     setBusy(true);
     setError(null);
     try {
-      const config = parseEventUpdateConfig({ title, body, resolve });
+      const config = parseEventUpdateConfig({ title, body });
       await api(`/api/admin/events/${event.id}/updates`, {
         method: 'POST',
         body: JSON.stringify({ version: event.version, ...config }),
@@ -188,8 +199,19 @@ function ProgressEditor({
       <form className="monitor-form" onSubmit={submit}>
         <p>{event.title}</p>
         <label className="field">
-          进展标题（选填）
-          <input autoFocus maxLength={120} value={title} onChange={(e) => setTitle(e.target.value)} />
+          进展阶段
+          <select
+            autoFocus
+            required
+            value={title}
+            onChange={(e) => setTitle(e.target.value as EventProgressTitle)}
+          >
+            {eventProgressOptions(event).map((option) => (
+              <option key={option} value={option}>
+                {option} · {EVENT_PROGRESS_LABELS[option]}
+              </option>
+            ))}
+          </select>
         </label>
         <label className="field">
           进展说明
@@ -201,11 +223,10 @@ function ProgressEditor({
             onChange={(e) => setBody(e.target.value)}
           />
         </label>
-        {event.source === 'manual' && event.status === 'open' && (
-          <label className="checkbox-field">
-            <input type="checkbox" checked={resolve} onChange={(e) => setResolve(e.target.checked)} />
-            <span>同时标记事件已完成</span>
-          </label>
+        {(title === 'Completed' || title === 'Resolved') && (
+          <p className="form-note">
+            保存此进展将同时{event.type === 'maintenance' ? '完成维护' : '标记故障已恢复'}。
+          </p>
         )}
         {event.source === 'automatic' && (
           <p className="form-note">自动事件由成功检测确认恢复，这里可以补充处理说明。</p>

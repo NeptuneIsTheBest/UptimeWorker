@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMonitor, findMonitor } from '../src/worker/repository';
+import { createEvent } from '../src/worker/events';
 import type { AdminMonitor } from '../src/shared/types';
 import { adminHeaders as headers, apiClient } from './api-client';
 import { databaseFixture, httpConfig, tcpConfig, resetDatabase } from './helpers';
@@ -179,10 +180,18 @@ describe('API boundaries', () => {
     async (pageRefreshSeconds) => {
       const { request } = apiClient(fixture.db);
       const row = (await createMonitor(fixture.db, httpConfig))!;
+      const event = await createEvent(fixture.db, {
+        title: '公开事件',
+        body: '检查详情缓存',
+        type: 'incident',
+        monitorIds: [row.id],
+        startsAt: null,
+        endsAt: null,
+      });
       expect(
         (await request('admin/settings', 'PATCH', { ...settingsUpdate, pageRefreshSeconds })).status,
       ).toBe(200);
-      for (const path of ['status', `monitors/${row.id}/history`, 'admin/monitors']) {
+      for (const path of ['status', `monitors/${row.id}/history`, `events/${event.id}`, 'admin/monitors']) {
         const response = await request(path);
         expect(response.status).toBe(200);
         expect(response.headers.get('cache-control')).toBe(
@@ -241,8 +250,38 @@ describe('API boundaries', () => {
     const history = await app.request(`https://status.test/api/monitors/${row!.id}/history`, {}, env, ctx);
     expect(history.headers.get('cache-control')).toBe('public, max-age=15');
     expect(await history.text()).not.toContain('secret.example.com');
+    const event = await createEvent(fixture.db, {
+      title: '公开事件',
+      body: '检查事件缓存',
+      type: 'incident',
+      monitorIds: [row!.id],
+      startsAt: null,
+      endsAt: null,
+    });
+    const eventDetail = await app.request(
+      `https://status.test/api/events/${event.id}?random=1`,
+      {},
+      env,
+      ctx,
+    );
+    expect(eventDetail.headers.get('cache-control')).toBe('public, max-age=15');
+    const detailText = await eventDetail.text();
+    for (const hidden of ['secret.example.com', 'private', 'version', 'write_token'])
+      expect(detailText).not.toContain(hidden);
     await Promise.all(pending);
     const puts = put.mock.calls.length;
+    const cachedEvent = await app.request(
+      `https://status.test/api/events/${event.id}?random=2`,
+      {},
+      env,
+      ctx,
+    );
+    expect(await cachedEvent.text()).toBe(detailText);
+    expect(put).toHaveBeenCalledTimes(puts);
+    const missingEvent = await app.request('https://status.test/api/events/missing', {}, env, ctx);
+    expect(missingEvent.status).toBe(404);
+    expect(missingEvent.headers.get('cache-control')).toBe('no-store');
+    expect(put).toHaveBeenCalledTimes(puts);
     const missing = await app.request('https://status.test/api/monitors/missing/history', {}, env, ctx);
     expect(missing.status).toBe(404);
     expect(missing.headers.get('cache-control')).toBe('no-store');

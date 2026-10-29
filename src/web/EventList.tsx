@@ -1,16 +1,24 @@
 import type { ReactNode } from 'react';
 import type { StatusEvent } from '../shared/types';
 import { eventLabel } from '../shared/events';
-import { Empty, useNow } from './components';
+import { Empty, Icon, useNow } from './components';
+import { eventTime, latestEventEntry } from './eventPresentation';
 
-export const eventTime = (time: number) =>
-  new Intl.DateTimeFormat('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(time);
+export function EventMonitors({ event }: { event: StatusEvent }) {
+  return (
+    <div className="event-monitors" aria-label="关联节点">
+      {event.monitors.map((monitor, index) =>
+        monitor.id ? (
+          <a key={monitor.id} href={`/monitors/${encodeURIComponent(monitor.id)}`}>
+            {monitor.name}
+          </a>
+        ) : (
+          <span key={`deleted-${index}`}>{monitor.name}（已删除）</span>
+        ),
+      )}
+    </div>
+  );
+}
 
 export function EventList<T extends StatusEvent>({
   events,
@@ -51,79 +59,70 @@ export function EventList<T extends StatusEvent>({
         </Empty>
       ) : (
         <div className="event-list">
-          {visibleEvents.map((event) => (
-            <article className="event-card" key={event.id}>
-              <div className="event-heading">
-                <div className="event-tags">
-                  <span className={`event-status ${event.status === 'open' ? event.type : event.status}`}>
-                    {eventLabel(event, now)}
-                  </span>
-                  <span className="muted">
-                    {event.type === 'maintenance' ? '计划维护' : '故障事件'} ·{' '}
-                    {event.source === 'automatic' ? '自动检测' : '管理员发布'}
-                  </span>
+          {visibleEvents.map((event) => {
+            const latest = latestEventEntry(event);
+            const href = `/events/${encodeURIComponent(event.id)}`;
+            return (
+              <article className="event-card" key={event.id}>
+                <div className="event-heading">
+                  <div className="event-tags">
+                    <span className={`event-status ${event.status === 'open' ? event.type : event.status}`}>
+                      {eventLabel(event, now)}
+                    </span>
+                    <span className="muted">
+                      {event.type === 'maintenance' ? '计划维护' : '故障事件'} ·{' '}
+                      {event.source === 'automatic' ? '自动检测' : '管理员发布'}
+                    </span>
+                  </div>
                 </div>
-                <time className="event-updated" dateTime={new Date(event.updatedAt).toISOString()}>
-                  更新于 {eventTime(event.updatedAt)}
-                </time>
-              </div>
-              <h3>{event.title}</h3>
-              <div className="event-monitors" aria-label="关联节点">
-                {event.monitors.map((monitor, index) =>
-                  monitor.id ? (
-                    <a key={monitor.id} href={`/monitors/${encodeURIComponent(monitor.id)}`}>
-                      {monitor.name}
-                    </a>
-                  ) : (
-                    <span key={`deleted-${index}`}>{monitor.name}（已删除）</span>
-                  ),
+                <h3>
+                  <a className="event-title-link" href={href}>
+                    {event.title}
+                    <Icon name="arrow" size={16} />
+                  </a>
+                </h3>
+                <EventMonitors event={event} />
+                {event.type === 'maintenance' && (
+                  <p className="event-window">
+                    计划时间：{eventTime(event.startsAt!)} — {eventTime(event.endsAt!)}
+                  </p>
                 )}
-              </div>
-              <p className="event-body">{event.body}</p>
-              {event.type === 'maintenance' && (
-                <p className="event-window">
-                  计划时间：{eventTime(event.startsAt!)} — {eventTime(event.endsAt!)}
-                </p>
-              )}
-              {event.source === 'automatic' && (
-                <p className="event-window">
-                  首次失败：{eventTime(event.startedAt)}
-                  {event.endedAt !== null && (
-                    <>
-                      {' '}
-                      · {event.status === 'resolved' ? '恢复' : '停止跟踪'}：{eventTime(event.endedAt)} ·
-                      持续约 {Math.max(0, Math.round((event.endedAt - event.startedAt) / 60_000))} 分钟
-                    </>
-                  )}
-                </p>
-              )}
-              {event.updates.length > 0 && (
-                <details className="event-progress">
-                  <summary>进展记录（{event.updates.length}）</summary>
-                  <ol>
-                    {event.updates.map((update) => (
-                      <li key={update.id}>
-                        <div className="muted">
-                          <time dateTime={new Date(update.createdAt).toISOString()}>
-                            {eventTime(update.createdAt)}
-                          </time>{' '}
-                          · {update.source === 'automatic' ? '自动检测' : '管理员'}
-                          {update.status === 'resolved'
-                            ? ' · 已完成'
-                            : update.status === 'stopped'
-                              ? ' · 已停止跟踪'
-                              : ''}
-                        </div>
-                        {update.title && <h4 className="event-progress-title">{update.title}</h4>}
-                        <p className="event-body">{update.body}</p>
-                      </li>
-                    ))}
-                  </ol>
-                </details>
-              )}
-              {actions && <div className="event-actions">{actions(event)}</div>}
-            </article>
-          ))}
+                {event.source === 'automatic' && (
+                  <p className="event-window">
+                    首次失败：{eventTime(event.startedAt)}
+                    {event.endedAt !== null && (
+                      <>
+                        {' '}
+                        · {event.status === 'resolved' ? '恢复' : '停止跟踪'}：{eventTime(event.endedAt)} ·
+                        持续约 {Math.max(0, Math.round((event.endedAt - event.startedAt) / 60_000))} 分钟
+                      </>
+                    )}
+                  </p>
+                )}
+                <div className="event-latest" aria-label="最新进展">
+                  <div className="event-latest-heading">
+                    <h4>{latest.title}</h4>
+                    <time className="event-updated" dateTime={new Date(latest.createdAt).toISOString()}>
+                      {eventTime(latest.createdAt)}
+                    </time>
+                  </div>
+                  <p className="event-body event-excerpt">
+                    {latest.legacyTitle && (
+                      <>
+                        {latest.legacyTitle}
+                        {'\n'}
+                      </>
+                    )}
+                    {latest.body}
+                  </p>
+                  <a className="event-timeline-link" href={href}>
+                    查看时间线 <Icon name="arrow" size={14} />
+                  </a>
+                </div>
+                {actions && <div className="event-actions">{actions(event)}</div>}
+              </article>
+            );
+          })}
         </div>
       )}
     </section>

@@ -1,7 +1,7 @@
 import { Hono, type MiddlewareHandler } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { parseMonitorConfig, ValidationError } from '../shared/validation';
-import { MAX_MONITORS } from '../shared/types';
+import { MAX_MONITORS, type EventDetailResponse } from '../shared/types';
 import { parseGlobalSettingsPatch } from '../shared/settings';
 import { object, parseEventConfig, parseEventUpdateConfig, parseGroup, parseVersion } from '../shared/events';
 import {
@@ -13,6 +13,7 @@ import {
   getEvent,
   listEvents,
   listGroups,
+  publicEvent,
   saveGroup,
 } from './events';
 import { requireAccess, type TokenVerifier } from './auth';
@@ -87,6 +88,20 @@ export function createApp(probe: Probe, verify?: TokenVerifier) {
     return result
       ? c.json(result, 200, { 'Cache-Control': publicCacheControl(result.pageRefreshSeconds) })
       : c.json({ error: '监控不存在。' }, 404);
+  });
+  app.get('/api/events/:id', publicCache, async (c) => {
+    const [event, pageRefreshSeconds] = await Promise.all([
+      getEvent(c.env.DB, c.req.param('id')),
+      getPageRefreshSeconds(c.env.DB),
+    ]);
+    if (!event) return c.json({ error: '事件不存在。' }, 404);
+    const result: EventDetailResponse = {
+      siteName: c.env.SITE_NAME || 'UptimeWorker',
+      event: publicEvent(event),
+      generatedAt: Date.now(),
+      pageRefreshSeconds,
+    };
+    return c.json(result, 200, { 'Cache-Control': publicCacheControl(pageRefreshSeconds) });
   });
   app.get('/api/admin/monitors', async (c) => {
     const [monitors, pageRefreshSeconds, groups] = await Promise.all([

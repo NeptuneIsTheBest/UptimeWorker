@@ -4,22 +4,23 @@
 
 ## 接口列表
 
-| 方法                 | 路径                            | 说明                                             |
-| -------------------- | ------------------------------- | ------------------------------------------------ |
-| GET                  | `/api/status`                   | 站点信息、分组、当前状态、每日可用率、未结束与历史事件   |
-| GET                  | `/api/monitors/:id/history`     | 服务展示数据、最近 24 小时明细、关联事件         |
-| GET                  | `/api/admin/monitors`           | 完整监控配置、分组、身份与数量上限               |
-| POST                 | `/api/admin/monitors`           | 创建监控                                         |
-| PATCH                | `/api/admin/monitors/:id`       | 更新配置，必须携带当前 `version`                 |
-| DELETE               | `/api/admin/monitors/:id`       | 删除监控及历史                                   |
-| POST                 | `/api/admin/monitors/:id/test`  | 只测试已保存目标，不写入统计                     |
-| GET                  | `/api/admin/settings`           | 全局设置、版本与密钥配置状态                     |
-| PATCH                | `/api/admin/settings`           | 更新全局设置，必须携带当前 `version`             |
-| GET / POST           | `/api/admin/groups`             | 列出／创建分组                                   |
-| PATCH / DELETE       | `/api/admin/groups/:id`         | 更新／删除分组，必须携带 `version`               |
-| GET / POST           | `/api/admin/events`             | 分页列出／发布事件                               |
-| GET / PATCH / DELETE | `/api/admin/events/:id`         | 获取／编辑／删除事件，写入必须携带 `version`     |
-| POST                 | `/api/admin/events/:id/updates` | 追加进展，可同时完成手动事件，必须携带 `version` |
+| 方法                 | 路径                            | 说明                                                   |
+| -------------------- | ------------------------------- | ------------------------------------------------------ |
+| GET                  | `/api/status`                   | 站点信息、分组、当前状态、每日可用率、未结束与历史事件 |
+| GET                  | `/api/monitors/:id/history`     | 服务展示数据、最近 24 小时明细、关联事件               |
+| GET                  | `/api/events/:id`               | 单个事件及完整进展记录，支持独立详情页                 |
+| GET                  | `/api/admin/monitors`           | 完整监控配置、分组、身份与数量上限                     |
+| POST                 | `/api/admin/monitors`           | 创建监控                                               |
+| PATCH                | `/api/admin/monitors/:id`       | 更新配置，必须携带当前 `version`                       |
+| DELETE               | `/api/admin/monitors/:id`       | 删除监控及历史                                         |
+| POST                 | `/api/admin/monitors/:id/test`  | 只测试已保存目标，不写入统计                           |
+| GET                  | `/api/admin/settings`           | 全局设置、版本与密钥配置状态                           |
+| PATCH                | `/api/admin/settings`           | 更新全局设置，必须携带当前 `version`                   |
+| GET / POST           | `/api/admin/groups`             | 列出／创建分组                                         |
+| PATCH / DELETE       | `/api/admin/groups/:id`         | 更新／删除分组，必须携带 `version`                     |
+| GET / POST           | `/api/admin/events`             | 分页列出／发布事件                                     |
+| GET / PATCH / DELETE | `/api/admin/events/:id`         | 获取／编辑／删除事件，写入必须携带 `version`           |
+| POST                 | `/api/admin/events/:id/updates` | 追加进展，可同时完成手动事件，必须携带 `version`       |
 
 ## 访问与错误
 
@@ -43,7 +44,7 @@ GET / PATCH 返回下表字段。PATCH 须携带当前 `version`，其余字段�
 
 `wafBypassToken` 仅用于写入，省略或空字符串保留原密钥，不回传原值。旧字段 `wafBypassDomains`、`wafBypassAutoDomains` 会被忽略，不返回也不参与放行判定。
 
-`GET /api/status`、`GET /api/monitors/:id/history` 和 `GET /api/admin/monitors` 的顶层响应均包含 `pageRefreshSeconds`。公开接口缓存有效期为 `min(pageRefreshSeconds, 60)` 秒，关闭时为 60 秒；已有缓存自然过期后生效。管理接口及失败响应不缓存。`generatedAt` 表示服务端生成数据的时间，界面刷新行为见[页面自动刷新](configuration.md#页面自动刷新)，事件触发规则见[服务器分组与事件](configuration.md#服务器分组与事件)。
+`GET /api/status`、`GET /api/monitors/:id/history`、`GET /api/events/:id` 和 `GET /api/admin/monitors` 的顶层响应均包含 `pageRefreshSeconds`。公开接口缓存有效期为 `min(pageRefreshSeconds, 60)` 秒，关闭时为 60 秒；已有缓存自然过期后生效。管理接口及失败响应不缓存。`generatedAt` 表示服务端生成数据的时间，界面刷新行为见[页面自动刷新](configuration.md#页面自动刷新)，事件触发规则见[服务器分组与事件](configuration.md#服务器分组与事件)。
 
 ## 分组与事件
 
@@ -56,14 +57,29 @@ GET / PATCH 返回下表字段。PATCH 须携带当前 `version`，其余字段�
 事件响应包含 `id`、`title`、`body`、`type`、`startsAt`、`endsAt`、`source`（`manual` / `automatic`）、`status`（`open` / `resolved` / `stopped`）、`startedAt`、`endedAt`、`createdAt`、`updatedAt`、`monitors` 和 `updates`：
 
 - `monitors` 为 `{id, name}` 数组；已删除节点的 id 为 null，name 保留快照。
-- `updates` 中每项包含 `id`、`title`、`body`、`source`、`status`、`createdAt`；`title` 为独立进展标题或 null，历史及自动生成进展可无标题；仅补充说明时 status 为 null。
+- `updates` 中每项包含 `id`、`title`、`body`、`source`、`status`、`createdAt`，按 `createdAt` 升序、同时间按 `id` 升序排列；新写入的 `title` 为固定英文阶段，旧记录仍可能是自由标题或 null，自动生成进展可无标题；仅补充说明时 status 为 null。
 - 维护的待开始、进行中、已过计划时间由 `open` 状态和计划时间推导，计划结束不会自动变为 `resolved`。
 
-追加进展示例：`{"version": 1, "title": "升级完成", "body": "维护已完成", "resolve": true}`。`title` 选填，去除首尾空白后最多 120 字符；省略、null 或空白统一保存为 null，其他类型及超长标题返回 `400`。`body` 仍须为 1–4000 字符的纯文本。`resolve` 省略或 false 只追加说明；true 同时完成开放的手动事件并结束静默，标题、正文和状态一起提交。自动事件不能编辑或手动完成，开放时不能删除；这些冲突及过期版本返回 `409`，需重新读取后重试。
+追加进展示例：`{"version": 1, "title": "Completed", "body": "维护已完成"}`。`title` 去除首尾空白后必须属于当前事件允许的固定阶段，区分大小写；`body` 为 1–4000 字符的纯文本。
+
+| 事件情况           | 允许的 `title`                                                     |
+| ------------------ | ------------------------------------------------------------------ |
+| 未结束的维护       | `Scheduled`、`Updated`、`In Progress`、`Completed`                 |
+| 未结束的手动故障   | `Investigating`、`Identified`、`Monitoring`、`Updated`、`Resolved` |
+| 未结束的自动故障   | `Investigating`、`Identified`、`Monitoring`、`Updated`             |
+| 已结束事件追加说明 | `Updated`                                                          |
+
+`Completed` 同时完成维护，`Resolved` 同时恢复手动故障；进展、事件状态及静默窗口在同一事务中提交。其他阶段仅记录说明，不改变维护时间推导或检测结果。`Stopped` 仅用于展示系统停止跟踪记录，不接受手动提交。
+
+兼容旧客户端：省略 `title`、传 null 或空白时，默认保存为 `Updated`；若同时传 `resolve: true`，按事件类型保存为 `Completed` 或 `Resolved` 并完成事件。显式提交的 `resolve` 必须与固定阶段的完成含义一致。新自由文本标题、不可用阶段及冲突参数返回 `400`，且不发生写入。旧自由标题仍可读取，界面将其保留为补充文字。
+
+自动事件不能编辑或手动完成，开放时不能删除；过期版本及旧版 `resolve: true` 请求试图完成自动或已结束事件时返回 `409`，需重新读取后处理。
 
 `GET /api/admin/events` 返回 `{events, nextCursor, pageRefreshSeconds}`，每页 20 条；将非空 `nextCursor` URL 编码后作为 `?cursor=` 获取下一页。管理事件含 `version`，公开事件不含管理版本、身份或监控目标。
 
 `/api/status` 返回 `groups` 和 `events`；`/api/monitors/:id/history` 返回 `checks` 和仅关联该节点的 `events`。公开 `events` 包含全部 `status = open` 的事件，以及最近 20 条已结束事件（`resolved` / `stopped`），合计可以超过 20 条；整体按 `updatedAt` 倒序、同时间按 `id` 倒序排列。未结束事件不受历史条数限制，待开始及已过计划时间但尚未确认完成的维护仍包含在内。自动事件文案仅使用节点名称及通用检测描述。
+
+`GET /api/events/:id` 无需登录，返回 `{siteName, event, generatedAt, pageRefreshSeconds}`。`event` 使用同一公开字段集合，包含全部进展，不包含管理版本、身份或监控目标。按 ID 读取不受列表最近 20 条历史记录的限制；事件不存在或已删除时返回 `404`，失败响应不缓存。
 
 ## 监控配置
 

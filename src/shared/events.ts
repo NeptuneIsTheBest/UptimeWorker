@@ -1,5 +1,33 @@
-import type { EventConfig, EventUpdateConfig, StatusEvent } from './types';
+import type { EventConfig, EventProgressTitle, EventUpdateConfig, StatusEvent } from './types';
 import { ValidationError } from './validation';
+
+export const EVENT_PROGRESS_LABELS: Record<EventProgressTitle, string> = {
+  Scheduled: '计划维护',
+  Updated: '进展更新',
+  'In Progress': '维护进行中',
+  Completed: '维护完成',
+  Investigating: '正在排查',
+  Identified: '已定位问题',
+  Monitoring: '持续观察',
+  Resolved: '故障恢复',
+};
+export function isEventProgressTitle(value: string): value is EventProgressTitle {
+  return Object.hasOwn(EVENT_PROGRESS_LABELS, value);
+}
+export function eventProgressOptions(
+  event: Pick<StatusEvent, 'type' | 'source' | 'status'>,
+): EventProgressTitle[] {
+  if (event.status !== 'open') return ['Updated'];
+  if (event.type === 'maintenance') return ['Scheduled', 'Updated', 'In Progress', 'Completed'];
+  return [
+    'Investigating',
+    'Identified',
+    'Monitoring',
+    'Updated',
+    ...(event.source === 'manual' ? ['Resolved' as const] : []),
+  ];
+}
+const completesEvent = (title: EventProgressTitle) => title === 'Completed' || title === 'Resolved';
 
 export function parseVersion(value: unknown): number {
   if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1)
@@ -60,8 +88,20 @@ export function parseEventUpdateConfig(value: unknown): EventUpdateConfig {
       ? null
       : parseText(v.title, '进展标题', 120);
   const body = parseText(v.body, '进展说明', 4000);
+  if (title !== null && !isEventProgressTitle(title)) throw new ValidationError('请选择有效的进展阶段');
   if (v.resolve !== undefined && typeof v.resolve !== 'boolean') throw new ValidationError('完成状态无效');
-  return { title, body, resolve: v.resolve === true };
+  if (title !== null && v.resolve !== undefined && v.resolve !== completesEvent(title))
+    throw new ValidationError('进展阶段与完成状态不一致');
+  return { title, body, ...(v.resolve !== undefined ? { resolve: v.resolve } : {}) };
+}
+export function resolveEventUpdateConfig(event: StatusEvent, config: EventUpdateConfig) {
+  const title =
+    config.title ?? (config.resolve ? (event.type === 'maintenance' ? 'Completed' : 'Resolved') : 'Updated');
+  if (!eventProgressOptions(event).includes(title)) throw new ValidationError('当前事件不能使用此进展阶段');
+  const resolve = completesEvent(title);
+  if (config.resolve !== undefined && config.resolve !== resolve)
+    throw new ValidationError('进展阶段与完成状态不一致');
+  return { title, body: config.body, resolve };
 }
 export function eventLabel(event: StatusEvent, now: number) {
   if (event.status === 'resolved') return event.type === 'maintenance' ? '已完成' : '已恢复';

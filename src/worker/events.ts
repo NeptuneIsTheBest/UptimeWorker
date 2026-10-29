@@ -1,4 +1,5 @@
 import type { AdminEvent, EventConfig, EventUpdateConfig, MonitorGroup, StatusEvent } from '../shared/types';
+import { resolveEventUpdateConfig } from '../shared/events';
 import { ValidationError } from '../shared/validation';
 
 export class ConflictError extends Error {}
@@ -288,9 +289,15 @@ export async function appendEventUpdate(
   db: D1Database,
   id: string,
   version: number,
-  { title, body, resolve }: EventUpdateConfig,
+  config: EventUpdateConfig,
   now = Date.now(),
 ) {
+  const event = await getEvent(db, id);
+  if (!event || event.version !== version) throw new ConflictError('事件已变更，请刷新后重试。');
+  // Preserve the legacy completion conflict while fixed choices are validated below.
+  if (config.title === null && config.resolve && (event.source !== 'manual' || event.status !== 'open'))
+    throw new ConflictError('该事件状态由检测维护，或事件已结束，请刷新后重试。');
+  const { title, body, resolve } = resolveEventUpdateConfig(event, config);
   const token = crypto.randomUUID();
   const writes = await db.batch([
     db
