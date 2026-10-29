@@ -3,7 +3,7 @@ import { bodyLimit } from 'hono/body-limit';
 import { parseMonitorConfig, ValidationError } from '../shared/validation';
 import { MAX_MONITORS } from '../shared/types';
 import { parseGlobalSettingsPatch } from '../shared/settings';
-import { object, parseEventConfig, parseGroup, parseText, parseVersion } from '../shared/events';
+import { object, parseEventConfig, parseEventUpdateConfig, parseGroup, parseVersion } from '../shared/events';
 import {
   appendEventUpdate,
   ConflictError,
@@ -154,15 +154,12 @@ export function createApp(probe: Probe, verify?: TokenVerifier) {
   });
   app.post('/api/admin/events/:id/updates', async (c) => {
     const body = object(await c.req.json());
-    if (body.resolve !== undefined && typeof body.resolve !== 'boolean')
-      throw new ValidationError('完成状态无效');
     return c.json(
       await appendEventUpdate(
         c.env.DB,
         c.req.param('id'),
         parseVersion(body.version),
-        parseText(body.body, '进展说明', 4000),
-        body.resolve === true,
+        parseEventUpdateConfig(body),
       ),
     );
   });

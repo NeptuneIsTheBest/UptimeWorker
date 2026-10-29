@@ -3,6 +3,7 @@ import type { PublicMonitor, StatusResponse } from '../shared/types';
 import { useRemote } from './api';
 import { EventList } from './EventList';
 import { RefreshStatus } from './RefreshStatus';
+import { getStatusSummary } from './statusSummary';
 import {
   Empty,
   ErrorNotice,
@@ -65,34 +66,8 @@ export function StatusPage() {
   const monitors = data?.monitors ?? [];
   const statuses = monitors.map((m) => effectiveStatus(m, now));
   const up = statuses.filter((s) => s === 'up').length;
-  const down = statuses.filter((s) => s === 'down').length;
-  const stale = statuses.filter((s) => s === 'stale').length;
-  const pending = statuses.filter((s) => s === 'unknown').length;
   const active = statuses.filter((s) => s !== 'paused').length;
-  const attention = down > 0 || stale > 0;
-  const healthy = active > 0 && up === active && !error;
-  const title = error
-    ? '状态数据暂时不可用。'
-    : healthy
-      ? '所有服务，运行如常。'
-      : attention
-        ? '部分服务需要关注。'
-        : pending
-          ? '正在等待第一条心跳。'
-          : monitors.length
-            ? '监控已暂停。'
-            : '从第一条监控开始。';
-  const description = error
-    ? '无法获取最新状态，请稍后重试。'
-    : healthy
-      ? '所有受监控服务运行正常，每一次检测都在为稳定作证。'
-      : attention
-        ? `${down} 项服务异常，${stale} 项数据过期。查看下方服务了解详情。`
-        : pending
-          ? '监控已就绪，定时任务每分钟检查到期的监控，正在等待首次结果。'
-          : monitors.length
-            ? '恢复监控后，我们将继续记录服务的每一次响应。'
-            : '添加你的 HTTP 服务或 TCP 端口，即可持续了解它们的运行状态。';
+  const summary = getStatusSummary(statuses, data?.events ?? [], now, Boolean(error));
   const totals = monitors
     .flatMap((m) => m.days.slice(-30))
     .reduce((a, d) => ({ success: a.success + d.successful, total: a.total + d.total }), {
@@ -120,26 +95,20 @@ export function StatusPage() {
         <span className="eyebrow-line" /> SERVICE STATUS{' '}
         <span className="eyebrow-right">持续检测 · 即刻知悉</span>
       </div>
-      <section
-        className={`status-hero ${healthy ? 'healthy' : attention || error ? 'attention' : 'waiting'}`}
-      >
+      <section className={`status-hero ${summary.tone}`}>
         <div className="hero-copy">
           <span className="hero-tag">
             <span className="status-dot" />
-            {healthy
-              ? 'ALL SYSTEMS OPERATIONAL'
-              : attention || error
-                ? 'ATTENTION REQUIRED'
-                : 'READY WHEN YOU ARE'}
+            {summary.label}
           </span>
-          <h1>{title}</h1>
-          <p>{description}</p>
+          <h1>{summary.title}</h1>
+          <p>{summary.description}</p>
         </div>
         <div className="hero-art" aria-hidden="true">
           <div className="hero-orbit" />
           <div className="hero-orbit inner" />
           <div className="hero-symbol">
-            <Icon name={healthy ? 'check' : attention || error ? 'info' : 'pulse'} size={36} />
+            <Icon name={summary.icon} size={36} />
           </div>
           <span className="orbit-dot" />
         </div>
@@ -280,7 +249,9 @@ export function StatusPage() {
       <EventList events={data?.events ?? []} variant="history" />
       <div className="info-strip">
         <Icon name="info" size={17} />
-        <span>状态来自定时连接检测。数据超过两个检测周期未更新时，将标记为过期。</span>
+        <span>
+          整体状态结合故障、维护与定时检测；节点状态及可用率依据检测结果。数据超过两个检测周期未更新时，将标记为过期。
+        </span>
         <a href="/admin">
           管理监控 <Icon name="arrow" size={13} />
         </a>

@@ -135,8 +135,14 @@ export interface EventConfig {
   endsAt: number | null;
 }
 export type EventStatus = 'open' | 'resolved' | 'stopped';
+export interface EventUpdateConfig {
+  title: string | null;
+  body: string;
+  resolve: boolean;
+}
 export interface EventUpdate {
   id: string;
+  title: string | null;
   body: string;
   status: EventStatus | null;
   source: 'manual' | 'automatic';

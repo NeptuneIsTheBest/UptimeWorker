@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import type { AdminEvent, AdminMonitor, EventConfig, EventsResponse, GlobalSettings } from '../shared/types';
-import { parseEventConfig } from '../shared/events';
+import { parseEventConfig, parseEventUpdateConfig } from '../shared/events';
 import { api, useRemote } from './api';
 import { ErrorNotice, Loading, Modal } from './components';
 import { EventList } from './EventList';
@@ -155,6 +155,7 @@ function ProgressEditor({
   saved: () => void;
   close: () => void;
 }) {
+  const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [resolve, setResolve] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -164,9 +165,10 @@ function ProgressEditor({
     setBusy(true);
     setError(null);
     try {
+      const config = parseEventUpdateConfig({ title, body, resolve });
       await api(`/api/admin/events/${event.id}/updates`, {
         method: 'POST',
-        body: JSON.stringify({ version: event.version, body, resolve }),
+        body: JSON.stringify({ version: event.version, ...config }),
       });
       saved();
       close();
@@ -186,9 +188,12 @@ function ProgressEditor({
       <form className="monitor-form" onSubmit={submit}>
         <p>{event.title}</p>
         <label className="field">
+          进展标题（选填）
+          <input autoFocus maxLength={120} value={title} onChange={(e) => setTitle(e.target.value)} />
+        </label>
+        <label className="field">
           进展说明
           <textarea
-            autoFocus
             required
             rows={5}
             maxLength={4000}

@@ -1,4 +1,4 @@
-import type { EventConfig, StatusEvent } from './types';
+import type { EventConfig, EventUpdateConfig, StatusEvent } from './types';
 import { ValidationError } from './validation';
 
 export function parseVersion(value: unknown): number {
@@ -52,6 +52,16 @@ export function parseEventConfig(value: unknown, allowEmptyMonitors = false): Ev
   )
     throw new ValidationError('请填写有效的维护起止时间，结束时间须晚于开始时间');
   return { title, body, type: v.type, monitorIds, startsAt: Number(v.startsAt), endsAt: Number(v.endsAt) };
+}
+export function parseEventUpdateConfig(value: unknown): EventUpdateConfig {
+  const v = object(value);
+  const title =
+    v.title == null || (typeof v.title === 'string' && !v.title.trim())
+      ? null
+      : parseText(v.title, '进展标题', 120);
+  const body = parseText(v.body, '进展说明', 4000);
+  if (v.resolve !== undefined && typeof v.resolve !== 'boolean') throw new ValidationError('完成状态无效');
+  return { title, body, resolve: v.resolve === true };
 }
 export function eventLabel(event: StatusEvent, now: number) {
   if (event.status === 'resolved') return event.type === 'maintenance' ? '已完成' : '已恢复';

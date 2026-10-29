@@ -114,6 +114,7 @@ export function EventList<T extends StatusEvent>({
                               ? ' · 已停止跟踪'
                               : ''}
                         </div>
+                        {update.title && <h4 className="event-progress-title">{update.title}</h4>}
                         <p className="event-body">{update.body}</p>
                       </li>
                     ))}

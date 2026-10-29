@@ -56,10 +56,10 @@ GET / PATCH 返回下表字段。PATCH 须携带当前 `version`，其余字段�
 事件响应包含 `id`、`title`、`body`、`type`、`startsAt`、`endsAt`、`source`（`manual` / `automatic`）、`status`（`open` / `resolved` / `stopped`）、`startedAt`、`endedAt`、`createdAt`、`updatedAt`、`monitors` 和 `updates`：
 
 - `monitors` 为 `{id, name}` 数组；已删除节点的 id 为 null，name 保留快照。
-- `updates` 中每项包含 `id`、`body`、`source`、`status`、`createdAt`；仅补充说明时 status 为 null。
+- `updates` 中每项包含 `id`、`title`、`body`、`source`、`status`、`createdAt`；`title` 为独立进展标题或 null，历史及自动生成进展可无标题；仅补充说明时 status 为 null。
 - 维护的待开始、进行中、已过计划时间由 `open` 状态和计划时间推导，计划结束不会自动变为 `resolved`。
 
-追加进展示例：`{"version": 1, "body": "维护已完成", "resolve": true}`。`resolve` 省略或 false 只追加说明；true 同时完成开放的手动事件并结束静默，进展和状态一起提交。自动事件不能编辑或手动完成，开放时不能删除；这些冲突及过期版本返回 `409`，需重新读取后重试。
+追加进展示例：`{"version": 1, "title": "升级完成", "body": "维护已完成", "resolve": true}`。`title` 选填，去除首尾空白后最多 120 字符；省略、null 或空白统一保存为 null，其他类型及超长标题返回 `400`。`body` 仍须为 1–4000 字符的纯文本。`resolve` 省略或 false 只追加说明；true 同时完成开放的手动事件并结束静默，标题、正文和状态一起提交。自动事件不能编辑或手动完成，开放时不能删除；这些冲突及过期版本返回 `409`，需重新读取后重试。
 
 `GET /api/admin/events` 返回 `{events, nextCursor, pageRefreshSeconds}`，每页 20 条；将非空 `nextCursor` URL 编码后作为 `?cursor=` 获取下一页。管理事件含 `version`，公开事件不含管理版本、身份或监控目标。
 

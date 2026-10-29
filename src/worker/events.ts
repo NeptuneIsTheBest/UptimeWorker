@@ -1,4 +1,4 @@
-import type { AdminEvent, EventConfig, MonitorGroup, StatusEvent } from '../shared/types';
+import type { AdminEvent, EventConfig, EventUpdateConfig, MonitorGroup, StatusEvent } from '../shared/types';
 import { ValidationError } from '../shared/validation';
 
 export class ConflictError extends Error {}
@@ -80,7 +80,7 @@ async function readEvents(
     db
       .prepare(
         `WITH selected AS (${selection})
-      SELECT u.id, u.event_id, u.body, u.status, u.source, u.created_at AS createdAt
+      SELECT u.id, u.event_id, u.title, u.body, u.status, u.source, u.created_at AS createdAt
       FROM event_updates u JOIN selected e ON e.id = u.event_id ORDER BY u.created_at, u.id`,
       )
       .bind(...values),
@@ -288,8 +288,7 @@ export async function appendEventUpdate(
   db: D1Database,
   id: string,
   version: number,
-  body: string,
-  resolve: boolean,
+  { title, body, resolve }: EventUpdateConfig,
   now = Date.now(),
 ) {
   const token = crypto.randomUUID();
@@ -303,10 +302,10 @@ export async function appendEventUpdate(
       .bind(now, token, Number(resolve), Number(resolve), now, id, version, Number(resolve)),
     db
       .prepare(
-        `INSERT INTO event_updates(id, event_id, body, status, source, created_at)
-      SELECT ?, ?, ?, ?, 'manual', ? WHERE ${guard}`,
+        `INSERT INTO event_updates(id, event_id, title, body, status, source, created_at)
+      SELECT ?, ?, ?, ?, ?, 'manual', ? WHERE ${guard}`,
       )
-      .bind(crypto.randomUUID(), id, body, resolve ? 'resolved' : null, now, id, token),
+      .bind(crypto.randomUUID(), id, title, body, resolve ? 'resolved' : null, now, id, token),
     ...(resolve ? endSuppressions(db, id, token, now) : []),
   ]);
   if (!writes[0].meta.changes) throw new ConflictError('事件已变更，或该事件状态由检测维护，请刷新后重试。');

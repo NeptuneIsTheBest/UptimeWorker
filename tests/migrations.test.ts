@@ -199,3 +199,95 @@ it('adds groups and events without backfilling incidents or changing legacy moni
     await legacy.dispose();
   }
 });
+
+it('adds nullable progress titles while preserving legacy records and automatic lifecycle triggers', async () => {
+  const legacy = await databaseFixture('0005_groups_events.sql');
+  try {
+    const db = legacy.db;
+    const row = await createMonitor(db, httpConfig, timestamp);
+    await db.batch([
+      db
+        .prepare(
+          `INSERT INTO events(id, title, body, type, source, started_at, created_at, updated_at)
+        VALUES ('manual', '故障说明', '处理中', 'incident', 'manual', ?, ?, ?)`,
+        )
+        .bind(timestamp, timestamp, timestamp),
+      db
+        .prepare(
+          `INSERT INTO events(id, title, body, type, source, auto_monitor_id, started_at, created_at, updated_at)
+        VALUES ('automatic', '自动故障', '检测失败', 'incident', 'automatic', ?, ?, ?, ?)`,
+        )
+        .bind(row.id, timestamp, timestamp, timestamp),
+      db
+        .prepare(
+          `INSERT INTO event_monitors(event_id, monitor_key, monitor_id, monitor_name)
+        SELECT id, ?, ?, ? FROM events`,
+        )
+        .bind(row.id, row.id, httpConfig.name),
+      db
+        .prepare(
+          `INSERT INTO event_updates(id, event_id, body, source, created_at)
+        VALUES ('legacy', 'manual', '旧版进展正文', 'manual', ?)`,
+        )
+        .bind(timestamp),
+    ]);
+    const tables = [
+      'events',
+      'event_monitors',
+      'monitors',
+      'check_results',
+      'daily_stats',
+      'global_settings',
+    ];
+    const snapshot = async () =>
+      (await db.batch(tables.map((table) => db.prepare(`SELECT * FROM ${table}`)))).map(
+        (result) => result.results,
+      );
+    const before = await snapshot();
+    const progress = await db.prepare('SELECT * FROM event_updates').first();
+    await applyMigration(db, '0006_event_update_titles.sql');
+    expect(await snapshot()).toEqual(before);
+    expect(await db.prepare('SELECT * FROM event_updates').first()).toEqual({ ...progress, title: null });
+
+    // Existing writers and database triggers omit the new column during rollout.
+    await db
+      .prepare(
+        `INSERT INTO event_updates(id, event_id, body, source, created_at)
+      VALUES ('old-client', 'manual', '兼容旧版写入', 'manual', ?)`,
+      )
+      .bind(timestamp + 1)
+      .run();
+    expect(
+      await db.prepare("SELECT title FROM event_updates WHERE id = 'old-client'").first('title'),
+    ).toBeNull();
+    await db
+      .prepare(
+        `INSERT INTO check_results(monitor_id, monitor_version, scheduled_at, checked_at, ok, latency_ms)
+      VALUES (?, 1, ?, ?, 1, 42)`,
+      )
+      .bind(row.id, timestamp + 60_000, timestamp + 60_000)
+      .run();
+    expect(await db.prepare("SELECT status FROM events WHERE id = 'automatic'").first('status')).toBe(
+      'resolved',
+    );
+    expect(
+      await db
+        .prepare("SELECT title, source, status FROM event_updates WHERE event_id = 'automatic'")
+        .first(),
+    ).toEqual({ title: null, source: 'automatic', status: 'resolved' });
+    await db
+      .prepare(
+        `INSERT INTO events(id, title, body, type, source, auto_monitor_id, started_at, created_at, updated_at)
+      VALUES ('stop', '再次故障', '检测失败', 'incident', 'automatic', ?, ?, ?, ?)`,
+      )
+      .bind(row.id, timestamp, timestamp, timestamp)
+      .run();
+    await db.prepare('DELETE FROM monitors WHERE id = ?').bind(row.id).run();
+    expect(
+      await db.prepare("SELECT title, status FROM event_updates WHERE event_id = 'stop'").first(),
+    ).toEqual({ title: null, status: 'stopped' });
+    expect((await db.prepare('PRAGMA foreign_key_check').all()).results).toEqual([]);
+  } finally {
+    await legacy.dispose();
+  }
+});

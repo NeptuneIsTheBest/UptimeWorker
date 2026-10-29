@@ -104,7 +104,7 @@ describe('events and groups', () => {
     expect(await getEvent(fixture.db, event.id)).toMatchObject({
       status: 'resolved',
       endedAt: at(7),
-      updates: [{ status: 'resolved' }],
+      updates: [{ title: null, status: 'resolved' }],
     });
     for (let n = 9; n <= 14; n++) await tick(n);
     expect(await recent()).toHaveLength(2);
@@ -194,7 +194,7 @@ describe('events and groups', () => {
       at(0),
     );
     for (let n = 0; n <= 3; n++) await tick(n);
-    await appendEventUpdate(fixture.db, first.id, 1, '提前完成', true, at(4));
+    await appendEventUpdate(fixture.db, first.id, 1, { title: null, body: '提前完成', resolve: true }, at(4));
     for (let n = 4; n <= 12; n++) await tick(n);
     expect(await recent()).toHaveLength(2);
     await tick(13);
@@ -206,7 +206,7 @@ describe('events and groups', () => {
     for (let n = 0; n <= 6; n++) await tick(n);
     await tick(7, true);
     expect((await recent())[0].status).toBe('open');
-    await appendEventUpdate(fixture.db, manual.id, 1, '已处理', true, at(8));
+    await appendEventUpdate(fixture.db, manual.id, 1, { title: null, body: '已处理', resolve: true }, at(8));
     for (let n = 8; n <= 13; n++) await tick(n);
     expect(await recent()).toHaveLength(2);
     await createEvent(fixture.db, config(row.id), at(14));
@@ -235,7 +235,7 @@ describe('events and groups', () => {
     expect(event).toMatchObject({
       status: 'stopped',
       monitors: [{ id: null, name: row.name }],
-      updates: [{ status: 'stopped' }],
+      updates: [{ title: null, status: 'stopped' }],
     });
     expect((await getStatus(environment(fixture.db))).events).toMatchObject([
       { id: event.id, status: 'stopped', monitors: event.monitors, updates: event.updates },
@@ -256,13 +256,143 @@ describe('events and groups', () => {
     await expect(editEvent(fixture.db, event.id, 1, config(b.id), at(2))).rejects.toThrow();
     expect((await getEvent(fixture.db, event.id))?.monitors).toHaveLength(2);
     const results = await Promise.allSettled([
-      appendEventUpdate(fixture.db, event.id, edited.version, '完成', true, at(3)),
-      appendEventUpdate(fixture.db, event.id, edited.version, '竞争更新', false, at(3)),
+      appendEventUpdate(
+        fixture.db,
+        event.id,
+        edited.version,
+        { title: '修复完成', body: '完成', resolve: true },
+        at(3),
+      ),
+      appendEventUpdate(
+        fixture.db,
+        event.id,
+        edited.version,
+        { title: '排查进度', body: '竞争更新', resolve: false },
+        at(3),
+      ),
     ]);
     expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
-    expect((await getEvent(fixture.db, event.id))?.updates).toHaveLength(1);
+    const saved = (await getEvent(fixture.db, event.id))!;
+    const winner = results[0].status === 'fulfilled';
+    expect(saved).toMatchObject({
+      version: edited.version + 1,
+      status: winner ? 'resolved' : 'open',
+      updates: [
+        {
+          title: winner ? '修复完成' : '排查进度',
+          body: winner ? '完成' : '竞争更新',
+          status: winner ? 'resolved' : null,
+        },
+      ],
+    });
+    expect(saved.updates).toHaveLength(1);
     await expect(createEvent(fixture.db, config('missing'), at(4))).rejects.toThrow();
     expect(await recent()).toHaveLength(1);
+  });
+  it('persists a progress title and completion together across admin and public responses', async () => {
+    const row = await node();
+    const event = await createEvent(fixture.db, config(row.id), at(0));
+    const { request } = apiClient(fixture.db);
+    const response = await request(`admin/events/${event.id}/updates`, 'POST', {
+      version: event.version,
+      title: '  已部署修复 <script>alert("title")</script>  ',
+      body: '  服务已恢复\n继续观察  ',
+      resolve: true,
+    });
+    expect(response.status).toBe(200);
+    const saved = (await response.json()) as AdminEvent;
+    expect(saved).toMatchObject({
+      title: event.title,
+      status: 'resolved',
+      version: event.version + 1,
+      updates: [
+        {
+          title: '已部署修复 <script>alert("title")</script>',
+          body: '服务已恢复\n继续观察',
+          status: 'resolved',
+          source: 'manual',
+        },
+      ],
+    });
+    expect(saved.updates).toHaveLength(1);
+    expect(saved.endedAt).not.toBeNull();
+    const detail = await request(`admin/events/${event.id}`);
+    expect(((await detail.json()) as AdminEvent).updates).toEqual(saved.updates);
+    for (const path of ['admin/events', 'status', `monitors/${row.id}/history`]) {
+      const response = await request(path);
+      expect(response.status).toBe(200);
+      const data = (await response.json()) as { events: StatusEvent[] };
+      expect(data.events[0].updates).toEqual(saved.updates);
+    }
+    expect(
+      await fixture.db
+        .prepare('SELECT ends_at FROM event_suppressions WHERE event_id = ?')
+        .bind(event.id)
+        .first('ends_at'),
+    ).toBe(saved.endedAt);
+  });
+  it('normalizes optional titles, accepts the trimmed limit and rejects invalid progress without writes', async () => {
+    const row = await node();
+    let event = await createEvent(fixture.db, config(row.id), at(0));
+    const { request } = apiClient(fixture.db);
+    for (const title of [undefined, null, '', ' \n\t ', '边'.repeat(120), `  ${'x'.repeat(120)}  `]) {
+      const response = await request(`admin/events/${event.id}/updates`, 'POST', {
+        version: event.version,
+        title,
+        body: '继续排查',
+      });
+      expect(response.status).toBe(200);
+      const saved = (await response.json()) as AdminEvent;
+      const update = saved.updates.find((update) => !event.updates.some((old) => old.id === update.id));
+      expect(update).toMatchObject({ title: title?.trim() || null, body: '继续排查', status: null });
+      event = saved;
+    }
+    for (const change of [
+      ...[false, 123, {}, [], 'x'.repeat(121), ` ${'x'.repeat(121)} `].map((title) => ({ title })),
+      { body: '' },
+      { body: '  ' },
+      { resolve: 'true' },
+    ]) {
+      const response = await request(`admin/events/${event.id}/updates`, 'POST', {
+        version: event.version,
+        title: '修复完成',
+        body: '检测恢复正常',
+        resolve: true,
+        ...change,
+      });
+      expect(response.status).toBe(400);
+      expect(await getEvent(fixture.db, event.id)).toEqual(event);
+    }
+  });
+  it('rolls back a titled completion and suppression changes when progress insertion fails', async () => {
+    const row = await node();
+    const event = await createEvent(fixture.db, config(row.id), at(0));
+    await fixture.db
+      .prepare(
+        `CREATE TRIGGER reject_progress BEFORE INSERT ON event_updates
+      BEGIN SELECT RAISE(ABORT, 'progress failed'); END`,
+      )
+      .run();
+    try {
+      await expect(
+        appendEventUpdate(
+          fixture.db,
+          event.id,
+          1,
+          { title: '修复完成', body: '恢复正常', resolve: true },
+          at(1),
+        ),
+      ).rejects.toThrow();
+      expect(await getEvent(fixture.db, event.id)).toEqual(event);
+      expect(
+        await fixture.db
+          .prepare('SELECT ends_at FROM event_suppressions WHERE event_id = ?')
+          .bind(event.id)
+          .first('ends_at'),
+      ).toBeNull();
+    } finally {
+      await fixture.db.prepare('DROP TRIGGER reject_progress').run();
+    }
   });
   it('rolls back automatic events and failure tracking with a failed check batch', async () => {
     const row = await node();
@@ -405,11 +535,25 @@ describe('events and groups', () => {
     }
     for (let index = 0; index < 22; index++) {
       const event = await createEvent(fixture.db, config(first.id, { title: `已结束 ${index}` }), at(1));
-      closed.push(await appendEventUpdate(fixture.db, event.id, 1, '处理完成', true, at(10 + (index % 3))));
+      closed.push(
+        await appendEventUpdate(
+          fixture.db,
+          event.id,
+          1,
+          { title: null, body: '处理完成', resolve: true },
+          at(10 + (index % 3)),
+        ),
+      );
     }
     const unrelatedOpen = await createEvent(fixture.db, config(second.id, { title: '其他节点故障' }), at(30));
     const unrelated = await createEvent(fixture.db, config(second.id, { title: '其他节点已恢复' }), at(31));
-    const unrelatedClosed = await appendEventUpdate(fixture.db, unrelated.id, 1, '已恢复', true, at(32));
+    const unrelatedClosed = await appendEventUpdate(
+      fixture.db,
+      unrelated.id,
+      1,
+      { title: null, body: '已恢复', resolve: true },
+      at(32),
+    );
     const newestFirst = (a: AdminEvent, b: AdminEvent) =>
       b.updatedAt - a.updatedAt || b.id.localeCompare(a.id);
     closed.sort(newestFirst);

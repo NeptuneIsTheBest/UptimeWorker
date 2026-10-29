@@ -212,6 +212,7 @@ select {
   font-weight: 400;
 }
 .status-hero {
+  --hero-color: var(--green);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -224,8 +225,14 @@ select {
   position: relative;
 }
 .status-hero.attention {
+  --hero-color: #b77b45;
   background: linear-gradient(110deg, #fff6ee, #fdf1e8);
   border-color: #f0dfd3;
+}
+.status-hero.maintenance {
+  --hero-color: #90650c;
+  background: linear-gradient(110deg, #fff9ed, #fff5df);
+  border-color: #efdfb9;
 }
 .status-hero.waiting {
   background: linear-gradient(110deg, #edf5f2, #f4f8f5);
@@ -241,11 +248,8 @@ select {
   font-size: 9px;
   font-weight: 650;
   letter-spacing: 1.4px;
-  color: var(--green);
+  color: var(--hero-color);
   margin-bottom: 12px;
-}
-.attention .hero-tag {
-  color: #b77b45;
 }
 .status-hero h1 {
   font-size: 30px;
@@ -265,7 +269,7 @@ select {
   flex-shrink: 0;
   display: grid;
   place-items: center;
-  color: var(--green);
+  color: var(--hero-color);
   margin-right: 4px;
 }
 .hero-orbit {
@@ -295,13 +299,10 @@ select {
   height: 8px;
   border: 2px solid #eaf6ef;
   border-radius: 50%;
-  background: var(--green);
+  background: currentColor;
   position: absolute;
   right: 17px;
   top: 12px;
-}
-.attention .hero-art {
-  color: #b77b45;
 }
 .stats-grid {
   display: grid;
@@ -1970,6 +1971,12 @@ td {
 }
 .event-progress .muted {
   font-size: 12px;
+}
+.event-progress-title {
+  margin: 12px 0 0;
+  font-size: 15px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
 }
 .event-actions,
 .event-pagination {

@@ -40,10 +40,13 @@ test('admin manages groups, publishes multi-node maintenance and follows progres
   await expect(card).toContainText('维护进行中');
   await card.getByRole('button', { name: '追加进展' }).click();
   const progress = page.getByRole('dialog', { name: '追加事件进展' });
+  await progress.getByLabel('进展标题（选填）').fill('升级完成');
   await progress.getByLabel('进展说明').fill('升级完成，所有节点恢复正常。');
   await progress.getByLabel('同时标记事件已完成').check();
   await progress.getByRole('button', { name: '保存进展' }).click();
   await expect(card.locator('.event-status')).toHaveText('已完成');
+  await card.locator('.event-progress summary').click();
+  await expect(card.getByRole('heading', { name: '升级完成', exact: true })).toBeVisible();
   await page.goto('/');
   await expect(page.locator('.group-heading').first()).toContainText('亚洲区域');
   await page.getByLabel('按分组筛选').selectOption({ label: '亚洲区域' });
@@ -52,10 +55,13 @@ test('admin manages groups, publishes multi-node maintenance and follows progres
   await expect(page.locator('.event-card')).toContainText('网络设备升级');
   await page.locator('.event-progress summary').click();
   await expect(page.locator('.event-progress')).toContainText('升级完成');
+  await expect(page.getByRole('heading', { name: '升级完成', exact: true })).toBeVisible();
   for (const id of [first.id, second.id]) {
     await page.goto(`/monitors/${id}`);
     await expect(page.getByRole('heading', { name: '历史事件', exact: true })).toBeVisible();
     await expect(page.locator('.event-card')).toContainText('网络设备升级');
+    await page.locator('.event-progress summary').click();
+    await expect(page.getByRole('heading', { name: '升级完成', exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: '最近检测', exact: true })).toHaveCount(0);
   }
   await page.setViewportSize({ width: 390, height: 844 });
@@ -70,6 +76,65 @@ test('admin manages groups, publishes multi-node maintenance and follows progres
   await expect(groups.getByRole('button', { name: '编辑 亚太区域', exact: true })).toHaveCount(0);
   await groups.getByRole('button', { name: '关闭', exact: true }).click();
   await expect(page.locator('.admin-card').filter({ hasText: '香港节点' })).toContainText('未分组');
+});
+
+test('progress titles and completion drafts survive refresh and failed submission', async ({
+  page,
+  request,
+}, testInfo) => {
+  const monitor = await createMonitor(request, { name: '跟进节点' });
+  const response = await request.post('/api/admin/events', {
+    headers: origin,
+    data: { title: '连接故障', body: '开始排查', type: 'incident', monitorIds: [monitor.id] },
+  });
+  expect(response.status()).toBe(201);
+  const event = (await response.json()) as { id: string };
+  await page.clock.install();
+  await page.goto('/admin');
+  await page.getByRole('tab', { name: '事件', exact: true }).click();
+  await page.getByRole('button', { name: '追加进展', exact: true }).click();
+  const progress = page.getByRole('dialog', { name: '追加事件进展' });
+  const title = '<img src=x onerror=alert("title")>'.padEnd(120, 'x');
+  const body = '已部署修复\n继续观察';
+  await expect(progress.getByLabel('进展标题（选填）')).toHaveAttribute('maxlength', '120');
+  await progress.getByLabel('进展标题（选填）').fill(title);
+  await progress.getByLabel('进展说明').fill(body);
+  await progress.getByLabel('同时标记事件已完成').check();
+  const refreshed = page.waitForResponse((value) => value.url().endsWith('/api/admin/events'));
+  await page.clock.runFor(31_000);
+  await refreshed;
+  await expect(progress.getByLabel('进展标题（选填）')).toHaveValue(title);
+  await expect(progress.getByLabel('进展说明')).toHaveValue(body);
+  await expect(progress.getByLabel('同时标记事件已完成')).toBeChecked();
+
+  const endpoint = `**/api/admin/events/${event.id}/updates`;
+  await page.route(endpoint, (route) => route.fulfill({ status: 503, json: { error: '保存暂时失败' } }));
+  await progress.getByRole('button', { name: '保存进展' }).click();
+  await expect(progress.getByRole('alert')).toContainText('保存暂时失败');
+  await expect(progress.getByLabel('进展标题（选填）')).toHaveValue(title);
+  await expect(progress.getByLabel('进展说明')).toHaveValue(body);
+  await expect(progress.getByLabel('同时标记事件已完成')).toBeChecked();
+  await page.unroute(endpoint);
+  await progress.getByRole('button', { name: '保存进展' }).click();
+  await expect(progress).toHaveCount(0);
+  await expect(page.locator('.event-status')).toHaveText('已恢复');
+  await page.locator('.event-progress summary').click();
+  await expect(page.locator('.event-progress-title')).toHaveText(title);
+  await expect(page.locator('.event-progress img')).toHaveCount(0);
+  const saved = await request.get(`/api/admin/events/${event.id}`);
+  expect(await saved.json()).toMatchObject({
+    title: '连接故障',
+    status: 'resolved',
+    updates: [{ title, body, status: 'resolved' }],
+  });
+  for (const [width, height] of [
+    [1440, 1000],
+    [390, 844],
+  ]) {
+    await page.setViewportSize({ width, height });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`progress-title-${width}.png`), fullPage: true });
+  }
 });
 
 test('event drafts survive refresh, editing persists, and the global threshold is configurable', async ({
@@ -190,6 +255,7 @@ for (const view of ['overview', 'detail'] as const) {
         updates: [
           {
             id: 'preparation',
+            title: null,
             body: '维护准备完成',
             source: 'manual',
             status: null,
@@ -211,7 +277,11 @@ for (const view of ['overview', 'detail'] as const) {
                   : { monitor, checks: [] }),
                 generatedAt: now,
                 pageRefreshSeconds: 30,
-                events,
+                // Older cached responses do not yet include progress titles.
+                events: events.map((event) => ({
+                  ...event,
+                  updates: event.updates.map(({ title: _title, ...update }) => update),
+                })),
               },
             },
       ),
