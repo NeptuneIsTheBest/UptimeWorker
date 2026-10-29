@@ -51,9 +51,9 @@ test('admin manages groups, publishes multi-node maintenance and follows progres
   await expect(progress.getByLabel('进展阶段')).toHaveValue('Updated');
   await expect(progress.getByLabel('进展阶段').locator('option')).toHaveText([
     '计划维护',
-    '进展更新',
     '维护进行中',
     '维护完成',
+    '进展更新',
   ]);
   await progress.getByLabel('进展阶段').selectOption('In Progress');
   await progress.getByLabel('进展说明').fill('正在升级网络设备。');
@@ -129,8 +129,8 @@ test('fixed stages and completion drafts survive refresh and failed submission',
     '正在排查',
     '已定位问题',
     '持续观察',
-    '进展更新',
     '故障恢复',
+    '进展更新',
   ]);
   await progress.getByLabel('进展阶段').selectOption(title);
   await progress.getByLabel('进展说明').fill(body);

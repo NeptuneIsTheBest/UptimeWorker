@@ -18,13 +18,13 @@ export function eventProgressOptions(
   event: Pick<StatusEvent, 'type' | 'source' | 'status'>,
 ): EventProgressTitle[] {
   if (event.status !== 'open') return ['Updated'];
-  if (event.type === 'maintenance') return ['Scheduled', 'Updated', 'In Progress', 'Completed'];
+  if (event.type === 'maintenance') return ['Scheduled', 'In Progress', 'Completed', 'Updated'];
   return [
     'Investigating',
     'Identified',
     'Monitoring',
-    'Updated',
     ...(event.source === 'manual' ? ['Resolved' as const] : []),
+    'Updated',
   ];
 }
 export const completesEvent = (title: EventProgressTitle) => title === 'Completed' || title === 'Resolved';

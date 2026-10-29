@@ -28,10 +28,10 @@
 
 事件卡片只展示最新一条进展的固定阶段、发布时间和最多三行正文摘要；没有追加进展时展示事件正文。点击事件标题或“查看时间线”进入 `/events/:id`，可直接打开、刷新或分享该地址。详情展示事件信息，以及从新到旧的全部进展和首次发布记录；每条记录包含相对时间、浏览器时区的完整时间和全文。首次维护记录为 `Scheduled`，首次故障记录为 `Investigating`。编辑事件正文会更新首次发布记录的展示内容，不保留编辑审计历史。
 
-事件大标题继续手动填写。“追加事件进展”通过「进展阶段」下拉框选择固定英文阶段，默认 `Updated`，进展说明为必填纯文本：
+事件大标题继续手动填写。“追加事件进展”通过「进展阶段」下拉框选择固定英文阶段，按事件发展顺序排列，通用的 `Updated` 放在末尾并保持默认选中，进展说明为必填纯文本：
 
-- 未结束的维护可选 `Scheduled`、`Updated`、`In Progress`、`Completed`。
-- 未结束的手动故障可选 `Investigating`、`Identified`、`Monitoring`、`Updated`、`Resolved`。
+- 未结束的维护可选 `Scheduled`、`In Progress`、`Completed`、`Updated`。
+- 未结束的手动故障可选 `Investigating`、`Identified`、`Monitoring`、`Resolved`、`Updated`。
 - 未结束的自动故障可选 `Investigating`、`Identified`、`Monitoring`、`Updated`，恢复仍由检测确认。
 - 已结束事件只能追加 `Updated` 说明，不能重新开启。
 
