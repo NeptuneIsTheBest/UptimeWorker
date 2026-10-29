@@ -107,7 +107,6 @@ export function EventDetailPage({ id }: { id: string }) {
             <section className="event-timeline" aria-labelledby="timeline-heading">
               <div className="event-timeline-heading">
                 <h2 id="timeline-heading">{t('event.timeline')}</h2>
-                <span className="muted">{t('time.browserZone')}</span>
               </div>
               <ol>
                 {eventTimeline(event).map((entry, index) => (
