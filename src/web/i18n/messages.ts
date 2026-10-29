@@ -2,20 +2,16 @@ export type Translation = string | { one: string; other: string };
 export const zh = {
   'performance.tab': '性能',
   'performance.title': '性能设置与容量估算',
-  'performance.description': '调整每轮检测规模，了解当前服务配置对运行预算的影响。',
   'performance.configure': '调度设置',
   'performance.plan': 'Workers 套餐',
-  'performance.planNote': '选择实际使用的套餐，作为调度预算依据；此设置不会更改 Cloudflare 订阅。',
   'performance.concurrency': '检测并发数',
   'performance.maxChecksPerRun': '每轮最大检测数',
   'performance.timeBudgetSeconds': '每轮时间预算（秒）',
   'performance.range': '整数，范围 {min}–{max}。',
-  'performance.budgetNote':
-    '启动检测前须容纳该服务的完整超时，并预留 {seconds} 秒保存结果。预算控制新检测的启动，数据库延迟仍可能延长整轮耗时。',
   'performance.saved': '性能设置已保存，将从下一轮检测生效。',
   'performance.unsaved': '估算使用尚未保存的设置',
   'performance.estimates': '配置估算',
-  'performance.estimateNote': '仅包含启用的服务，按全部检测如期完成计算；实际负载、延迟和用量需要实测。',
+  'performance.estimateNote': '按启用服务如期检测估算。',
   'performance.monitorsUnavailable': '服务配置尚不可用，暂时无法估算。',
   'performance.correctInputs': '修正设置后显示估算。',
   'performance.enabled': '启用服务',
@@ -24,16 +20,13 @@ export const zh = {
   'performance.dailyHttp': 'HTTP 请求范围 / 天',
   'performance.samples': '7 天明细样本量',
   'performance.writeFloor': '基础写入下限 / 天',
-  'performance.writeNote': '每个样本至少写入检测、日汇总和服务状态；不含索引、事件和清理。',
   'performance.simulation': '全部服务同时到期',
-  'performance.simulationNote':
-    '假设每项检测耗尽超时、按服务 ID 排序，且读取配置无延迟。实际顺序优先处理最早到期的服务。',
+  'performance.simulationNote': '按每项检测耗尽超时估算。',
   'performance.started': '本轮可启动',
   'performance.deferred': '留待后续轮次',
   'performance.duration': '模拟探测耗时',
   'performance.reservedRequests': '预留 HTTP 子请求',
   'performance.seconds': '{count} 秒',
-  'performance.milliseconds': '{count} 毫秒',
   'performance.deferredNote':
     '推迟原因：批量 {batch} 项，请求预算 {requests} 项，时间预算 {time} 项。推迟不会记为故障；持续满载会延长检测间隔。',
   'performance.batchCapacity': '同轮到期数量 / 批量',
@@ -42,30 +35,10 @@ export const zh = {
   'performance.within': '低于 80%',
   'performance.near': '接近上限',
   'performance.over': '超过预算',
-  'performance.batchHint': '可提高每轮批量，或延长服务检测间隔；一轮无法覆盖峰值不一定代表持续积压。',
-  'performance.requestHint':
-    'HTTP 每项预留 4 次请求（含 3 次重定向），TCP 不占此额度。降低并发不会减少请求总数。',
-  'performance.timeHint':
-    '按候选数向上取整的并发轮数 × 最大超时估算。可提高并发或预算；预算超过一分钟可能跳过重叠轮次。',
   'performance.averageOverload':
     '平均检测需求已超过每分钟批量上限，无法维持当前目标频率。请提高批量或延长检测间隔。',
   'performance.writeWarning':
     '仅基础写入下限已接近或超过 D1 额度，实际写入还会更高。Paid 按 30 天投影；请检查实际账期用量。',
-  'performance.limits': '平台基准与需实测指标',
-  'performance.measuredNote':
-    'CPU 时间不包含网络等待，不能从检测耗时推算。CPU、总内存、D1 实际读写和账户总用量需在 Cloudflare 查看；本页不保证不会超限。',
-  'performance.cpu': '每分钟 Cron 的 CPU 上限',
-  'performance.memory': '每个 isolate 内存上限',
-  'performance.wall': 'Cron 墙钟时长上限',
-  'performance.connections': '等待连接建立的并发上限',
-  'performance.d1ReadQuota': 'D1 读取额度',
-  'performance.d1WriteQuota': 'D1 写入额度',
-  'performance.day': '天',
-  'performance.month': '月',
-  'performance.quotaNote':
-    'D1 Free 为账户每日额度，Paid 为每月包含用量，超出后计费。其他应用、页面访问和即时测试另计；HTTP 出站请求数不等于 Worker 调用次数。自定义平台限制以部署配置为准。',
-  'performance.reviewed': '基准核对日期：{date}。官方说明：',
-  'performance.d1Limits': 'D1 技术限制',
   'nav.admin': '监控管理',
   'groups.manage': '分组管理',
   'settings.title': '全局设置',
@@ -402,22 +375,16 @@ export type MessageKey = keyof typeof zh;
 export const en = {
   'performance.tab': 'Performance',
   'performance.title': 'Performance and capacity',
-  'performance.description': 'Tune each scheduled run and estimate the load of your monitor configuration.',
   'performance.configure': 'Scheduling settings',
   'performance.plan': 'Workers plan',
-  'performance.planNote':
-    'Select your actual plan for scheduling budgets. This does not change your Cloudflare subscription.',
   'performance.concurrency': 'Probe concurrency',
   'performance.maxChecksPerRun': 'Maximum checks per run',
   'performance.timeBudgetSeconds': 'Time budget per run (seconds)',
   'performance.range': 'Integer from {min} to {max}.',
-  'performance.budgetNote':
-    'Each new check must fit its full timeout, leaving {seconds} seconds to save results. Database delays can still extend the total run.',
   'performance.saved': 'Performance settings saved. They apply to the next scheduled run.',
   'performance.unsaved': 'Estimates use your unsaved settings',
   'performance.estimates': 'Configuration estimates',
-  'performance.estimateNote':
-    'Enabled monitors only, assuming every check runs on schedule. Actual load, delay, and usage require measurement.',
+  'performance.estimateNote': 'Assumes enabled monitors are checked on schedule.',
   'performance.monitorsUnavailable':
     'Monitor configuration is unavailable; estimates cannot be calculated yet.',
   'performance.correctInputs': 'Correct the settings to see estimates.',
@@ -427,17 +394,13 @@ export const en = {
   'performance.dailyHttp': 'HTTP requests / day',
   'performance.samples': 'Samples retained for 7 days',
   'performance.writeFloor': 'Minimum base writes / day',
-  'performance.writeNote':
-    'At least one write each for the check, daily summary, and monitor state. Excludes indexes, events, and cleanup.',
   'performance.simulation': 'All monitors due together',
-  'performance.simulationNote':
-    'Assumes every check takes its full timeout, ordered by monitor ID, with no configuration-read delay. Real runs prioritize the oldest due checks.',
+  'performance.simulationNote': 'Assumes each check takes its full timeout.',
   'performance.started': 'Checks admitted this run',
   'performance.deferred': 'Deferred checks',
   'performance.duration': 'Simulated probe duration',
   'performance.reservedRequests': 'Reserved HTTP subrequests',
   'performance.seconds': '{count} seconds',
-  'performance.milliseconds': '{count} ms',
   'performance.deferredNote':
     'Deferred by batch size: {batch}; request budget: {requests}; time budget: {time}. Deferral is not a failed check; sustained load extends check intervals.',
   'performance.batchCapacity': 'Simultaneously due / batch size',
@@ -446,31 +409,10 @@ export const en = {
   'performance.within': 'Below 80%',
   'performance.near': 'Near limit',
   'performance.over': 'Over budget',
-  'performance.batchHint':
-    'Increase the batch size or monitor intervals. A burst spanning several runs does not necessarily imply sustained backlog.',
-  'performance.requestHint':
-    'Reserve 4 requests per HTTP check, including 3 redirects; TCP does not use this quota. Lower concurrency does not reduce total requests.',
-  'performance.timeHint':
-    'Estimated as rounded-up concurrency waves × maximum timeout. Increase concurrency or time budget; runs over one minute can skip overlapping ticks.',
   'performance.averageOverload':
     'Average demand exceeds the per-minute batch limit. Increase the batch size or monitor intervals to sustain the target frequency.',
   'performance.writeWarning':
     'Even base writes approach or exceed the D1 allowance; actual writes will be higher. Paid uses a 30-day projection; check your actual billing period.',
-  'performance.limits': 'Platform reference and measured usage',
-  'performance.measuredNote':
-    'CPU excludes network waits and cannot be inferred from probe duration. Measure CPU, total memory, actual D1 reads/writes, and account usage in Cloudflare. These estimates do not guarantee staying within limits.',
-  'performance.cpu': 'CPU limit for minutely Cron',
-  'performance.memory': 'Memory per isolate',
-  'performance.wall': 'Cron wall-time limit',
-  'performance.connections': 'Concurrent connections awaiting response',
-  'performance.d1ReadQuota': 'D1 read allowance',
-  'performance.d1WriteQuota': 'D1 write allowance',
-  'performance.day': 'day',
-  'performance.month': 'month',
-  'performance.quotaNote':
-    'D1 Free allowances apply per account per day; Paid includes monthly usage with overage charges. Other apps, page traffic, and manual tests are additional. Outbound HTTP requests are not Worker invocations. Custom platform limits depend on your deployment.',
-  'performance.reviewed': 'Reference checked {date}. Official documentation:',
-  'performance.d1Limits': 'D1 technical limits',
   'nav.admin': 'Monitor management',
   'groups.manage': 'Manage groups',
   'settings.title': 'Global settings',

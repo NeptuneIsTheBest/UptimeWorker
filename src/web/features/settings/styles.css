@@ -67,11 +67,6 @@
 .performance-heading {
   margin: 8px 0 24px;
 }
-.performance-heading p,
-.performance-limits > p {
-  color: var(--muted);
-  margin-top: 8px;
-}
 .performance-layout {
   display: grid;
   grid-template-columns: minmax(250px, 320px) minmax(0, 1fr);
@@ -79,8 +74,7 @@
   align-items: start;
 }
 .performance-controls,
-.performance-estimates,
-.performance-limits {
+.performance-estimates {
   min-width: 0;
   padding: 24px;
   border: 1px solid var(--line);
@@ -93,8 +87,8 @@
 .performance-controls .field {
   margin-bottom: 16px;
 }
-.performance-controls .form-note {
-  margin-bottom: 20px;
+.performance-controls .field:last-child {
+  margin-bottom: 0;
 }
 .performance-save {
   display: flex;
@@ -132,11 +126,6 @@
   overflow-wrap: anywhere;
   font-variant-numeric: tabular-nums;
 }
-.performance-metric p {
-  color: var(--muted);
-  font-size: 12px;
-  margin-top: 5px;
-}
 .performance-simulation {
   margin-top: 24px;
   padding-top: 20px;
@@ -171,14 +160,11 @@
   margin-top: 5px;
   font-variant-numeric: tabular-nums;
 }
-.performance-capacity small {
-  display: block;
-  color: var(--muted);
-}
 .performance-capacity meter {
+  display: block;
   width: 100%;
   height: 10px;
-  margin: 8px 0;
+  margin: 8px 0 0;
 }
 .performance-capacity.near span {
   color: var(--amber);
@@ -191,33 +177,14 @@
   font-size: 12px;
   margin-top: 16px;
 }
-.performance-limits {
-  margin-top: 24px;
-  font-size: 12px;
-}
-.performance-limits .performance-metrics {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  margin: 20px 0;
-}
-.performance-limits .performance-metric dd {
-  font-size: 18px;
-}
-.performance-sources a {
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
 @media (max-width: 760px) {
   .performance-layout {
     grid-template-columns: minmax(0, 1fr);
     gap: 16px;
   }
   .performance-controls,
-  .performance-estimates,
-  .performance-limits {
+  .performance-estimates {
     padding: 18px;
-  }
-  .performance-limits .performance-metrics {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .performance-metric dd {
     font-size: 19px;

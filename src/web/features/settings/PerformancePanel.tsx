@@ -96,16 +96,15 @@ export function PerformancePanel({
       setBusy(false);
     }
   }
-  function metric(label: MessageKey, value: string, note?: MessageKey) {
+  function metric(label: MessageKey, value: string) {
     return (
       <div className="performance-metric" key={label}>
         <dt>{t(label)}</dt>
         <dd>{value}</dd>
-        {note && <p>{t(note)}</p>}
       </div>
     );
   }
-  function capacity(label: MessageKey, value: number, limit: number, hint: MessageKey) {
+  function capacity(label: MessageKey, value: number, limit: number) {
     const level = budgetLevel(value, limit);
     return (
       <div className={`performance-capacity ${level}`} key={label}>
@@ -117,7 +116,6 @@ export function PerformancePanel({
           {number(value)} / {number(limit)}
         </p>
         <meter min={0} max={limit} value={Math.min(value, limit)} aria-label={t(label)} />
-        <small>{t(hint)}</small>
       </div>
     );
   }
@@ -133,7 +131,6 @@ export function PerformancePanel({
     <section className="performance-panel" aria-label={t('performance.title')}>
       <header className="performance-heading">
         <h2>{t('performance.title')}</h2>
-        <p>{t('performance.description')}</p>
       </header>
       <div className="performance-layout">
         <form className="performance-controls" noValidate onSubmit={submit}>
@@ -152,7 +149,6 @@ export function PerformancePanel({
                 <option value="paid">Workers Paid</option>
               </select>
             </div>
-            <p className="form-note">{t('performance.planNote')}</p>
             {(['concurrency', 'maxChecksPerRun', 'timeBudgetSeconds'] as const).map((field) => (
               <div className="field" key={field}>
                 <label htmlFor={`performance-${field}`}>{t(`performance.${field}`)}</label>
@@ -177,7 +173,6 @@ export function PerformancePanel({
                 </small>
               </div>
             ))}
-            <p className="form-note">{t('performance.budgetNote', { seconds: RESULT_RESERVE_SECONDS })}</p>
           </fieldset>
           {validation && <ErrorNotice message={validation} />}
           {error && <ErrorNotice message={error} />}
@@ -215,11 +210,7 @@ export function PerformancePanel({
                   `${number(estimate.dailyHttpMin)}–${number(estimate.dailyHttpMax)}`,
                 )}
                 {metric('performance.samples', number(estimate.retainedSamples))}
-                {metric(
-                  'performance.writeFloor',
-                  `≥ ${number(estimate.dailyWriteFloor)}`,
-                  'performance.writeNote',
-                )}
+                {metric('performance.writeFloor', `≥ ${number(estimate.dailyWriteFloor)}`)}
               </dl>
               <div className="performance-simulation" aria-live="polite">
                 <h3>{t('performance.simulation')}</h3>
@@ -235,23 +226,12 @@ export function PerformancePanel({
                 )}
               </div>
               <div className="performance-capacities">
-                {capacity(
-                  'performance.batchCapacity',
-                  estimate.enabled,
-                  draft.maxChecksPerRun || 1,
-                  'performance.batchHint',
-                )}
-                {capacity(
-                  'performance.requestCapacity',
-                  estimate.worstHttpRequests,
-                  limits.subrequests,
-                  'performance.requestHint',
-                )}
+                {capacity('performance.batchCapacity', estimate.enabled, draft.maxChecksPerRun || 1)}
+                {capacity('performance.requestCapacity', estimate.worstHttpRequests, limits.subrequests)}
                 {capacity(
                   'performance.timeCapacity',
                   estimate.unboundedProbeSeconds,
                   (draft.timeBudgetSeconds || 40) - RESULT_RESERVE_SECONDS,
-                  'performance.timeHint',
                 )}
               </div>
               {estimate.checksPerMinute > (draft.maxChecksPerRun || 1) && (
@@ -265,39 +245,6 @@ export function PerformancePanel({
           )}
         </div>
       </div>
-      <aside className="performance-limits">
-        <h3>{t('performance.limits')}</h3>
-        <p>{t('performance.measuredNote')}</p>
-        <dl className="performance-metrics">
-          {metric('performance.cpu', t('performance.milliseconds', { count: limits.cronCpuMs }))}
-          {metric('performance.memory', `${PLATFORM_LIMITS.memoryMb} MB`)}
-          {metric('performance.wall', t('performance.seconds', { count: PLATFORM_LIMITS.cronWallSeconds }))}
-          {metric('performance.connections', number(PLATFORM_LIMITS.connections))}
-          {metric(
-            'performance.d1ReadQuota',
-            `${number(limits.d1Reads)} / ${t(draft.workersPlan === 'free' ? 'performance.day' : 'performance.month')}`,
-          )}
-          {metric(
-            'performance.d1WriteQuota',
-            `${number(limits.d1Writes)} / ${t(draft.workersPlan === 'free' ? 'performance.day' : 'performance.month')}`,
-          )}
-        </dl>
-        <p>{t('performance.quotaNote')}</p>
-        <p className="performance-sources">
-          {t('performance.reviewed', { date: PLATFORM_LIMITS.reviewedAt })}{' '}
-          <a href={PLATFORM_LIMITS.workersUrl} target="_blank" rel="noreferrer">
-            Workers
-          </a>
-          {' · '}
-          <a href={PLATFORM_LIMITS.d1Url} target="_blank" rel="noreferrer">
-            D1
-          </a>
-          {' · '}
-          <a href={PLATFORM_LIMITS.d1LimitsUrl} target="_blank" rel="noreferrer">
-            {t('performance.d1Limits')}
-          </a>
-        </p>
-      </aside>
     </section>
   );
 }
