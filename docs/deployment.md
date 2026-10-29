@@ -25,7 +25,7 @@ uptimeworker.<你的 workers.dev 子域名>.workers.dev/admin
 uptimeworker.<你的 workers.dev 子域名>.workers.dev/api/admin
 ```
 
-保护上述路径及其子路径，保持 `/`、`/api/status` 和 `/api/monitors/*/history` 公开。若账户已启用全局 Worker 保护，先为此 Worker 配置公开例外，再保护后台路径。
+保护上述路径及其子路径，保持首页 `/`、监控详情 `/monitors/*`、事件详情 `/events/*`，以及 `/api/status`、`/api/monitors/*/history`、`/api/events/*` 公开。若账户已启用全局 Worker 保护，先为此 Worker 配置公开例外，再保护后台路径。
 
 配置 **Allow** 策略，仅允许你的邮箱或指定用户组；选择现有身份提供商或邮件一次性验证码。两条路径使用同一个应用的 AUD。
 

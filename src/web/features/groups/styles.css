@@ -1,0 +1,40 @@
+.group-manager-list {
+  display: grid;
+  gap: 12px;
+  margin: 24px 0;
+}
+.group-manager-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.group-manager-row > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.group-manager-row small {
+  display: block;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.group-manager-row > div {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.group-delete {
+  flex-wrap: wrap;
+}
+.group-delete p {
+  width: 100%;
+  margin: 0;
+}
+@media (max-width: 760px) {
+  .group-manager-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

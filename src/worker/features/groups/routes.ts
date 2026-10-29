@@ -1,0 +1,21 @@
+import { Hono } from 'hono';
+import { object, parseVersion } from '../../../shared/validation';
+import { parseGroup } from '../../../shared/groups/validation';
+import { listGroups, saveGroup, deleteGroup } from './repository';
+import type { AppEnv } from '../../types';
+
+export function registerGroupRoutes(app: Hono<AppEnv>) {
+  app.get('/api/admin/groups', async (c) => c.json({ groups: await listGroups(c.env.DB) }));
+  app.post('/api/admin/groups', async (c) =>
+    c.json(await saveGroup(c.env.DB, parseGroup(await c.req.json())), 201),
+  );
+  app.patch('/api/admin/groups/:id', async (c) => {
+    const body = object(await c.req.json());
+    return c.json(await saveGroup(c.env.DB, parseGroup(body), c.req.param('id'), parseVersion(body.version)));
+  });
+  app.delete('/api/admin/groups/:id', async (c) => {
+    const body = object(await c.req.json());
+    await deleteGroup(c.env.DB, c.req.param('id'), parseVersion(body.version));
+    return c.json({ ok: true });
+  });
+}

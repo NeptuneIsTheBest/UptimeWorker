@@ -127,4 +127,4 @@ GET / PATCH 返回下表字段。PATCH 须携带当前 `version`，其余字段�
 
 ### TCP 监控
 
-TCP 使用 `type: "tcp"`、`hostname`、`port` 替代 HTTP 专属字段，其余公共字段一致。完整类型定义见 [src/shared/types.ts](../src/shared/types.ts)。
+TCP 使用 `type: "tcp"`、`hostname`、`port` 替代 HTTP 专属字段，其余公共字段一致。完整契约见[监控类型](../src/shared/monitors/types.ts)、[公开状态与历史响应](../src/shared/status/types.ts)、[事件类型](../src/shared/events/types.ts)及[设置类型](../src/shared/settings/types.ts)。

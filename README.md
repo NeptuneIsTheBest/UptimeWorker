@@ -28,12 +28,13 @@ npm run dev
 
 ## 文档
 
-| 文档                              | 内容                                               |
-| --------------------------------- | -------------------------------------------------- |
-| [部署指南](docs/deployment.md)    | Cloudflare、Access、GitHub Actions、上线验收与回滚 |
-| [监控配置](docs/configuration.md) | HTTP/TCP、WAF、统计口径、保留策略与运行观测        |
-| [API 参考](docs/api.md)           | 接口、鉴权、请求限制、版本控制与请求示例           |
-| [开发与维护](docs/development.md) | 本地环境、验证命令、测试职责、项目结构与迁移约定   |
+| 文档                                   | 内容                                               |
+| -------------------------------------- | -------------------------------------------------- |
+| [部署指南](docs/deployment.md)         | Cloudflare、Access、GitHub Actions、上线验收与回滚 |
+| [监控配置](docs/configuration.md)      | HTTP/TCP、WAF、统计口径、保留策略与运行观测        |
+| [API 参考](docs/api.md)                | 接口、鉴权、请求限制、版本控制与请求示例           |
+| [开发与维护](docs/development.md)      | 本地环境、验证命令、测试职责与迁移约定             |
+| [架构与代码组织](docs/architecture.md) | 功能目录、依赖边界、请求与调度流程、样式组织       |
 
 ## License
 
