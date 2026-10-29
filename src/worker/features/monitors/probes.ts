@@ -1,4 +1,4 @@
-import { MAX_RESPONSE_BODY_BYTES } from '../../../shared/monitors/constants';
+import { MAX_HTTP_REDIRECTS, MAX_RESPONSE_BODY_BYTES } from '../../../shared/monitors/constants';
 import type { MonitorConfig, ProbeResult, ErrorCode } from '../../../shared/monitors/types';
 import { parseHttpUrl, wafMonitorDomain } from '../../../shared/monitors/validation';
 import { ValidationError } from '../../../shared/errors';
@@ -108,7 +108,7 @@ export function createProbe(deps: ProbeDependencies) {
               throw new ProbeError('cloudflare_challenge');
             const location = response.headers.get('location');
             if ([301, 302, 303, 307, 308].includes(response.status) && location) {
-              if (redirects >= 3) throw new ProbeError('redirect_limit');
+              if (redirects >= MAX_HTTP_REDIRECTS) throw new ProbeError('redirect_limit');
               const target = parseHttpUrl(new URL(location, url).toString());
               if (
                 ([301, 302].includes(response.status) && method === 'POST') ||

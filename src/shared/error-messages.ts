@@ -1,6 +1,14 @@
 import { interpolate, type Locale, type MessageParams } from './locale';
 
 export const errorMessages = {
+  order_invalid: {
+    zh: '请提交完整且不重复的排序列表，以及有效的原版本和顺序。',
+    en: 'Provide a complete, unique ordering with valid original versions and positions.',
+  },
+  order_conflict: {
+    zh: '列表或顺序已变更，请刷新后重试。',
+    en: 'The list or its order has changed. Refresh and try again.',
+  },
   version_invalid: { zh: '请携带有效的版本号', en: 'A valid version number is required.' },
   object_required: { zh: '请求内容必须是对象', en: 'The request body must be an object.' },
   text_length: { zh: '{field}需为 1–{max} 个字符', en: '{field} must contain 1–{max} characters.' },
@@ -14,8 +22,8 @@ export const errorMessages = {
   },
   event_type_invalid: { zh: '事件类型无效', en: 'Invalid event type.' },
   event_monitors_invalid: {
-    zh: '请选择 1–10 个关联节点',
-    en: 'Select between 1 and 10 associated monitors.',
+    zh: '请选择有效的关联节点',
+    en: 'Select valid associated monitors.',
   },
   maintenance_time_invalid: {
     zh: '请填写有效的维护起止时间，结束时间须晚于开始时间',
@@ -187,9 +195,11 @@ export const errorMessages = {
     zh: '监控已被修改，请刷新后重试。',
     en: 'The monitor has changed. Refresh and try again.',
   },
-  monitor_limit: {
-    zh: '免费优先模式最多支持 {max} 个监控，请先删除不再使用的项目。',
-    en: 'Free-tier mode supports at most {max} monitors. Remove an unused monitor first.',
+  performance_object_invalid: { zh: '性能设置格式无效', en: 'Invalid performance settings.' },
+  performance_plan_invalid: { zh: '请选择 Free 或 Paid 套餐', en: 'Select the Free or Paid plan.' },
+  performance_value_invalid: {
+    zh: '{field}须为 {min}–{max} 的整数',
+    en: '{field} must be an integer between {min} and {max}.',
   },
 } as const;
 export type AppErrorCode = keyof typeof errorMessages;
@@ -201,6 +211,9 @@ export const textFields = {
   progress_title: { zh: '进展标题', en: 'Progress title' },
   progress_body: { zh: '进展说明', en: 'Progress description' },
   group_name: { zh: '分组名称', en: 'Group name' },
+  concurrency: { zh: '检测并发数', en: 'Probe concurrency' },
+  maxChecksPerRun: { zh: '每轮最大检测数', en: 'Maximum checks per run' },
+  timeBudgetSeconds: { zh: '每轮时间预算', en: 'Time budget per run' },
 } as const;
 export type TextField = keyof typeof textFields;
 export function formatError(code: AppErrorCode, params: MessageParams = {}, locale: Locale = 'zh-CN') {

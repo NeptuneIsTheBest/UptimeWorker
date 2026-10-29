@@ -1,3 +1,4 @@
+import { DEFAULT_PERFORMANCE } from '../../../src/shared/settings/performance';
 import { test, expect } from '../support/fixtures';
 import type { GlobalSettings } from '../../../src/shared/settings/types';
 
@@ -10,6 +11,7 @@ test('advanced monitor options persist and remain usable on mobile', async ({ pa
         autoIncidentAfterMinutes: 5,
         wafBypassEnabled: false,
         wafBypassTokenConfigured: false,
+        performance: DEFAULT_PERFORMANCE,
       } satisfies GlobalSettings,
     }),
   );

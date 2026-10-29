@@ -15,8 +15,10 @@ export function registerMiddleware(app: Hono<AppEnv>, verify?: TokenVerifier) {
     const monitorWrite =
       (c.req.method === 'POST' && c.req.path === '/api/admin/monitors') ||
       (c.req.method === 'PATCH' && /^\/api\/admin\/monitors\/[^/]+$/.test(c.req.path));
+    const orderWrite =
+      c.req.method === 'PUT' && ['/api/admin/monitors/order', '/api/admin/groups/order'].includes(c.req.path);
     return bodyLimit({
-      maxSize: (monitorWrite ? 256 : 16) * 1024,
+      maxSize: (monitorWrite || orderWrite ? 256 : 16) * 1024,
       onError: (context) => context.json(errorResponse('request_too_large'), 413),
     })(c, next);
   });

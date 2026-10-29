@@ -88,6 +88,7 @@ export async function resetDatabase(db: D1Database) {
     db.prepare('UPDATE scheduler_state SET lease_owner = NULL, lease_until = 0, last_completed_slot = 0'),
     db.prepare(`INSERT INTO global_settings(id) VALUES (1) ON CONFLICT(id) DO UPDATE SET
       page_refresh_seconds = 30, auto_incident_after_minutes = 5, waf_bypass_enabled = 0, waf_bypass_token = NULL,
-      waf_bypass_domains_json = '[]', version = 1`),
+      waf_bypass_domains_json = '[]', version = 1,
+      workers_plan = 'free', probe_concurrency = 4, max_checks_per_run = 10, time_budget_seconds = 50`),
   ]);
 }

@@ -60,3 +60,166 @@
   font-weight: 600;
   margin-bottom: 12px;
 }
+
+.performance-panel {
+  min-width: 0;
+}
+.performance-heading {
+  margin: 8px 0 24px;
+}
+.performance-heading p,
+.performance-limits > p {
+  color: var(--muted);
+  margin-top: 8px;
+}
+.performance-layout {
+  display: grid;
+  grid-template-columns: minmax(250px, 320px) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+.performance-controls,
+.performance-estimates,
+.performance-limits {
+  min-width: 0;
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.performance-controls h3 {
+  margin-bottom: 20px;
+}
+.performance-controls .field {
+  margin-bottom: 16px;
+}
+.performance-controls .form-note {
+  margin-bottom: 20px;
+}
+.performance-save {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 20px;
+}
+.performance-save small {
+  color: var(--amber);
+}
+.performance-saved {
+  color: var(--green);
+}
+.performance-estimates > .form-note {
+  margin: 8px 0 20px;
+}
+.performance-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  margin: 0;
+}
+.performance-metric {
+  min-width: 0;
+}
+.performance-metric dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+.performance-metric dd {
+  margin: 4px 0 0;
+  font-size: 22px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+.performance-metric p {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 5px;
+}
+.performance-simulation {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+.performance-simulation > p {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 8px 0 16px;
+}
+.performance-capacities {
+  display: grid;
+  gap: 16px;
+  margin-top: 24px;
+}
+.performance-capacity {
+  padding: 14px 16px;
+  border-radius: 8px;
+  background: var(--subtle);
+}
+.performance-capacity > div {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+.performance-capacity strong,
+.performance-capacity span {
+  font-size: 12px;
+}
+.performance-capacity p {
+  margin-top: 5px;
+  font-variant-numeric: tabular-nums;
+}
+.performance-capacity small {
+  display: block;
+  color: var(--muted);
+}
+.performance-capacity meter {
+  width: 100%;
+  height: 10px;
+  margin: 8px 0;
+}
+.performance-capacity.near span {
+  color: var(--amber);
+}
+.performance-capacity.over span {
+  color: var(--red);
+}
+.performance-panel .performance-warning {
+  color: var(--amber);
+  font-size: 12px;
+  margin-top: 16px;
+}
+.performance-limits {
+  margin-top: 24px;
+  font-size: 12px;
+}
+.performance-limits .performance-metrics {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 20px 0;
+}
+.performance-limits .performance-metric dd {
+  font-size: 18px;
+}
+.performance-sources a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+@media (max-width: 760px) {
+  .performance-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+  .performance-controls,
+  .performance-estimates,
+  .performance-limits {
+    padding: 18px;
+  }
+  .performance-limits .performance-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .performance-metric dd {
+    font-size: 19px;
+  }
+}

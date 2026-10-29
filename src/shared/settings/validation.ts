@@ -1,6 +1,7 @@
 import { MIN_PAGE_REFRESH_SECONDS, MAX_PAGE_REFRESH_SECONDS } from './constants';
 import type { GlobalSettings } from './types';
 import { ValidationError } from '../errors';
+import { parsePerformancePatch } from './performance';
 
 export function isWafToken(value: string): boolean {
   return /^[A-Za-z0-9_-]{32,256}$/.test(value);
@@ -46,6 +47,7 @@ export function parseGlobalSettingsPatch(value: unknown, current: GlobalSettings
     throw new ValidationError('waf_token_required');
   return {
     version: Number(v.version),
+    performance: parsePerformancePatch(v.performance, current.performance),
     autoIncidentAfterMinutes,
     pageRefreshSeconds,
     wafBypassEnabled: enabled,

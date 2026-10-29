@@ -248,6 +248,17 @@
   gap: 20px;
   padding: 20px 24px;
 }
+.admin-group + .admin-group {
+  border-top: 1px solid var(--line);
+}
+.admin-group-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 24px 0;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
 .admin-card + .admin-card {
   border-top: 1px solid var(--line);
 }
@@ -453,6 +464,9 @@
   .admin-actions {
     width: 100%;
     gap: 4px;
+  }
+  .admin-actions > .sort-controls {
+    flex-basis: 100%;
   }
   .admin-actions .button {
     margin-right: auto;

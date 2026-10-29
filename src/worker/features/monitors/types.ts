@@ -3,6 +3,7 @@ import type { WafBypassSettings } from '../settings/types';
 
 export interface MonitorRow {
   id: string;
+  sort_order: number;
   group_id: string | null;
   name: string;
   type: 'http' | 'tcp';

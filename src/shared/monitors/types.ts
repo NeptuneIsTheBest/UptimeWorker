@@ -80,6 +80,7 @@ export interface PublicMonitor {
 
 export type AdminMonitor = MonitorConfig & {
   id: string;
+  sortOrder: number;
   version: number;
   status: MonitorStatus;
   lastCheckedAt: number | null;

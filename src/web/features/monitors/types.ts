@@ -6,7 +6,6 @@ import type { PageRefreshSettings } from '../../../shared/settings/types';
 export interface AdminResponse extends PageRefreshSettings {
   monitors: AdminMonitor[];
   identity: { email: string };
-  limit: number;
   groups?: MonitorGroup[];
 }
 

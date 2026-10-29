@@ -10,6 +10,9 @@ export function Icon({
   className?: string;
 }) {
   const paths: Record<string, ReactNode> = {
+    grip: <path d="M9 5h.01M15 5h.01M9 12h.01M15 12h.01M9 19h.01M15 19h.01" />,
+    up: <path d="m6 10 6-6 6 6M12 4v16" />,
+    down: <path d="m6 14 6 6 6-6M12 4v16" />,
     pulse: <path d="M3 12h4l3-8 4 16 3-8h4" />,
     globe: (
       <>

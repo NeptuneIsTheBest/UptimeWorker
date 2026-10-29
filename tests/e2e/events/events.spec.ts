@@ -18,7 +18,6 @@ test('admin manages groups, publishes multi-node maintenance and follows progres
   await page.getByRole('button', { name: '分组管理', exact: true }).click();
   const groups = page.getByRole('dialog', { name: '分组管理' });
   await groups.getByLabel('分组名称').fill('亚洲区域');
-  await groups.getByLabel('排序', { exact: true }).fill('1');
   await groups.getByRole('button', { name: '保存分组', exact: true }).click();
   await expect(groups.getByRole('button', { name: '编辑 亚洲区域', exact: true })).toBeVisible();
   await checkDialogLayout(page, groups, info, 'groups-zh-CN');

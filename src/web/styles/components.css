@@ -488,3 +488,30 @@
     gap: 12px;
   }
 }
+.sort-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.sort-handle:not(:disabled) {
+  cursor: grab;
+}
+.sort-handle:active {
+  cursor: grabbing;
+}
+[data-dragging='true'] {
+  opacity: 0.55;
+}
+[data-drop-position='before'] {
+  box-shadow: inset 0 3px var(--text);
+}
+[data-drop-position='after'] {
+  box-shadow: inset 0 -3px var(--text);
+}
+@media (pointer: coarse) {
+  .sort-controls .icon-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}

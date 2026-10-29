@@ -1,3 +1,4 @@
+import { DEFAULT_PERFORMANCE } from '../../../src/shared/settings/performance';
 import { test as base, expect, type APIRequestContext } from '@playwright/test';
 import type { AdminMonitor } from '../../../src/shared/monitors/types';
 import type { GlobalSettings } from '../../../src/shared/settings/types';
@@ -78,6 +79,7 @@ export const test = base.extend<{ resetState: void }>({
         data: {
           version: current.version,
           pageRefreshSeconds: 30,
+          performance: DEFAULT_PERFORMANCE,
           autoIncidentAfterMinutes: 5,
           wafBypassEnabled: false,
           wafBypassToken: 'e2e-fixture-token-'.repeat(4),

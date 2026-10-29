@@ -175,12 +175,11 @@ function addAssociations(db: D1Database, id: string, token: string, config: Even
 export async function createEvent(db: D1Database, config: EventConfig, now = Date.now()) {
   const id = crypto.randomUUID();
   const token = crypto.randomUUID();
-  const slots = config.monitorIds.map(() => '?').join(',');
   const writes = await db.batch([
     db
       .prepare(
         `INSERT INTO events(id, title, body, type, source, starts_at, ends_at, started_at, created_at, updated_at, write_token)
-      SELECT ?, ?, ?, ?, 'manual', ?, ?, ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM monitors WHERE id IN (${slots})) = ?`,
+      SELECT ?, ?, ?, ?, 'manual', ?, ?, ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM monitors WHERE id IN (SELECT value FROM json_each(?))) = ?`,
       )
       .bind(
         id,
@@ -193,7 +192,7 @@ export async function createEvent(db: D1Database, config: EventConfig, now = Dat
         now,
         now,
         token,
-        ...config.monitorIds,
+        JSON.stringify(config.monitorIds),
         config.monitorIds.length,
       ),
     ...addAssociations(db, id, token, config, now),
@@ -209,13 +208,12 @@ export async function editEvent(
   now = Date.now(),
 ) {
   const token = crypto.randomUUID();
-  const slots = config.monitorIds.map(() => '?').join(',') || 'NULL';
   const writes = await db.batch([
     db
       .prepare(
         `UPDATE events SET title = ?, body = ?, type = ?, starts_at = ?, ends_at = ?,
       updated_at = ?, version = version + 1, write_token = ? WHERE id = ? AND version = ? AND source = 'manual'
-      AND (SELECT COUNT(*) FROM monitors WHERE id IN (${slots})) = ?
+      AND (SELECT COUNT(*) FROM monitors WHERE id IN (SELECT value FROM json_each(?))) = ?
       AND (? > 0 OR EXISTS (SELECT 1 FROM event_monitors WHERE event_id = events.id AND monitor_id IS NULL))`,
       )
       .bind(
@@ -228,7 +226,7 @@ export async function editEvent(
         token,
         id,
         version,
-        ...config.monitorIds,
+        JSON.stringify(config.monitorIds),
         config.monitorIds.length,
         config.monitorIds.length,
       ),

@@ -1,4 +1,4 @@
-import { errorMessage, type DisplayMessage } from '../../i18n/core';
+import { displayMessage, errorMessage, type DisplayMessage } from '../../i18n/core';
 import { useI18n } from '../../i18n/I18nProvider';
 import { parseGroup } from '../../../shared/groups/validation';
 import { useState, type FormEvent } from 'react';
@@ -6,34 +6,49 @@ import type { MonitorGroup } from '../../../shared/groups/types';
 import { api } from '../../lib/api';
 import { ErrorNotice } from '../../components/feedback';
 import { Modal } from '../../components/Modal';
+import { SortControls } from '../../components/SortControls';
+import { useReorder } from '../../hooks/useReorder';
+import { useRemote } from '../../hooks/useRemote';
+import { orderItems } from '../../../shared/ordering';
+import type { AdminResponse } from '../monitors/types';
 
 export function GroupManager({
-  groups,
-  changed,
+  remote,
   close,
 }: {
-  groups: MonitorGroup[];
-  changed: () => void;
+  remote: ReturnType<typeof useRemote<AdminResponse>>;
   close: () => void;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const { refresh: changed } = remote;
   const [editing, setEditing] = useState<MonitorGroup | null>(null);
   const [name, setName] = useState('');
-  const [order, setOrder] = useState(0);
   const [deleting, setDeleting] = useState<MonitorGroup | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<DisplayMessage | null>(null);
+  const ordering = useReorder({
+    items: remote.data?.groups ?? [],
+    disabled: busy || !!editing || !!deleting || remote.locked,
+    suspend: remote.suspend,
+    save: async (items) => {
+      const result = await api<{ groups: MonitorGroup[] }>('/api/admin/groups/order', {
+        method: 'PUT',
+        body: JSON.stringify({ items: orderItems(items) }),
+      });
+      remote.updateData((current) => ({ ...current, groups: result.groups }));
+    },
+  });
+  const locked = busy || remote.locked;
   function reset() {
     setEditing(null);
     setName('');
-    setOrder(0);
   }
   async function save(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
     setError(null);
     try {
-      const config = parseGroup({ name, sortOrder: order });
+      const config = parseGroup({ name });
       await api(editing ? `/api/admin/groups/${editing.id}` : '/api/admin/groups', {
         method: editing ? 'PATCH' : 'POST',
         body: JSON.stringify({ ...config, ...(editing ? { version: editing.version } : {}) }),
@@ -68,28 +83,34 @@ export function GroupManager({
     <Modal
       title={t('groups.manage')}
       close={() => {
-        if (!busy) close();
+        if (!locked) close();
       }}
     >
       <form noValidate className="monitor-form" onSubmit={save}>
         <div className="modal-scroll">
           <p className="form-note">{t('groups.description')}</p>
           <div className="group-manager-list">
-            {groups.map((group) => (
-              <div className="group-manager-row" key={group.id}>
+            {ordering.items.map((group, index) => (
+              <div className="group-manager-row" key={group.id} {...ordering.rowProps(group)}>
                 <span>
                   <strong>{group.name}</strong>
-                  <small>{t('groups.sortValue', { value: group.sortOrder })}</small>
                 </span>
                 <div>
+                  <SortControls
+                    name={group.name}
+                    index={index}
+                    count={ordering.items.length}
+                    disabled={ordering.disabled}
+                    handleProps={ordering.handleProps(group)}
+                    move={(offset) => ordering.move(group, ordering.items[index + offset])}
+                  />
                   <button
                     type="button"
                     className="button small secondary"
-                    disabled={busy}
+                    disabled={locked}
                     onClick={() => {
                       setEditing(group);
                       setName(group.name);
-                      setOrder(group.sortOrder);
                       setDeleting(null);
                       setError(null);
                     }}
@@ -99,7 +120,7 @@ export function GroupManager({
                   <button
                     type="button"
                     className="button small secondary"
-                    disabled={busy}
+                    disabled={locked}
                     onClick={() => setDeleting(group)}
                   >
                     {t('common.deleteNamed', { name: group.name })}
@@ -114,7 +135,7 @@ export function GroupManager({
               <button
                 type="button"
                 className="button small secondary"
-                disabled={busy}
+                disabled={locked}
                 onClick={() => setDeleting(null)}
               >
                 {t('groups.cancelDelete')}
@@ -122,7 +143,7 @@ export function GroupManager({
               <button
                 type="button"
                 className="button small destructive"
-                disabled={busy}
+                disabled={locked}
                 onClick={() => void remove()}
               >
                 {t('groups.confirmDelete')}
@@ -132,29 +153,31 @@ export function GroupManager({
           <h3>{editing ? t('groups.edit') : t('groups.add')}</h3>
           <label className="field">
             {t('groups.name')}
-            <input required maxLength={80} value={name} onChange={(e) => setName(e.target.value)} />
-          </label>
-          <label className="field">
-            {t('groups.sort')}
             <input
-              type="number"
               required
-              min={0}
-              max={1000000}
-              step={1}
-              value={order}
-              onChange={(e) => setOrder(Number(e.target.value))}
+              maxLength={80}
+              disabled={locked}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
             />
           </label>
           {error && <ErrorNotice message={error} />}
+          {ordering.notice &&
+            (ordering.notice.error ? (
+              <ErrorNotice message={ordering.notice.text} />
+            ) : (
+              <p role="status" className="form-note">
+                {displayMessage(ordering.notice.text, locale)}
+              </p>
+            ))}
         </div>
         <div className="modal-actions">
           {editing && (
-            <button type="button" className="button secondary" disabled={busy} onClick={reset}>
+            <button type="button" className="button secondary" disabled={locked} onClick={reset}>
               {t('groups.cancelEdit')}
             </button>
           )}
-          <button className="button primary" disabled={busy}>
+          <button className="button primary" disabled={locked}>
             {busy ? t('common.saving') : t('groups.save')}
           </button>
         </div>

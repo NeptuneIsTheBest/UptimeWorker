@@ -1,3 +1,4 @@
+import { DEFAULT_PERFORMANCE } from '../../../src/shared/settings/performance';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseGlobalSettingsPatch } from '../../../src/shared/settings/validation';
 import { wafRuleDomains, wafSkipExpression } from '../../../src/shared/settings/waf';
@@ -23,10 +24,12 @@ const defaults: GlobalSettings = {
   autoIncidentAfterMinutes: 5,
   wafBypassEnabled: false,
   wafBypassTokenConfigured: false,
+  performance: DEFAULT_PERFORMANCE,
 };
 const token = 'test-bypass-token-'.repeat(4);
 const rotatedToken = 'rotated-bypass-token-'.repeat(4);
 const config = {
+  performance: DEFAULT_PERFORMANCE,
   version: 1,
   pageRefreshSeconds: 30,
   autoIncidentAfterMinutes: 5,
@@ -187,6 +190,7 @@ describe('global settings API and probe integration', () => {
       const saved = await patch({ ...config, wafBypassDomains: null, wafBypassAutoDomains: ['other.test'] });
       expect(saved.status).toBe(200);
       expect(await saved.json()).toEqual({
+        performance: DEFAULT_PERFORMANCE,
         version: 2,
         pageRefreshSeconds: 30,
         autoIncidentAfterMinutes: 5,
@@ -198,7 +202,10 @@ describe('global settings API and probe integration', () => {
           .prepare('SELECT waf_bypass_domains_json FROM global_settings')
           .first('waf_bypass_domains_json'),
       ).toBe(legacyDomains);
-      expect((await getProbeSnapshot(fixture.db)).options.wafBypass).toEqual({ enabled: true, token });
+      expect((await getProbeSnapshot(fixture.db, { slot: timestamp })).options.wafBypass).toEqual({
+        enabled: true,
+        token,
+      });
     },
   );
 

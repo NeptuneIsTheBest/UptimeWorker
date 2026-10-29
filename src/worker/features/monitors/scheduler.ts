@@ -4,6 +4,7 @@ import { utcDay, dayStart, DAY } from '../../lib/time';
 import type { Env } from '../../types';
 import type { MonitorRow, Probe } from './types';
 import { getProbeSnapshot } from './snapshot';
+import { createProbeBudget } from '../../../shared/settings/performance';
 
 const SLOT = 60_000;
 
@@ -66,26 +67,29 @@ export async function runScheduled(
   if (!lease.results.length) return metrics;
   metrics.claimed = true;
   try {
-    const { monitors, options, reads } = await getProbeSnapshot(env.DB);
+    const { monitors, options, performance, reads } = await getProbeSnapshot(env.DB, { slot });
     count(reads);
-    const due = monitors.filter((row) => row.enabled === 1 && row.next_check_at <= slot).slice(0, 10);
+    const budget = createProbeBudget(performance, started);
+    const failed: MonitorRow[] = [];
     const results = await mapConcurrent(
-      due,
-      4,
+      monitors,
+      performance.concurrency,
       async (row): Promise<{ row: MonitorRow; result: ProbeResult } | null> => {
+        if (budget.reserve({ type: row.type, timeoutSeconds: row.timeout_seconds }, now())) return null;
         try {
           return { row, result: await probe(monitorConfig(row), options) };
         } catch {
           console.error(JSON.stringify({ event: 'probe_internal_error', monitorId: row.id }));
+          failed.push(row);
           return null;
         }
       },
     );
     const completed = results.filter((entry): entry is NonNullable<typeof entry> => entry !== null);
     metrics.checked = completed.length;
-    if (completed.length) {
-      const writes = await env.DB.batch(
-        completed.map(({ row, result }) =>
+    if (completed.length || failed.length) {
+      const writes = await env.DB.batch([
+        ...completed.map(({ row, result }) =>
           env.DB.prepare(
             `
         INSERT OR IGNORE INTO check_results (monitor_id, monitor_version, scheduled_at, checked_at, ok, latency_ms, http_status, error_code)
@@ -104,9 +108,16 @@ export async function runScheduled(
             now(),
           ),
         ),
-      );
+        ...failed.map((row) =>
+          env.DB.prepare(
+            `UPDATE monitors SET next_check_at = ?
+          WHERE id = ? AND version = ? AND enabled = 1
+          AND EXISTS (SELECT 1 FROM scheduler_state WHERE id = 1 AND lease_owner = ? AND lease_until > ?)`,
+          ).bind(slot + SLOT, row.id, row.version, owner, now()),
+        ),
+      ]);
       count(writes);
-      metrics.stored = writes.filter((write) => write.meta.changes > 0).length;
+      metrics.stored = writes.slice(0, completed.length).filter((write) => write.meta.changes > 0).length;
     }
     // A bounded cleanup each tick catches up after long downtimes without a large transaction.
     const housekeeping = await env.DB.batch([

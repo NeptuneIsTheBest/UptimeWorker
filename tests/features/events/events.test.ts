@@ -61,6 +61,49 @@ const config = (id: string, changes: Partial<EventConfig> = {}): EventConfig => 
 });
 
 describe('events', () => {
+  it('creates and edits events with over one hundred associations without exceeding SQL parameters', async () => {
+    const ids: string[] = [];
+    for (let i = 0; i < 105; i++) ids.push((await node()).id);
+    const { request } = apiClient(fixture.db);
+    const created = await request('admin/events', 'POST', config(ids[0], { monitorIds: ids }));
+    expect(created.status).toBe(201);
+    const event = (await created.json()) as AdminEvent;
+    expect(event.monitors).toHaveLength(105);
+    expect(
+      await fixture.db
+        .prepare('SELECT COUNT(*) AS n FROM event_suppressions WHERE event_id = ?')
+        .bind(event.id)
+        .first('n'),
+    ).toBe(105);
+    const updated = await request(`admin/events/${event.id}`, 'PATCH', {
+      ...config(ids[0], { title: '更新关联', monitorIds: ids.slice(1) }),
+      version: event.version,
+    });
+    expect(updated.status).toBe(200);
+    expect(((await updated.json()) as AdminEvent).monitors).toHaveLength(104);
+    expect(
+      (
+        await request(`admin/events/${event.id}`, 'PATCH', {
+          ...config(ids[0], { monitorIds: ids }),
+          version: event.version,
+        })
+      ).status,
+    ).toBe(409);
+    expect(
+      (await request('admin/events', 'POST', config(ids[0], { monitorIds: [...ids, 'missing'] }))).status,
+    ).toBe(400);
+    expect(
+      (
+        await request(`admin/events/${event.id}`, 'PATCH', {
+          ...config(ids[0], { monitorIds: [...ids, 'missing'] }),
+          version: event.version + 1,
+        })
+      ).status,
+    ).toBe(409);
+    const saved = (await getEvent(fixture.db, event.id))!;
+    expect(saved.title).toBe('更新关联');
+    expect(saved.monitors.map((monitor) => monitor.id).sort()).toEqual(ids.slice(1).sort());
+  });
   it('validates event content, node selection and maintenance dates', () => {
     const base = config('monitor');
     expect(parseEventConfig({ ...base, monitorIds: ['monitor', 'monitor'] }).monitorIds).toEqual(['monitor']);

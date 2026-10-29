@@ -1,10 +1,11 @@
 import { isPageRefreshSeconds, parseGlobalSettingsPatch } from '../../../shared/settings/validation';
 import { DEFAULT_PAGE_REFRESH_SECONDS } from '../../../shared/settings/constants';
+import { DEFAULT_PERFORMANCE } from '../../../shared/settings/performance';
 import type { GlobalSettings } from '../../../shared/settings/types';
 import type { SettingsRow, StoredSettings } from './types';
 
 const SETTINGS_COLUMNS =
-  'version, page_refresh_seconds, auto_incident_after_minutes, waf_bypass_enabled, waf_bypass_token';
+  'version, page_refresh_seconds, auto_incident_after_minutes, waf_bypass_enabled, waf_bypass_token, workers_plan, probe_concurrency, max_checks_per_run, time_budget_seconds';
 const SETTINGS_QUERY = `SELECT ${SETTINGS_COLUMNS} FROM global_settings WHERE id = 1`;
 export function storedSettings(row: SettingsRow | undefined): StoredSettings {
   if (!row) throw new Error('Global settings are unavailable');
@@ -12,6 +13,12 @@ export function storedSettings(row: SettingsRow | undefined): StoredSettings {
     const parsed = parseGlobalSettingsPatch(
       {
         version: row.version,
+        performance: {
+          workersPlan: row.workers_plan,
+          concurrency: row.probe_concurrency,
+          maxChecksPerRun: row.max_checks_per_run,
+          timeBudgetSeconds: row.time_budget_seconds,
+        },
         pageRefreshSeconds: row.page_refresh_seconds,
         autoIncidentAfterMinutes: row.auto_incident_after_minutes,
         wafBypassEnabled: row.waf_bypass_enabled === 1,
@@ -20,6 +27,7 @@ export function storedSettings(row: SettingsRow | undefined): StoredSettings {
       {
         version: row.version,
         pageRefreshSeconds: DEFAULT_PAGE_REFRESH_SECONDS,
+        performance: DEFAULT_PERFORMANCE,
         autoIncidentAfterMinutes: 5,
         wafBypassEnabled: false,
         wafBypassTokenConfigured: false,
@@ -27,6 +35,7 @@ export function storedSettings(row: SettingsRow | undefined): StoredSettings {
     );
     return {
       version: parsed.version,
+      performance: parsed.performance,
       pageRefreshSeconds: parsed.pageRefreshSeconds,
       autoIncidentAfterMinutes: parsed.autoIncidentAfterMinutes,
       wafBypass: {
@@ -43,6 +52,7 @@ export function storedSettings(row: SettingsRow | undefined): StoredSettings {
 export function adminSettings(settings: StoredSettings): GlobalSettings {
   return {
     version: settings.version,
+    performance: settings.performance,
     pageRefreshSeconds: settings.pageRefreshSeconds,
     autoIncidentAfterMinutes: settings.autoIncidentAfterMinutes,
     wafBypassEnabled: settings.wafBypass.enabled,
@@ -70,7 +80,8 @@ export async function updateGlobalSettings(
   const result = await db
     .prepare(
       `UPDATE global_settings SET page_refresh_seconds = ?, auto_incident_after_minutes = ?, waf_bypass_enabled = ?,
-      waf_bypass_token = COALESCE(?, waf_bypass_token), version = version + 1
+      waf_bypass_token = COALESCE(?, waf_bypass_token), workers_plan = ?, probe_concurrency = ?,
+      max_checks_per_run = ?, time_budget_seconds = ?, version = version + 1
     WHERE id = 1 AND version = ? RETURNING ${SETTINGS_COLUMNS}`,
     )
     .bind(
@@ -78,6 +89,10 @@ export async function updateGlobalSettings(
       patch.autoIncidentAfterMinutes,
       Number(patch.wafBypassEnabled),
       patch.wafBypassToken ?? null,
+      patch.performance.workersPlan,
+      patch.performance.concurrency,
+      patch.performance.maxChecksPerRun,
+      patch.performance.timeBudgetSeconds,
       patch.version,
     )
     .all<SettingsRow>();

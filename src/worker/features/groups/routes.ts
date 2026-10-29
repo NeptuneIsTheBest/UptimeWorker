@@ -1,11 +1,18 @@
 import { Hono } from 'hono';
 import { object, parseVersion } from '../../../shared/validation';
 import { parseGroup } from '../../../shared/groups/validation';
+import { parseOrderItems } from '../../../shared/ordering';
+import { saveOrder } from '../ordering/repository';
 import { listGroups, saveGroup, deleteGroup } from './repository';
 import type { AppEnv } from '../../types';
 
 export function registerGroupRoutes(app: Hono<AppEnv>) {
   app.get('/api/admin/groups', async (c) => c.json({ groups: await listGroups(c.env.DB) }));
+  app.put('/api/admin/groups/order', async (c) => {
+    const body = object(await c.req.json());
+    await saveOrder(c.env.DB, 'monitor_groups', parseOrderItems(body.items));
+    return c.json({ groups: await listGroups(c.env.DB) });
+  });
   app.post('/api/admin/groups', async (c) =>
     c.json(await saveGroup(c.env.DB, parseGroup(await c.req.json())), 201),
   );

@@ -9,7 +9,7 @@
 | GET                  | `/api/status`                   | 站点信息、分组、当前状态、每日可用率、未结束与历史事件 |
 | GET                  | `/api/monitors/:id/history`     | 服务展示数据、最近 24 小时明细、关联事件               |
 | GET                  | `/api/events/:id`               | 单个事件及完整进展记录，支持独立详情页                 |
-| GET                  | `/api/admin/monitors`           | 完整监控配置、分组、身份与数量上限                     |
+| GET                  | `/api/admin/monitors`           | 完整监控配置、分组与身份                               |
 | POST                 | `/api/admin/monitors`           | 创建监控                                               |
 | PATCH                | `/api/admin/monitors/:id`       | 更新配置，必须携带当前 `version`                       |
 | DELETE               | `/api/admin/monitors/:id`       | 删除监控及历史                                         |
@@ -17,6 +17,8 @@
 | GET                  | `/api/admin/settings`           | 全局设置、版本与密钥配置状态                           |
 | PATCH                | `/api/admin/settings`           | 更新全局设置，必须携带当前 `version`                   |
 | GET / POST           | `/api/admin/groups`             | 列出／创建分组                                         |
+| PUT                  | `/api/admin/groups/order`       | 原子保存全部分组的顺序                                 |
+| PUT                  | `/api/admin/monitors/order`     | 原子保存指定分组内全部服务的顺序                       |
 | PATCH / DELETE       | `/api/admin/groups/:id`         | 更新／删除分组，必须携带 `version`                     |
 | GET / POST           | `/api/admin/events`             | 分页列出／发布事件                                     |
 | GET / PATCH / DELETE | `/api/admin/events/:id`         | 获取／编辑／删除事件，写入必须携带 `version`           |
@@ -35,6 +37,7 @@ GET / PATCH 返回下表字段。PATCH 须携带当前 `version`，其余字段�
 | 字段                       | 规则                                                  |
 | -------------------------- | ----------------------------------------------------- |
 | `version`                  | 当前设置版本，PATCH 必填。                            |
+| `performance`              | 性能设置对象，嵌套字段省略时保留原值；见下表。        |
 | `pageRefreshSeconds`       | 默认 30，接受 5–3600 的整数秒，或 0（关闭自动刷新）。 |
 | `autoIncidentAfterMinutes` | 默认 5，接受 0–1440 的整数分钟，0 关闭新自动事件。    |
 | `wafBypassEnabled`         | 布尔值，启用前须配置密钥。                            |
@@ -42,17 +45,34 @@ GET / PATCH 返回下表字段。PATCH 须携带当前 `version`，其余字段�
 
 刷新间隔和自动事件阈值均不接受字符串、小数、null 或越界值。PATCH 示例：`{"version": 1, "pageRefreshSeconds": 15, "autoIncidentAfterMinutes": 10}`。
 
+`performance` 的数值字段仅接受范围内的整数，字符串、null、小数和越界值均返回 `400`；套餐仅接受下表的字符串值。性能设置与其他全局设置共用 `version`，不在公开接口返回。
+
+| 嵌套字段            | 默认值   | 规则                                            |
+| ------------------- | -------- | ----------------------------------------------- |
+| `workersPlan`       | `"free"` | `"free"` / `"paid"`，应用预算依据，不改变订阅。 |
+| `concurrency`       | 4        | 1–6。                                           |
+| `maxChecksPerRun`   | 10       | 1–500，单轮候选数量。                           |
+| `timeBudgetSeconds` | 50       | 40–180 秒，启动前预留完整超时及 5 秒保存时间。  |
+
+例如 `{"version": 1, "performance": {"concurrency": 6, "maxChecksPerRun": 30}}` 仅修改并发和批量，保留套餐、时间预算以及其他全局设置。估算规则见[性能设置与容量估算](configuration.md#性能设置与容量估算)。
+
 `wafBypassToken` 仅用于写入，省略或空字符串保留原密钥，不回传原值。旧字段 `wafBypassDomains`、`wafBypassAutoDomains` 会被忽略，不返回也不参与放行判定。
 
 `GET /api/status`、`GET /api/monitors/:id/history`、`GET /api/events/:id` 和 `GET /api/admin/monitors` 的顶层响应均包含 `pageRefreshSeconds`。公开接口缓存有效期为 `min(pageRefreshSeconds, 60)` 秒，关闭时为 60 秒；已有缓存自然过期后生效。管理接口及失败响应不缓存。`generatedAt` 表示服务端生成数据的时间，界面刷新行为见[页面自动刷新](configuration.md#页面自动刷新)，事件触发规则见[服务器分组与事件](configuration.md#服务器分组与事件)。
 
 ## 分组与事件
 
-分组包含 `id`、`name`、`sortOrder`、`version`。POST / PATCH 提交 `name`（1–80 字符、不重复）和 `sortOrder`（0–1000000 的整数），PATCH 另须提交 `version`。删除分组后节点的 `groupId` 变为 null。
+分组包含 `id`、`name`、`sortOrder`、`version`。POST / PATCH 提交 `name`（1–80 字符、不重复），可选 `sortOrder`（0–1000000 的整数），PATCH 另须提交 `version`。创建省略顺序时追加到末尾，编辑省略时保留原顺序；兼容旧客户端的数字排序。追加时若已有顺序占满数值范围，会先按现有顺序归一化并更新受影响分组的版本。删除分组后节点的 `groupId` 变为 null，并按原组内顺序追加到未分组末尾。
 
 监控的 `groupId` 须指向现存分组；创建时省略默认 null，PATCH 省略保留原值，传 null 移出分组。只改名称或分组会增加管理版本，保留当前状态、检测计划和连续失败计时。`GET /api/admin/monitors` 返回 `groups`。
 
-创建或编辑手动事件须提交完整配置：`title`（1–120 字符）、`body`（1–4000 字符纯文本）、`type`（`incident` / `maintenance`）、`monitorIds`（1–10 个现存节点）。维护须提供 UTC 毫秒 `startsAt`、`endsAt`，结束晚于开始；故障的这两个字段归一化为 null。编辑另须提交 `version`；已删除节点的名称保留，有此类历史关联时允许 `monitorIds` 为空。
+管理端监控响应增加只读 `sortOrder`，不属于探测配置，普通监控 POST / PATCH 不接受它作为排序指令。新增或换组的服务追加到目标组末尾。管理和公开列表均按分组顺序、组内服务顺序排列，未分组在最后；同序按创建时间、ID 保证稳定。
+
+排序请求的 `items` 必须是目标顺序的完整非空列表，每项为 `{id, expectedVersion, expectedSortOrder}`，其中版本和顺序取自最近一次管理列表响应，而不是目标序号。`PUT /api/admin/groups/order` 提交 `{items}`，返回 `{groups}`；`PUT /api/admin/monitors/order` 提交 `{groupId, items}`，`groupId` 必填，null 表示未分组，返回 `{groupId, monitors}`（该组全部服务）。成功后按数组位置保存从 0 开始的连续序号。
+
+两个排序接口的请求体上限为 256 KiB；缺失或无效参数、重复 ID、空列表返回 `400`，完整成员集合、分组归属、原版本或原顺序与数据库不一致返回 `409 order_conflict`。排序在单条数据库更新中校验全量快照并提交，不发生部分写入。服务排序不修改监控 `version`，正在执行的检测继续有效；分组排序会增加顺序发生变化的分组版本。保存后客户端应使用返回的新快照，冲突时重新读取再提交。
+
+创建或编辑手动事件须提交完整配置：`title`（1–120 字符）、`body`（1–4000 字符纯文本）、`type`（`incident` / `maintenance`）、`monitorIds`（至少一个现存节点，去重，无固定数量上限；请求体仍受 16 KiB 限制）。维护须提供 UTC 毫秒 `startsAt`、`endsAt`，结束晚于开始；故障的这两个字段归一化为 null。编辑另须提交 `version`；已删除节点的名称保留，有此类历史关联时允许 `monitorIds` 为空。
 
 事件响应包含 `id`、`title`、`body`、`type`、`startsAt`、`endsAt`、`source`（`manual` / `automatic`）、`status`（`open` / `resolved` / `stopped`）、`startedAt`、`endedAt`、`createdAt`、`updatedAt`、`monitors` 和 `updates`：
 
@@ -85,7 +105,7 @@ GET / PATCH 返回下表字段。PATCH 须携带当前 `version`，其余字段�
 
 监控 POST / PATCH 的 JSON 请求上限为 256 KiB，其余 API 为 16 KiB。`intervalMinutes` 接受 1–60 的整数分钟，POST 省略默认 1，PATCH 省略保留原值；小数、越界值、字符串和 null 返回 `400`。
 
-创建 HTTP 监控时，`method` 默认 GET，`wafBypassEnabled` 默认 false，`requestHeaders` 默认 `{}`，`requestBody`、`responseCheck` 默认 null。PATCH 省略字段保留原值，传 null 可清空请求体或响应校验。数量上限、超时和检测行为见[基本配置](configuration.md#基本配置)。
+创建 HTTP 监控时，`method` 默认 GET，`wafBypassEnabled` 默认 false，`requestHeaders` 默认 `{}`，`requestBody`、`responseCheck` 默认 null。PATCH 省略字段保留原值，传 null 可清空请求体或响应校验。服务总数无固定上限，`GET /api/admin/monitors` 不再返回 `limit`，创建不再返回 `monitor_limit`。超时和检测行为见[基本配置](configuration.md#基本配置)。
 
 ### 基本 HTTP 监控
 

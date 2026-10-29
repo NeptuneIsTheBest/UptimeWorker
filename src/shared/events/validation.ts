@@ -11,7 +11,6 @@ export function parseEventConfig(value: unknown, allowEmptyMonitors = false): Ev
   if (
     !Array.isArray(v.monitorIds) ||
     (!v.monitorIds.length && !allowEmptyMonitors) ||
-    v.monitorIds.length > 10 ||
     v.monitorIds.some((id) => typeof id !== 'string' || !id || id.length > 100)
   )
     throw new ValidationError('event_monitors_invalid');

@@ -280,13 +280,13 @@ describe('D1 scheduling and aggregation', () => {
     expect(history?.checks.map((check) => check.checkedAt)).toEqual(checks.slice(1));
     expect(history?.checks).toHaveLength(1441);
   });
-  it('limits monitoring to ten targets atomically', async () => {
+  it('creates more than ten monitors concurrently', async () => {
     const rows = await Promise.all(
       Array.from({ length: 11 }, (_, i) =>
         createMonitor(fixture.db, { ...httpConfig, name: `Monitor ${i}` }),
       ),
     );
-    expect(rows.filter(Boolean)).toHaveLength(10);
+    expect(rows.filter(Boolean)).toHaveLength(11);
   });
   it('stays within the configured concurrent probe budget and isolates unexpected failures', async () => {
     for (let i = 0; i < 10; i++) await createMonitor(fixture.db, { ...httpConfig, name: `Service ${i}` });

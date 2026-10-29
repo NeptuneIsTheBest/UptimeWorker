@@ -1,4 +1,3 @@
-import { MAX_MONITORS } from '../../../shared/monitors/constants';
 import type { AdminMonitor, MonitorConfig, MonitorStatus } from '../../../shared/monitors/types';
 import type { MonitorRow } from './types';
 import { parseMonitorConfig } from '../../../shared/monitors/validation';
@@ -25,6 +24,7 @@ export function adminMonitor(row: MonitorRow, now = Date.now()): AdminMonitor {
   return {
     ...monitorConfig(row),
     id: row.id,
+    sortOrder: row.sort_order,
     version: row.version,
     status: currentStatus(row, now),
     lastCheckedAt: row.last_checked_at,
@@ -36,8 +36,11 @@ export async function findMonitor(db: D1Database, id: string) {
   return db.prepare('SELECT * FROM monitors WHERE id = ?').bind(id).first<MonitorRow>();
 }
 export async function listMonitors(db: D1Database) {
-  return (await db.prepare('SELECT * FROM monitors ORDER BY created_at, id').all<MonitorRow>()).results;
+  return (await db.prepare(orderedMonitorsQuery).all<MonitorRow>()).results;
 }
+export const orderedMonitorsQuery = `SELECT m.* FROM monitors m
+  LEFT JOIN monitor_groups g ON g.id = m.group_id
+  ORDER BY g.id IS NULL, g.sort_order, g.created_at, g.id, m.sort_order, m.created_at, m.id`;
 export async function createMonitor(
   db: D1Database,
   config: MonitorConfig,
@@ -48,9 +51,10 @@ export async function createMonitor(
   const result = await db
     .prepare(
       `INSERT INTO monitors
-    (id, name, type, config_json, interval_minutes, timeout_seconds, enabled, created_at, updated_at, group_id)
-    SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM monitors) < ?
-      AND (? IS NULL OR EXISTS (SELECT 1 FROM monitor_groups WHERE id = ?))`,
+    (id, name, type, config_json, interval_minutes, timeout_seconds, enabled, created_at, updated_at, group_id, sort_order)
+    SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+      (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM monitors WHERE group_id IS ?)
+      WHERE (? IS NULL OR EXISTS (SELECT 1 FROM monitor_groups WHERE id = ?))`,
     )
     .bind(
       id,
@@ -63,7 +67,7 @@ export async function createMonitor(
       now,
       now,
       config.groupId ?? null,
-      MAX_MONITORS,
+      config.groupId ?? null,
       config.groupId ?? null,
       config.groupId ?? null,
     )
@@ -90,6 +94,8 @@ export async function updateMonitor(
     .prepare(
       `UPDATE monitors SET name = ?, type = ?, config_json = ?, interval_minutes = ?,
     timeout_seconds = ?, enabled = ?, updated_at = ?, group_id = ?, version = version + 1,
+    sort_order = CASE WHEN group_id IS ? THEN sort_order ELSE
+      (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM monitors WHERE group_id IS ?) END,
     next_check_at = CASE WHEN ? THEN 0 ELSE next_check_at END,
     last_checked_at = CASE WHEN ? THEN NULL ELSE last_checked_at END,
     last_ok = CASE WHEN ? THEN NULL ELSE last_ok END,
@@ -106,6 +112,8 @@ export async function updateMonitor(
       config.timeoutSeconds,
       Number(config.enabled),
       now,
+      config.groupId ?? null,
+      config.groupId ?? null,
       config.groupId ?? null,
       ...Array(5).fill(Number(reset)),
       id,

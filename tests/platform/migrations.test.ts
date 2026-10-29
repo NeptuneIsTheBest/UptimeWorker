@@ -33,6 +33,140 @@ afterAll(async () => {
   await fixture?.dispose();
 });
 
+it('initializes display positions in legacy order without changing monitoring state or groups', async () => {
+  const legacy = await databaseFixture('0007_performance_settings.sql');
+  try {
+    const db = legacy.db;
+    await db
+      .prepare("INSERT INTO monitor_groups(id, name, sort_order, created_at) VALUES ('g', 'Group', 42, ?)")
+      .bind(timestamp)
+      .run();
+    for (const [id, groupId, createdAt] of [
+      ['b', 'g', timestamp],
+      ['a', 'g', timestamp],
+      ['c', 'g', timestamp + 1],
+      ['u2', null, timestamp + 1],
+      ['u1', null, timestamp],
+    ] as const) {
+      await db
+        .prepare(
+          `INSERT INTO monitors(id, name, type, config_json, interval_minutes, timeout_seconds,
+        enabled, created_at, updated_at, group_id) VALUES (?, ?, 'http', ?, 1, 10, 1, ?, ?, ?)`,
+        )
+        .bind(id, id, JSON.stringify(httpConfig), createdAt, createdAt, groupId)
+        .run();
+    }
+    await db
+      .prepare(
+        `INSERT INTO check_results(monitor_id, monitor_version, scheduled_at, checked_at, ok, latency_ms)
+      VALUES ('a', 1, ?, ?, 0, 42)`,
+      )
+      .bind(timestamp, timestamp)
+      .run();
+    const tables = [
+      'monitors',
+      'monitor_groups',
+      'check_results',
+      'daily_stats',
+      'monitor_outages',
+      'events',
+      'global_settings',
+      'scheduler_state',
+    ];
+    // daily_stats is WITHOUT ROWID, so use its primary key instead.
+    const read = async () =>
+      (
+        await db.batch<Record<string, unknown>>(
+          tables.map((table) =>
+            db.prepare(
+              `SELECT * FROM ${table} ORDER BY ${table === 'daily_stats' ? 'monitor_id, day' : 'rowid'}`,
+            ),
+          ),
+        )
+      ).map((result) => result.results);
+    const before = await read();
+    await applyMigration(db, '0008_display_order.sql');
+    const after = await read();
+    expect(after[0].map(({ sort_order: _, ...row }) => row)).toEqual(before[0]);
+    expect(after.slice(1)).toEqual(before.slice(1));
+    expect(
+      (await db.prepare('SELECT id, sort_order FROM monitors ORDER BY group_id, sort_order').all()).results,
+    ).toEqual([
+      { id: 'u1', sort_order: 0 },
+      { id: 'u2', sort_order: 1 },
+      { id: 'a', sort_order: 0 },
+      { id: 'b', sort_order: 1 },
+      { id: 'c', sort_order: 2 },
+    ]);
+    expect((await db.prepare('PRAGMA foreign_key_check').all()).results).toEqual([]);
+    for (const invalid of [-1, 1.5, null])
+      await expect(
+        db.prepare("UPDATE monitors SET sort_order = ? WHERE id = 'a'").bind(invalid).run(),
+      ).rejects.toThrow();
+  } finally {
+    await legacy.dispose();
+  }
+});
+
+it('adds performance defaults and an indexed due query without altering existing data', async () => {
+  const legacy = await databaseFixture('0006_event_update_titles.sql');
+  try {
+    const db = legacy.db;
+    const row = await createMonitor(db, httpConfig, timestamp);
+    await db.batch([
+      db
+        .prepare('UPDATE global_settings SET version = 7, page_refresh_seconds = 127, waf_bypass_token = ?')
+        .bind('legacy-secret-'.repeat(4)),
+      db
+        .prepare(
+          'INSERT INTO check_results(monitor_id, monitor_version, scheduled_at, checked_at, ok, latency_ms) VALUES (?, 1, ?, ?, 1, 42)',
+        )
+        .bind(row.id, timestamp, timestamp),
+      db
+        .prepare('UPDATE scheduler_state SET lease_owner = ?, lease_until = ?')
+        .bind('old-lease', timestamp + 240_000),
+    ]);
+    const tables = ['monitors', 'check_results', 'daily_stats', 'scheduler_state', 'global_settings'];
+    const snapshot = async () =>
+      (
+        await db.batch<Record<string, unknown>>(tables.map((table) => db.prepare(`SELECT * FROM ${table}`)))
+      ).map((result) => result.results);
+    const before = await snapshot();
+    await applyMigration(db, '0007_performance_settings.sql');
+    const after = await snapshot();
+    expect(after.slice(0, 4)).toEqual(before.slice(0, 4));
+    expect(after[4]).toEqual([
+      {
+        ...before[4][0],
+        workers_plan: 'free',
+        probe_concurrency: 4,
+        max_checks_per_run: 10,
+        time_budget_seconds: 50,
+      },
+    ]);
+    const queryPlan = await db
+      .prepare(
+        'EXPLAIN QUERY PLAN SELECT * FROM monitors WHERE enabled = 1 AND next_check_at <= ? ORDER BY next_check_at, id LIMIT 10',
+      )
+      .bind(timestamp)
+      .all();
+    expect(JSON.stringify(queryPlan.results)).toContain('monitors_due');
+    for (const [column, value] of [
+      ['probe_concurrency', 7],
+      ['max_checks_per_run', 501],
+      ['max_checks_per_run', 1.5],
+      ['time_budget_seconds', 39],
+      ['workers_plan', 'invalid'],
+    ] as const)
+      await expect(
+        db.prepare(`UPDATE global_settings SET ${column} = ?`).bind(value).run(),
+      ).rejects.toThrow();
+    expect((await db.prepare('PRAGMA foreign_key_check').all()).results).toEqual([]);
+  } finally {
+    await legacy.dispose();
+  }
+});
+
 it('adds a 30-second refresh default while preserving existing settings and monitoring data', async () => {
   const legacy = await databaseFixture('0003_flexible_intervals.sql');
   try {

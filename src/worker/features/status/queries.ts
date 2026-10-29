@@ -5,7 +5,7 @@ import type { MonitorRow } from '../monitors/types';
 import { getPageRefreshSeconds } from '../settings/repository';
 import { listGroups } from '../groups/repository';
 import { listPublicEvents } from '../events/repository';
-import { currentStatus, findMonitor } from '../monitors/repository';
+import { currentStatus, findMonitor, orderedMonitorsQuery } from '../monitors/repository';
 import { DAY, dayStart, utcDay } from '../../lib/time';
 
 interface DailyRow {
@@ -55,7 +55,7 @@ function publicMonitor(row: MonitorRow, daily: DailyRow[], now: number): PublicM
 export async function getStatus(env: Env, now = Date.now()): Promise<StatusResponse> {
   const [[monitors, stats], pageRefreshSeconds, groups, events] = await Promise.all([
     env.DB.batch([
-      env.DB.prepare('SELECT * FROM monitors ORDER BY created_at, id'),
+      env.DB.prepare(orderedMonitorsQuery),
       env.DB.prepare('SELECT * FROM daily_stats WHERE day >= ? ORDER BY day').bind(
         utcDay(dayStart(now) - 89 * DAY),
       ),
