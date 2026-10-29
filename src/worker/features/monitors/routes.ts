@@ -1,3 +1,4 @@
+import { errorResponse } from '../../../shared/errors';
 import { Hono } from 'hono';
 import { parseMonitorConfig } from '../../../shared/monitors/validation';
 import { MAX_MONITORS } from '../../../shared/monitors/constants';
@@ -36,25 +37,25 @@ export function registerMonitorRoutes(app: Hono<AppEnv>, probe: Probe) {
     const row = await createMonitor(c.env.DB, config);
     return row
       ? c.json(adminMonitor(row), 201)
-      : c.json({ error: `免费优先模式最多支持 ${MAX_MONITORS} 个监控，请先删除不再使用的项目。` }, 409);
+      : c.json(errorResponse('monitor_limit', { max: MAX_MONITORS }), 409);
   });
   app.patch('/api/admin/monitors/:id', async (c) => {
     const row = await findMonitor(c.env.DB, c.req.param('id'));
-    if (!row) return c.json({ error: '监控不存在。' }, 404);
+    if (!row) return c.json(errorResponse('monitor_not_found'), 404);
     const body = await c.req.json<Record<string, unknown>>();
-    if (body?.version !== row.version) return c.json({ error: '监控已被修改，请刷新后重试。' }, 409);
+    if (body?.version !== row.version) return c.json(errorResponse('monitor_conflict'), 409);
     const config = parseMonitorConfig({ ...monitorConfig(row), ...body });
     const updated = await updateMonitor(c.env.DB, row.id, row.version, config);
-    return updated ? c.json(adminMonitor(updated)) : c.json({ error: '监控已被修改，请刷新后重试。' }, 409);
+    return updated ? c.json(adminMonitor(updated)) : c.json(errorResponse('monitor_conflict'), 409);
   });
   app.delete('/api/admin/monitors/:id', async (c) => {
     const deleted = await deleteMonitor(c.env.DB, c.req.param('id'));
-    return deleted ? c.json({ ok: true }) : c.json({ error: '监控不存在。' }, 404);
+    return deleted ? c.json({ ok: true }) : c.json(errorResponse('monitor_not_found'), 404);
   });
   app.post('/api/admin/monitors/:id/test', async (c) => {
     const { monitors, options } = await getProbeSnapshot(c.env.DB);
     const row = monitors.find((monitor) => monitor.id === c.req.param('id'));
-    if (!row) return c.json({ error: '监控不存在。' }, 404);
+    if (!row) return c.json(errorResponse('monitor_not_found'), 404);
     return c.json(await probe(monitorConfig(row), options));
   });
 }

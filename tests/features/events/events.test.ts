@@ -707,7 +707,7 @@ describe('events', () => {
     const missing = await request('events/missing', 'GET', undefined, { headers: {} });
     expect(missing.status).toBe(404);
     expect(missing.headers.get('cache-control')).toBe('no-store');
-    expect(await missing.json()).toEqual({ error: '事件不存在。' });
+    expect(await missing.json()).toEqual({ error: '事件不存在。', code: 'event_not_found' });
   });
   it('paginates identical timestamps without duplicates and protects management APIs', async () => {
     const row = await node();

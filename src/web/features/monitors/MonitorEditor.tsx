@@ -1,3 +1,6 @@
+import { errorMessage, displayMessage, type DisplayMessage } from '../../i18n/core';
+import { useI18n } from '../../i18n/I18nProvider';
+import { ValidationError } from '../../../shared/errors';
 import { useState, type FormEvent } from 'react';
 import {
   DEFAULT_INTERVAL_MINUTES,
@@ -25,6 +28,7 @@ export function MonitorEditor({
   save: (config: MonitorConfig) => Promise<void>;
   close: () => void;
 }) {
+  const { t, locale } = useI18n();
   const [type, setType] = useState<'http' | 'tcp'>(initial?.type ?? 'http');
   const [name, setName] = useState(initial?.name ?? '');
   const [groupId, setGroupId] = useState(initial?.groupId ?? '');
@@ -64,7 +68,7 @@ export function MonitorEditor({
   const [timeoutSeconds, setTimeoutSeconds] = useState(initial?.timeoutSeconds ?? 10);
   const [enabled, setEnabled] = useState(initial?.enabled ?? true);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<DisplayMessage | null>(null);
   async function submit(event: FormEvent) {
     event.preventDefault();
     setError(null);
@@ -72,7 +76,7 @@ export function MonitorEditor({
       const headers = requestHeaders.filter(([name, value]) => name.trim() || value);
       const headerNames = headers.map(([name]) => name.trim().toLowerCase());
       if (type === 'http' && new Set(headerNames).size !== headerNames.length)
-        throw new Error('请求头名称不能重复（不区分大小写）');
+        throw new ValidationError('header_duplicate');
       const words = (value: string) =>
         value
           .split(/\r?\n/)
@@ -100,22 +104,22 @@ export function MonitorEditor({
       setBusy(true);
       await save(config);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '保存失败');
+      setError(errorMessage(err, 'error.save'));
     } finally {
       setBusy(false);
     }
   }
   return (
     <Modal
-      title={initial ? '编辑监控' : '新增监控'}
+      title={initial ? t('monitors.edit') : t('monitors.add')}
       close={() => {
         if (!busy) close();
       }}
       wide
     >
-      <form onSubmit={submit} className="monitor-form">
-        <p className="form-intro">选择检测方式，配置你的服务连接信息。</p>
-        <div className="type-picker" role="group" aria-label="检测类型">
+      <form noValidate onSubmit={submit} className="monitor-form">
+        <p className="form-intro">{t('monitor.editorDescription')}</p>
+        <div className="type-picker" role="group" aria-label={t('monitor.type')}>
           <button
             type="button"
             className={type === 'http' ? 'selected' : ''}
@@ -124,7 +128,7 @@ export function MonitorEditor({
           >
             <Icon name="globe" />
             <span>
-              HTTP / HTTPS<small>网站与 API 服务</small>
+              HTTP / HTTPS<small>{t('monitor.httpDescription')}</small>
             </span>
             {type === 'http' && <Icon name="check" size={16} />}
           </button>
@@ -136,26 +140,26 @@ export function MonitorEditor({
           >
             <Icon name="server" />
             <span>
-              TCP Port<small>服务端口连接</small>
+              TCP Port<small>{t('monitor.tcpDescription')}</small>
             </span>
             {type === 'tcp' && <Icon name="check" size={16} />}
           </button>
         </div>
         <label className="field">
-          服务名称
+          {t('monitor.name')}
           <input
             required
             maxLength={80}
             autoFocus
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="例如：官方网站"
+            placeholder={t('monitor.namePlaceholder')}
           />
         </label>
         <label className="field">
-          所属分组
+          {t('monitor.group')}
           <select value={groupId} onChange={(e) => setGroupId(e.target.value)}>
-            <option value="">未分组</option>
+            <option value="">{t('groups.ungrouped')}</option>
             {groups.map((group) => (
               <option key={group.id} value={group.id}>
                 {group.name}
@@ -166,7 +170,7 @@ export function MonitorEditor({
         {type === 'http' ? (
           <>
             <label className="field">
-              检测地址
+              {t('monitor.url')}
               <input
                 required
                 type="url"
@@ -175,11 +179,11 @@ export function MonitorEditor({
                 onChange={(e) => setUrl(e.target.value)}
                 placeholder="https://example.com/health"
               />
-              <small>仅支持公网地址，最多跟随 3 次重定向。</small>
+              <small>{t('monitor.urlNote')}</small>
             </label>
             <div className="form-columns">
               <label className="field">
-                请求方法
+                {t('monitor.method')}
                 <select value={method} onChange={(e) => setMethod(e.target.value as HttpMethod)}>
                   {HTTP_METHODS.map((value) => (
                     <option key={value}>{value}</option>
@@ -187,10 +191,10 @@ export function MonitorEditor({
                 </select>
               </label>
               <div className="field">
-                <span>期望状态码</span>
+                <span>{t('monitor.statusRange')}</span>
                 <div className="range-input">
                   <input
-                    aria-label="最小状态码"
+                    aria-label={t('monitor.statusMin')}
                     type="number"
                     min={100}
                     max={599}
@@ -200,7 +204,7 @@ export function MonitorEditor({
                   />
                   <span>—</span>
                   <input
-                    aria-label="最大状态码"
+                    aria-label={t('monitor.statusMax')}
                     type="number"
                     min={100}
                     max={599}
@@ -219,41 +223,39 @@ export function MonitorEditor({
                     checked={wafBypassEnabled}
                     onChange={(e) => setWafBypassEnabled(e.target.checked)}
                   />
-                  <span>启用 WAF 放行</span>
+                  <span>{t('monitor.waf')}</span>
                 </label>
-                <p className="form-note">
-                  仅向当前监控域名 {wafDomain} 的 HTTPS 请求发送共享密钥；跨域场景请直接配置最终检测地址。
-                </p>
+                <p className="form-note">{t('monitor.wafNote', { domain: wafDomain })}</p>
                 {wafBypassEnabled &&
                   (settings.loading ? (
                     <p className="form-note" role="status">
-                      正在读取全局 WAF 设置…
+                      {t('monitor.wafLoading')}
                     </p>
                   ) : settings.error ? (
                     <ErrorNotice
-                      message={`无法确认全局 WAF 设置：${settings.error}`}
+                      message={t('monitor.wafError', { error: displayMessage(settings.error, locale) })}
                       retry={settings.refresh}
                     />
                   ) : (
                     <p className="form-note" role="status">
                       {!settings.data?.wafBypassTokenConfigured
-                        ? '尚未配置共享密钥，请到全局设置配置密钥并开启总开关。'
+                        ? t('monitor.wafMissing')
                         : !settings.data.wafBypassEnabled
-                          ? '全局 WAF 总开关已关闭，请到全局设置开启后生效。'
-                          : '全局 WAF 已就绪，请确保目标站点已配置对应的 Skip 规则。'}
+                          ? t('monitor.wafDisabled')
+                          : t('monitor.wafReady')}
                     </p>
                   ))}
               </div>
             )}
             <details className="advanced-config">
-              <summary>高级配置（请求参数与响应校验）</summary>
+              <summary>{t('monitor.advanced')}</summary>
               <div className="advanced-fields">
                 <fieldset className="request-headers">
-                  <legend>自定义请求头</legend>
+                  <legend>{t('monitor.headers')}</legend>
                   {requestHeaders.map(([name, value], index) => (
                     <div className="request-header-row" key={index}>
                       <input
-                        aria-label={`请求头名称 ${index + 1}`}
+                        aria-label={t('monitor.headerName', { count: index + 1 })}
                         value={name}
                         placeholder="Authorization"
                         autoCapitalize="none"
@@ -265,7 +267,7 @@ export function MonitorEditor({
                         }
                       />
                       <input
-                        aria-label={`请求头值 ${index + 1}`}
+                        aria-label={t('monitor.headerValue', { count: index + 1 })}
                         value={value}
                         placeholder="Bearer …"
                         autoComplete="off"
@@ -279,7 +281,7 @@ export function MonitorEditor({
                       <button
                         type="button"
                         className="icon-button danger"
-                        aria-label={`删除请求头 ${index + 1}`}
+                        aria-label={t('monitor.removeHeader', { count: index + 1 })}
                         onClick={() => setRequestHeaders((rows) => rows.filter((_, i) => i !== index))}
                       >
                         <Icon name="trash" size={16} />
@@ -291,26 +293,26 @@ export function MonitorEditor({
                     className="button small secondary"
                     onClick={() => setRequestHeaders((rows) => [...rows, ['', '']])}
                   >
-                    添加请求头
+                    {t('monitor.addHeader')}
                   </button>
-                  <p className="form-note">合计最多 8 KiB；跨源重定向时移除自定义请求头。</p>
+                  <p className="form-note">{t('monitor.headersNote')}</p>
                 </fieldset>
                 {hasBody ? (
                   <>
                     <label className="field">
-                      请求体格式
+                      {t('monitor.bodyFormat')}
                       <select
                         value={bodyFormat}
                         onChange={(e) => setBodyFormat(e.target.value as typeof bodyFormat)}
                       >
-                        <option value="none">不发送请求体</option>
-                        <option value="text">文本</option>
+                        <option value="none">{t('monitor.noBody')}</option>
+                        <option value="text">{t('monitor.textBody')}</option>
                         <option value="json">JSON</option>
                       </select>
                     </label>
                     {bodyFormat !== 'none' && (
                       <label className="field">
-                        请求体内容
+                        {t('monitor.body')}
                         <textarea
                           rows={5}
                           value={bodyContent}
@@ -318,36 +320,36 @@ export function MonitorEditor({
                           autoCapitalize="none"
                           maxLength={16384}
                           onChange={(e) => setBodyContent(e.target.value)}
-                          placeholder={bodyFormat === 'json' ? '{"check": true}' : '请求正文'}
+                          placeholder={
+                            bodyFormat === 'json' ? '{"check": true}' : t('monitor.bodyPlaceholder')
+                          }
                         />
-                        <small>
-                          最多 16 KiB；自动补充 Content-Type，可通过请求头覆盖。请求体不会转发到其他源。
-                        </small>
+                        <small>{t('monitor.bodyNote')}</small>
                       </label>
                     )}
                   </>
                 ) : (
-                  <p className="form-note">{method} 不支持请求体。</p>
+                  <p className="form-note">{t('monitor.bodyUnsupported', { method })}</p>
                 )}
                 {method !== 'HEAD' ? (
                   <>
                     <div className="form-columns">
                       <label className="field">
-                        必须包含
+                        {t('monitor.includes')}
                         <textarea
                           rows={4}
                           value={includes}
                           onChange={(e) => setIncludes(e.target.value)}
-                          placeholder={'healthy\n服务正常'}
+                          placeholder={t('monitor.includesPlaceholder')}
                         />
                       </label>
                       <label className="field">
-                        不能包含
+                        {t('monitor.excludes')}
                         <textarea
                           rows={4}
                           value={excludes}
                           onChange={(e) => setExcludes(e.target.value)}
-                          placeholder={'error\n维护中'}
+                          placeholder={t('monitor.excludesPlaceholder')}
                         />
                       </label>
                     </div>
@@ -357,15 +359,12 @@ export function MonitorEditor({
                         checked={ignoreCase}
                         onChange={(e) => setIgnoreCase(e.target.checked)}
                       />
-                      <span>忽略大小写</span>
+                      <span>{t('monitor.ignoreCase')}</span>
                     </label>
-                    <p className="form-note">
-                      每行一个关键词，每组最多 20 个、每个最多 256
-                      字符。要求包含项全部出现、排除项全部不出现；留空只检查状态码。最多校验 1 MiB 响应文本。
-                    </p>
+                    <p className="form-note">{t('monitor.keywordsNote')}</p>
                   </>
                 ) : (
-                  <p className="form-note">HEAD 不返回响应正文，不进行关键词校验。</p>
+                  <p className="form-note">{t('monitor.headNote')}</p>
                 )}
               </div>
             </details>
@@ -374,7 +373,7 @@ export function MonitorEditor({
           <>
             <div className="form-columns host-columns">
               <label className="field">
-                主机地址
+                {t('monitor.host')}
                 <input
                   required
                   value={hostname}
@@ -383,7 +382,7 @@ export function MonitorEditor({
                 />
               </label>
               <label className="field">
-                端口
+                {t('monitor.port')}
                 <input
                   type="number"
                   min={1}
@@ -396,13 +395,13 @@ export function MonitorEditor({
             </div>
             <div className="form-hint">
               <Icon name="info" size={16} />
-              <span>TCP 仅检测连接能否建立。Cloudflare 不支持连接内网地址、Cloudflare IP 或端口 25。</span>
+              <span>{t('monitor.tcpNote')}</span>
             </div>
           </>
         )}
         <div className="form-columns">
           <label className="field">
-            检测间隔（分钟）
+            {t('monitor.intervalInput')}
             <input
               required
               type="number"
@@ -414,12 +413,15 @@ export function MonitorEditor({
               onChange={(e) => setInterval(e.target.value === '' ? '' : Number(e.target.value))}
             />
             <small id="interval-note">
-              支持 {MIN_INTERVAL_MINUTES}–{MAX_INTERVAL_MINUTES} 的整数，新建默认 {DEFAULT_INTERVAL_MINUTES}{' '}
-              分钟。
+              {t('monitor.intervalNote', {
+                min: MIN_INTERVAL_MINUTES,
+                max: MAX_INTERVAL_MINUTES,
+                default: DEFAULT_INTERVAL_MINUTES,
+              })}
             </small>
           </label>
           <label className="field">
-            超时时间（秒）
+            {t('monitor.timeoutInput')}
             <input
               required
               type="number"
@@ -432,19 +434,17 @@ export function MonitorEditor({
         </div>
         <label className="checkbox-field">
           <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
-          <span>启用定时检测</span>
+          <span>{t('monitor.enabled')}</span>
         </label>
-        {initial && (
-          <p className="form-note">修改检测参数后等待下一轮检测；仅修改名称或分组会保留当前状态。</p>
-        )}
+        {initial && <p className="form-note">{t('monitor.editNote')}</p>}
         {error && <ErrorNotice message={error} />}
         <div className="modal-actions">
           <button type="button" className="button secondary" disabled={busy} onClick={close}>
-            取消
+            {t('common.cancel')}
           </button>
           <button className="button primary" disabled={busy}>
             {busy ? <span className="spinner" /> : <Icon name="check" size={17} />}
-            {busy ? '正在保存…' : '保存监控'}
+            {busy ? t('common.saving') : t('monitor.save')}
           </button>
         </div>
       </form>

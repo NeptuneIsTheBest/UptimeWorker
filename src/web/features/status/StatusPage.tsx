@@ -1,3 +1,5 @@
+import { number } from '../../lib/format';
+import { useI18n } from '../../i18n/I18nProvider';
 import { useMemo, useState } from 'react';
 import type { StatusResponse } from '../../../shared/status/types';
 import { useRemote } from '../../hooks/useRemote';
@@ -13,6 +15,7 @@ import { useNow } from '../../hooks/useNow';
 import { MonitorCard } from '../monitors/MonitorCard';
 
 export function StatusPage() {
+  const { t, locale } = useI18n();
   const remote = useRemote<StatusResponse>('/api/status');
   const { data, error, loading, refresh } = remote;
   const now = useNow();
@@ -23,7 +26,7 @@ export function StatusPage() {
   const statuses = monitors.map((m) => effectiveStatus(m, now));
   const up = statuses.filter((s) => s === 'up').length;
   const active = statuses.filter((s) => s !== 'paused').length;
-  const summary = getStatusSummary(statuses, data?.events ?? [], now, Boolean(error));
+  const summary = getStatusSummary(statuses, data?.events ?? [], now, Boolean(error), locale);
   const totals = monitors
     .flatMap((m) => m.days.slice(-30))
     .reduce((a, d) => ({ success: a.success + d.successful, total: a.total + d.total }), {
@@ -48,8 +51,8 @@ export function StatusPage() {
     <Layout siteName={data?.siteName}>
       <EventList events={data?.events ?? []} variant="open" />
       <div className="page-eyebrow">
-        <span className="eyebrow-line" /> SERVICE STATUS{' '}
-        <span className="eyebrow-right">持续检测 · 即刻知悉</span>
+        <span className="eyebrow-line" /> {t('page.observability')}{' '}
+        <span className="eyebrow-right">{t('status.tagline')}</span>
       </div>
       <section className={`status-hero ${summary.tone}`}>
         <div className="hero-copy">
@@ -70,48 +73,53 @@ export function StatusPage() {
         </div>
       </section>
       {error && <ErrorNotice message={error} retry={refresh} />}
-      <section className="stats-grid" aria-label="监控概况">
+      <section className="stats-grid" aria-label={t('status.overview')}>
         <div className="stat-card">
           <span className="stat-label">
-            <Icon name="server" size={16} /> 正常服务
+            <Icon name="server" size={16} />
+            {t('status.healthyServices')}
           </span>
           <div className="stat-value">
-            {up}
-            <span className="stat-denominator"> / {active}</span>
+            {number(up, locale)}
+            <span className="stat-denominator"> / {number(active, locale)}</span>
           </div>
-          <span className="stat-note">{statuses.filter((s) => s === 'paused').length} 项暂停监控</span>
+          <span className="stat-note">
+            {t('status.pausedCount', { count: statuses.filter((s) => s === 'paused').length })}
+          </span>
         </div>
         <div className="stat-card">
           <span className="stat-label">
-            <Icon name="shield" size={16} /> 30 日整体可用率
+            <Icon name="shield" size={16} />
+            {t('status.overallUptime')}
           </span>
           <div className="stat-value">
             {totals.total ? (
               <>
-                {((totals.success / totals.total) * 100).toFixed(2)}
+                {number((totals.success / totals.total) * 100, locale, 2)}
                 <span className="stat-unit">%</span>
               </>
             ) : (
               '—'
             )}
           </div>
-          <span className="stat-note">按成功检测次数统计</span>
+          <span className="stat-note">{t('status.uptimeNote')}</span>
         </div>
         <div className="stat-card">
           <span className="stat-label">
-            <Icon name="pulse" size={16} /> 平均响应时间
+            <Icon name="pulse" size={16} />
+            {t('status.averageLatency')}
           </span>
           <div className="stat-value">
             {latencies.length ? (
               <>
-                {Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length)}
+                {number(Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length), locale)}
                 <span className="stat-unit">ms</span>
               </>
             ) : (
               '—'
             )}
           </div>
-          <span className="stat-note">正常服务的最近一次响应</span>
+          <span className="stat-note">{t('status.latencyNote')}</span>
         </div>
         <RefreshStatus {...remote} card />
       </section>
@@ -119,41 +127,46 @@ export function StatusPage() {
         <div className="section-heading">
           <div>
             <h2>
-              监控服务 <span className="count-badge">{monitors.length.toString().padStart(2, '0')}</span>
+              {t('status.services')}
+              <span className="count-badge">{monitors.length.toString().padStart(2, '0')}</span>
             </h2>
-            <p>过去 90 天的运行记录，一目了然。</p>
+            <p>{t('status.historyNote')}</p>
           </div>
           {monitors.length > 0 && (
             <div className="filter-controls">
               <label className="search-box">
                 <Icon name="search" size={17} />
                 <input
-                  aria-label="搜索服务"
-                  placeholder="搜索服务…"
+                  aria-label={t('status.search')}
+                  placeholder={t('status.searchPlaceholder')}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />
               </label>
               <select
-                aria-label="按分组筛选"
+                aria-label={t('status.groupFilter')}
                 value={groupFilter}
                 onChange={(e) => setGroupFilter(e.target.value)}
               >
-                <option value="all">全部分组</option>
+                <option value="all">{t('status.allGroups')}</option>
                 {(data?.groups ?? []).map((group) => (
                   <option key={group.id} value={group.id}>
                     {group.name}
                   </option>
                 ))}
-                <option value="">未分组</option>
+                <option value="">{t('groups.ungrouped')}</option>
               </select>
-              <select aria-label="按状态筛选" value={filter} onChange={(e) => setFilter(e.target.value)}>
-                <option value="all">全部状态</option>
-                <option value="up">运行正常</option>
-                <option value="down">服务异常</option>
-                <option value="stale">数据过期</option>
-                <option value="unknown">等待检测</option>
-                <option value="paused">已暂停</option>
+              <select
+                aria-label={t('status.statusFilter')}
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+              >
+                <option value="all">{t('status.allStatuses')}</option>
+                <option value="up">{t('status.up')}</option>
+                <option value="down">{t('status.down')}</option>
+                <option value="stale">{t('status.stale')}</option>
+                <option value="unknown">{t('status.unknown')}</option>
+                <option value="paused">{t('status.paused')}</option>
               </select>
             </div>
           )}
@@ -162,20 +175,20 @@ export function StatusPage() {
           {loading ? (
             <Loading />
           ) : !monitors.length ? (
-            <Empty title="还没有监控服务">
-              在管理后台添加你的第一个服务。
+            <Empty title={t('status.empty')}>
+              {t('status.emptyDescription')}
               <br />
               <a className="button primary empty-action" href="/admin">
                 <Icon name="plus" size={16} />
-                添加监控
+                {t('status.add')}
               </a>
             </Empty>
           ) : !visible.length ? (
-            <Empty title="没有匹配的服务" icon="search">
-              试试其他名称、分组或状态。
+            <Empty title={t('status.noMatch')} icon="search">
+              {t('status.noMatchDescription')}
             </Empty>
           ) : (
-            [...(data?.groups ?? []), { id: '', name: '未分组' }].map((group) => {
+            [...(data?.groups ?? []), { id: '', name: t('groups.ungrouped') }].map((group) => {
               const members = visible.filter(
                 (monitor) =>
                   (data?.groups?.some((item) => item.id === monitor.groupId) ? monitor.groupId : '') ===
@@ -186,7 +199,7 @@ export function StatusPage() {
                   <section className="monitor-group" key={group.id || 'ungrouped'} aria-label={group.name}>
                     <h3 className="group-heading">
                       {group.name}
-                      <span className="count-badge">{members.length}</span>
+                      <span className="count-badge">{number(members.length, locale)}</span>
                     </h3>
                     {members.map((monitor) => (
                       <MonitorCard key={monitor.id} monitor={monitor} now={now} />
@@ -199,17 +212,16 @@ export function StatusPage() {
         </div>
         <div className="list-footnote">
           <Legend />
-          <span>空白区间表示没有检测数据，不计为成功。</span>
+          <span>{t('status.gapNote')}</span>
         </div>
       </section>
       <EventList events={data?.events ?? []} variant="history" />
       <div className="info-strip">
         <Icon name="info" size={17} />
-        <span>
-          整体状态结合故障、维护与定时检测；节点状态及可用率依据检测结果。数据超过两个检测周期未更新时，将标记为过期。
-        </span>
+        <span>{t('status.methodNote')}</span>
         <a href="/admin">
-          管理监控 <Icon name="arrow" size={13} />
+          {t('status.manage')}
+          <Icon name="arrow" size={13} />
         </a>
       </div>
     </Layout>

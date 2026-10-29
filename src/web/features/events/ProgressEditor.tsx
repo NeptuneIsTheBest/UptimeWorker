@@ -1,6 +1,9 @@
+import { errorMessage, type DisplayMessage } from '../../i18n/core';
+import { useI18n } from '../../i18n/I18nProvider';
+import { localizedEventTitle, PROGRESS_LABELS } from './presentation';
 import { useState, type FormEvent } from 'react';
 import type { AdminEvent, EventProgressTitle } from '../../../shared/events/types';
-import { EVENT_PROGRESS_LABELS, eventProgressOptions } from '../../../shared/events/progress';
+import { eventProgressOptions } from '../../../shared/events/progress';
 import { parseEventUpdateConfig } from '../../../shared/events/validation';
 import { api } from '../../lib/api';
 import { ErrorNotice } from '../../components/feedback';
@@ -15,10 +18,11 @@ export function ProgressEditor({
   saved: () => void;
   close: () => void;
 }) {
+  const { t, locale } = useI18n();
   const [title, setTitle] = useState<EventProgressTitle>('Updated');
   const [body, setBody] = useState('');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<DisplayMessage | null>(null);
   async function submit(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
@@ -32,22 +36,22 @@ export function ProgressEditor({
       saved();
       close();
     } catch (err) {
-      setError(err instanceof Error ? err.message : '保存失败');
+      setError(errorMessage(err, 'error.save'));
     } finally {
       setBusy(false);
     }
   }
   return (
     <Modal
-      title="追加事件进展"
+      title={t('progress.title')}
       close={() => {
         if (!busy) close();
       }}
     >
-      <form className="monitor-form" onSubmit={submit}>
-        <p>{event.title}</p>
+      <form noValidate className="monitor-form" onSubmit={submit}>
+        <p>{localizedEventTitle(event, locale)}</p>
         <label className="field">
-          进展阶段
+          {t('progress.stage')}
           <select
             autoFocus
             required
@@ -56,13 +60,13 @@ export function ProgressEditor({
           >
             {eventProgressOptions(event).map((option) => (
               <option key={option} value={option}>
-                {option} · {EVENT_PROGRESS_LABELS[option]}
+                {t(PROGRESS_LABELS[option])}
               </option>
             ))}
           </select>
         </label>
         <label className="field">
-          进展说明
+          {t('progress.body')}
           <textarea
             required
             rows={5}
@@ -73,19 +77,17 @@ export function ProgressEditor({
         </label>
         {(title === 'Completed' || title === 'Resolved') && (
           <p className="form-note">
-            保存此进展将同时{event.type === 'maintenance' ? '完成维护' : '标记故障已恢复'}。
+            {t(event.type === 'maintenance' ? 'progress.completesMaintenance' : 'progress.resolvesIncident')}
           </p>
         )}
-        {event.source === 'automatic' && (
-          <p className="form-note">自动事件由成功检测确认恢复，这里可以补充处理说明。</p>
-        )}
+        {event.source === 'automatic' && <p className="form-note">{t('progress.automaticNote')}</p>}
         {error && <ErrorNotice message={error} />}
         <div className="modal-actions">
           <button type="button" className="button secondary" disabled={busy} onClick={close}>
-            取消
+            {t('common.cancel')}
           </button>
           <button className="button primary" disabled={busy}>
-            {busy ? '正在保存…' : '保存进展'}
+            {busy ? t('common.saving') : t('progress.save')}
           </button>
         </div>
       </form>

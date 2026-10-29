@@ -1,3 +1,4 @@
+import { errorResponse } from '../../shared/errors';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { requireAccess, type TokenVerifier } from './auth';
@@ -16,7 +17,7 @@ export function registerMiddleware(app: Hono<AppEnv>, verify?: TokenVerifier) {
       (c.req.method === 'PATCH' && /^\/api\/admin\/monitors\/[^/]+$/.test(c.req.path));
     return bodyLimit({
       maxSize: (monitorWrite ? 256 : 16) * 1024,
-      onError: (context) => context.json({ error: '请求内容过大。' }, 413),
+      onError: (context) => context.json(errorResponse('request_too_large'), 413),
     })(c, next);
   });
   const auth = requireAccess(verify);

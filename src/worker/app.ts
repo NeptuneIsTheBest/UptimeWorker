@@ -1,3 +1,4 @@
+import { errorResponse } from '../shared/errors';
 import { Hono, type MiddlewareHandler } from 'hono';
 import type { TokenVerifier } from './http/auth';
 import type { AppEnv } from './types';
@@ -26,7 +27,7 @@ export function createApp(probe: Probe, verify?: TokenVerifier) {
   };
   app.get('/admin', adminPage);
   app.get('/admin/*', adminPage);
-  app.notFound((c) => c.json({ error: '接口不存在。' }, 404));
+  app.notFound((c) => c.json(errorResponse('endpoint_not_found'), 404));
   app.onError(handleError);
   return app;
 }

@@ -1,3 +1,5 @@
+import { message, errorMessage, displayMessage, NoticeError, type DisplayMessage } from '../../i18n/core';
+import { useI18n } from '../../i18n/I18nProvider';
 import { useState } from 'react';
 import { ERROR_LABELS } from './labels';
 import type { AdminMonitor, MonitorConfig, ProbeResult } from '../../../shared/monitors/types';
@@ -27,18 +29,19 @@ export function MonitorManager({
   notice: MonitorNotice | null;
   onNoticeChange: (notice: MonitorNotice | null) => void;
 }) {
+  const { t, locale } = useI18n();
   const { data, error, loading, refresh } = remote;
   const [deleting, setDeleting] = useState<AdminMonitor | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-  async function action(id: string, work: () => Promise<string>) {
+  const [deleteError, setDeleteError] = useState<DisplayMessage | null>(null);
+  async function action(id: string, work: () => Promise<DisplayMessage>) {
     setBusy(id);
     setNotice(null);
     try {
       setNotice({ text: await work(), error: false });
       refresh();
     } catch (err) {
-      setNotice({ text: err instanceof Error ? err.message : '操作失败', error: true });
+      setNotice({ text: errorMessage(err, 'error.operation'), error: true });
     } finally {
       setBusy(null);
     }
@@ -51,7 +54,7 @@ export function MonitorManager({
       });
     else await api('/api/admin/monitors', { method: 'POST', body: JSON.stringify(config) });
     setEditor(null);
-    setNotice({ text: '监控已保存。', error: false });
+    setNotice({ text: message('monitor.saved'), error: false });
     refresh();
   }
   async function remove() {
@@ -61,10 +64,10 @@ export function MonitorManager({
     try {
       await api(`/api/admin/monitors/${deleting.id}`, { method: 'DELETE', body: '{}' });
       setDeleting(null);
-      setNotice({ text: '监控及其历史数据已删除。', error: false });
+      setNotice({ text: message('monitor.deleted'), error: false });
       refresh();
     } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : '删除失败');
+      setDeleteError(errorMessage(err, 'error.delete'));
     } finally {
       setBusy(null);
     }
@@ -78,12 +81,14 @@ export function MonitorManager({
           <div className="access-strip">
             <span>
               <Icon name="shield" size={17} />
-              {data.identity.email === 'local@development' ? '本地开发身份' : 'Cloudflare Access 已验证'}
+              {data.identity.email === 'local@development' ? t('admin.local') : t('admin.verified')}
               <strong>{data.identity.email}</strong>
             </span>
             <span>
-              {data.monitors.length} / {data.limit} 个监控
-              {data.identity.email !== 'local@development' && <a href="/cdn-cgi/access/logout">退出登录</a>}
+              {t('admin.monitorCount', { count: data.monitors.length, limit: data.limit })}
+              {data.identity.email !== 'local@development' && (
+                <a href="/cdn-cgi/access/logout">{t('admin.logout')}</a>
+              )}
             </span>
           </div>
         )}
@@ -91,8 +96,8 @@ export function MonitorManager({
         {notice && (
           <div role="status" className={`notice ${notice.error ? 'error' : ''}`}>
             <Icon name={notice.error ? 'info' : 'check'} size={18} />
-            <span>{notice.text}</span>
-            <button className="icon-button" onClick={() => setNotice(null)} aria-label="关闭提示">
+            <span>{displayMessage(notice.text, locale)}</span>
+            <button className="icon-button" onClick={() => setNotice(null)} aria-label={t('common.dismiss')}>
               <Icon name="close" size={16} />
             </button>
           </div>
@@ -103,12 +108,12 @@ export function MonitorManager({
           data && (
             <section className="admin-list">
               {!data.monitors.length ? (
-                <Empty title="让你的服务开始被看见" icon="server">
-                  支持 HTTP / HTTPS 与 TCP 端口检测。
+                <Empty title={t('monitor.empty')} icon="server">
+                  {t('monitor.supported')}
                   <br />
                   <button className="button primary empty-action" onClick={() => setEditor('new')}>
                     <Icon name="plus" size={16} />
-                    添加第一个监控
+                    {t('monitor.addFirst')}
                   </button>
                 </Empty>
               ) : (
@@ -134,11 +139,16 @@ export function MonitorManager({
                         <div className="monitor-meta">
                           <span className="protocol">{monitor.type.toUpperCase()}</span>
                           <span>
-                            {data.groups?.find((group) => group.id === monitor.groupId)?.name ?? '未分组'}
+                            {data.groups?.find((group) => group.id === monitor.groupId)?.name ??
+                              t('groups.ungrouped')}
                           </span>
-                          <span>每 {monitor.intervalMinutes} 分钟</span>
-                          <span>超时 {monitor.timeoutSeconds} 秒</span>
-                          <span>最近检测 {formatTime(monitor.lastCheckedAt)}</span>
+                          <span>{t('monitor.interval', { count: monitor.intervalMinutes })}</span>
+                          <span>{t('monitor.timeout', { count: monitor.timeoutSeconds })}</span>
+                          <span>
+                            {t('monitor.lastCheck', {
+                              time: formatTime(monitor.lastCheckedAt, false, locale),
+                            })}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -153,20 +163,31 @@ export function MonitorManager({
                               body: '{}',
                             });
                             if (!result.ok)
-                              throw new Error(
-                                `${monitor.name}：${result.errorCode ? ERROR_LABELS[result.errorCode] : '检测失败'}（${latency(result.latencyMs)}）`,
+                              throw new NoticeError(
+                                message('monitor.testFailed', {
+                                  name: monitor.name,
+                                  reason: message(
+                                    result.errorCode ? ERROR_LABELS[result.errorCode] : 'monitor.checkFailed',
+                                  ),
+                                  latency: latency(result.latencyMs, locale),
+                                }),
                               );
-                            return `${monitor.name}：连接成功，${latency(result.latencyMs)}。本次测试不计入历史统计。`;
+                            return message('monitor.testSucceeded', {
+                              name: monitor.name,
+                              latency: latency(result.latencyMs, locale),
+                            });
                           })
                         }
                       >
                         <Icon name="pulse" size={16} />
-                        {busy === monitor.id ? '处理中' : '测试连接'}
+                        {busy === monitor.id ? t('event.status.open') : t('monitor.test')}
                       </button>
                       <button
                         className="icon-button"
-                        title={monitor.enabled ? '暂停监控' : '恢复监控'}
-                        aria-label={`${monitor.enabled ? '暂停' : '恢复'} ${monitor.name}`}
+                        title={monitor.enabled ? t('monitor.pause') : t('monitor.resume')}
+                        aria-label={t(monitor.enabled ? 'monitor.pauseNamed' : 'monitor.resumeNamed', {
+                          name: monitor.name,
+                        })}
                         disabled={busy === monitor.id}
                         onClick={() =>
                           void action(monitor.id, async () => {
@@ -174,7 +195,7 @@ export function MonitorManager({
                               method: 'PATCH',
                               body: JSON.stringify({ enabled: !monitor.enabled, version: monitor.version }),
                             });
-                            return monitor.enabled ? '监控已暂停。' : '监控已恢复，将在下一轮调度检测。';
+                            return monitor.enabled ? message('monitor.paused') : message('monitor.resumed');
                           })
                         }
                       >
@@ -182,8 +203,8 @@ export function MonitorManager({
                       </button>
                       <button
                         className="icon-button"
-                        title="编辑监控"
-                        aria-label={`编辑 ${monitor.name}`}
+                        title={t('monitors.edit')}
+                        aria-label={t('common.editNamed', { name: monitor.name })}
                         disabled={busy === monitor.id}
                         onClick={() => setEditor(monitor)}
                       >
@@ -191,8 +212,8 @@ export function MonitorManager({
                       </button>
                       <button
                         className="icon-button danger"
-                        title="删除监控"
-                        aria-label={`删除 ${monitor.name}`}
+                        title={t('monitor.delete')}
+                        aria-label={t('common.deleteNamed', { name: monitor.name })}
                         disabled={busy === monitor.id}
                         onClick={() => {
                           setDeleting(monitor);
@@ -210,7 +231,7 @@ export function MonitorManager({
         )}
         <div className="info-strip">
           <Icon name="clock" size={17} />
-          <span>定时任务每分钟检查到期的监控。连接测试即时执行，不改变当前状态和可用率。</span>
+          <span>{t('monitor.schedulerNote')}</span>
         </div>
       </div>
       {editor && (
@@ -223,26 +244,22 @@ export function MonitorManager({
       )}
       {deleting && (
         <Modal
-          title="删除监控"
+          title={t('monitor.delete')}
           close={() => {
             if (!busy) setDeleting(null);
           }}
         >
           <div className="delete-body">
-            <p>
-              确定删除「<strong>{deleting.name}</strong>」？
-            </p>
-            <p className="muted">
-              此监控的检测明细和历史汇总也将删除，无法恢复。已发布事件会保留，进行中的自动事件将停止跟踪。
-            </p>
+            <p>{t('monitor.deleteQuestion', { name: deleting.name })}</p>
+            <p className="muted">{t('monitor.deleteNote')}</p>
             {deleteError && <ErrorNotice message={deleteError} />}
           </div>
           <div className="modal-actions">
             <button className="button secondary" disabled={!!busy} onClick={() => setDeleting(null)}>
-              取消
+              {t('common.cancel')}
             </button>
             <button className="button destructive" disabled={!!busy} onClick={() => void remove()}>
-              {busy ? '正在删除…' : '确认删除'}
+              {busy ? t('common.deleting') : t('common.confirmDelete')}
             </button>
           </div>
         </Modal>

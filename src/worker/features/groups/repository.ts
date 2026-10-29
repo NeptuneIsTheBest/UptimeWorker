@@ -33,12 +33,12 @@ export async function saveGroup(
         )
         .bind(groupId, config.name, config.sortOrder, Date.now(), config.name)
         .run();
-  if (!result.meta.changes) throw new ConflictError('分组已被修改或名称已存在，请刷新后重试。');
+  if (!result.meta.changes) throw new ConflictError('group_conflict');
   return (await listGroups(db)).find((group) => group.id === groupId)!;
 }
 export async function assertGroup(db: D1Database, id: string | null | undefined) {
   if (id && !(await db.prepare('SELECT id FROM monitor_groups WHERE id = ?').bind(id).first()))
-    throw new ValidationError('分组不存在，请刷新后重新选择');
+    throw new ValidationError('group_not_found');
 }
 
 export async function deleteGroup(db: D1Database, id: string, version: number) {
@@ -46,5 +46,5 @@ export async function deleteGroup(db: D1Database, id: string, version: number) {
     .prepare('DELETE FROM monitor_groups WHERE id = ? AND version = ?')
     .bind(id, version)
     .run();
-  if (!result.meta.changes) throw new ConflictError('分组已变更，请刷新后重试。');
+  if (!result.meta.changes) throw new ConflictError('group_changed');
 }

@@ -1,1 +1,2 @@
-export class ConflictError extends Error {}
+import { ApplicationError } from '../shared/errors';
+export class ConflictError extends ApplicationError {}

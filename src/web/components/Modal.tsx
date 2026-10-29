@@ -1,3 +1,4 @@
+import { useI18n } from '../i18n/I18nProvider';
 import { useEffect, useRef, type ReactNode } from 'react';
 import { Icon } from './Icon';
 
@@ -12,6 +13,7 @@ export function Modal({
   close: () => void;
   wide?: boolean;
 }) {
+  const { t } = useI18n();
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     ref.current?.showModal();
@@ -30,7 +32,7 @@ export function Modal({
     >
       <div className="modal-heading">
         <h2>{title}</h2>
-        <button className="icon-button" onClick={close} aria-label="关闭">
+        <button className="icon-button" onClick={close} aria-label={t('common.close')}>
           <Icon name="close" />
         </button>
       </div>

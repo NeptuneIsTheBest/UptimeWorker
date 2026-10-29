@@ -492,3 +492,26 @@
     display: none;
   }
 }
+
+.modal-actions {
+  flex-wrap: wrap;
+}
+.error-notice > span,
+.notice > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.settings-reload {
+  white-space: normal;
+  text-align: left;
+}
+@media (max-width: 760px) {
+  .refresh-card .time-value {
+    font-size: 23px;
+  }
+}
+@media (max-width: 380px) {
+  .refresh-card .time-value {
+    font-size: 20px;
+  }
+}

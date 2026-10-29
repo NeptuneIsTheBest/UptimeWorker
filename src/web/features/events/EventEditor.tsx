@@ -1,3 +1,5 @@
+import { errorMessage, type DisplayMessage } from '../../i18n/core';
+import { useI18n } from '../../i18n/I18nProvider';
 import { useState, type FormEvent } from 'react';
 import type { AdminEvent, EventConfig } from '../../../shared/events/types';
 import type { AdminMonitor } from '../../../shared/monitors/types';
@@ -20,6 +22,7 @@ export function EventEditor({
   save: (config: EventConfig) => Promise<void>;
   close: () => void;
 }) {
+  const { t, locale } = useI18n();
   const deletedMonitors = initial?.monitors.filter((monitor) => monitor.id === null) ?? [];
   const [title, setTitle] = useState(initial?.title ?? '');
   const [body, setBody] = useState(initial?.body ?? '');
@@ -28,7 +31,7 @@ export function EventEditor({
   const [start, setStart] = useState(localTime(initial?.startsAt ?? Date.now() + 3_600_000));
   const [end, setEnd] = useState(localTime(initial?.endsAt ?? Date.now() + 7_200_000));
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<DisplayMessage | null>(null);
   async function submit(event: FormEvent) {
     event.preventDefault();
     setError(null);
@@ -47,23 +50,23 @@ export function EventEditor({
       setBusy(true);
       await save(config);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '保存失败');
+      setError(errorMessage(err, 'error.save'));
     } finally {
       setBusy(false);
     }
   }
   return (
     <Modal
-      title={initial ? '编辑事件' : '发布事件'}
+      title={initial ? t('event.edit') : t('event.publish')}
       close={() => {
         if (!busy) close();
       }}
       wide
     >
-      <form className="monitor-form" onSubmit={submit}>
-        <p className="form-note">保存后会在公开状态页展示。可关联多个节点，并在发布后追加进展。</p>
+      <form noValidate className="monitor-form" onSubmit={submit}>
+        <p className="form-note">{t('event.publishNote')}</p>
         <label className="field">
-          事件标题
+          {t('event.title')}
           <input
             autoFocus
             required
@@ -73,14 +76,14 @@ export function EventEditor({
           />
         </label>
         <label className="field">
-          事件类型
+          {t('event.type')}
           <select value={type} onChange={(e) => setType(e.target.value as EventConfig['type'])}>
-            <option value="incident">故障事件</option>
-            <option value="maintenance">计划维护</option>
+            <option value="incident">{t('event.incident')}</option>
+            <option value="maintenance">{t('event.maintenance')}</option>
           </select>
         </label>
         <label className="field">
-          事件正文
+          {t('event.body')}
           <textarea
             required
             rows={5}
@@ -90,11 +93,15 @@ export function EventEditor({
           />
         </label>
         <fieldset className="event-node-picker">
-          <legend>关联节点</legend>
-          {!monitors.length && !deletedMonitors.length && <p className="muted">请先添加监控节点。</p>}
+          <legend>{t('event.monitors')}</legend>
+          {!monitors.length && !deletedMonitors.length && (
+            <p className="muted">{t('event.addMonitorsFirst')}</p>
+          )}
           {deletedMonitors.length > 0 && (
             <p className="form-note">
-              保留已删除节点的历史关联：{deletedMonitors.map((monitor) => monitor.name).join('、')}
+              {t('event.deletedAssociations', {
+                names: deletedMonitors.map((monitor) => monitor.name).join(locale === 'en' ? ', ' : '、'),
+              })}
             </p>
           )}
           {monitors.map((monitor) => (
@@ -115,7 +122,7 @@ export function EventEditor({
         {type === 'maintenance' && (
           <>
             <label className="field">
-              计划开始时间
+              {t('event.startInput')}
               <input
                 required
                 type="datetime-local"
@@ -124,21 +131,19 @@ export function EventEditor({
               />
             </label>
             <label className="field">
-              计划结束时间
+              {t('event.endInput')}
               <input required type="datetime-local" value={end} onChange={(e) => setEnd(e.target.value)} />
             </label>
-            <p className="form-note">
-              时间按浏览器时区填写。窗口内继续检测和统计，暂停新发离线事件；到结束时间恢复自动发布计时，维护是否完成需手动确认。
-            </p>
+            <p className="form-note">{t('event.timeNote')}</p>
           </>
         )}
         {error && <ErrorNotice message={error} />}
         <div className="modal-actions">
           <button type="button" className="button secondary" disabled={busy} onClick={close}>
-            取消
+            {t('common.cancel')}
           </button>
           <button className="button primary" disabled={busy || (!monitors.length && !deletedMonitors.length)}>
-            {busy ? '正在保存…' : initial ? '保存事件' : '发布事件'}
+            {busy ? t('common.saving') : initial ? t('event.save') : t('event.publish')}
           </button>
         </div>
       </form>

@@ -1,16 +1,8 @@
+import { useI18n } from '../i18n/I18nProvider';
+import { intlLocale } from '../../shared/locale';
 import { useEffect, useState } from 'react';
-import { formatTime } from '../lib/format';
+import { formatTime, elapsedTime } from '../lib/format';
 import { Icon } from './Icon';
-
-function elapsedTime(milliseconds: number) {
-  const seconds = Math.max(0, Math.floor(milliseconds / 1000));
-  if (seconds < 60) return `${seconds} 秒`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes} 分 ${seconds % 60} 秒`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} 小时 ${minutes % 60} 分`;
-  return `${Math.floor(hours / 24)} 天 ${hours % 24} 小时`;
-}
 
 export function RefreshStatus({
   lastRefreshedAt,
@@ -25,6 +17,7 @@ export function RefreshStatus({
   refresh: () => void;
   card?: boolean;
 }) {
+  const { t, locale } = useI18n();
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
     if (lastRefreshedAt === null) return;
@@ -41,35 +34,40 @@ export function RefreshStatus({
   return (
     <div
       className={`refresh-status ${card ? 'stat-card refresh-card' : 'refresh-strip'}`}
-      aria-label="页面刷新"
+      aria-label={t('refresh.label')}
     >
       <div className="refresh-time">
         <span className="stat-label">
-          <Icon name="clock" size={16} /> 上次刷新
+          <Icon name="clock" size={16} />
+          {t('refresh.last')}
         </span>
         {lastRefreshedAt === null ? (
-          <span className="refresh-pending">尚未成功刷新</span>
+          <span className="refresh-pending">{t('refresh.pending')}</span>
         ) : (
           <time
             className={card ? 'stat-value time-value' : 'tabular'}
             dateTime={new Date(lastRefreshedAt).toISOString()}
-            title={new Date(lastRefreshedAt).toLocaleString('zh-CN', { hour12: false })}
+            title={new Date(lastRefreshedAt).toLocaleString(intlLocale(locale), { hour12: false })}
           >
-            {formatTime(lastRefreshedAt)}
+            {formatTime(lastRefreshedAt, false, locale)}
           </time>
         )}
       </div>
       <div className="refresh-details">
         {lastRefreshedAt !== null && (
-          <span className="refresh-elapsed tabular">已过去 {elapsedTime(now - lastRefreshedAt)}</span>
+          <span className="refresh-elapsed tabular">
+            {t('refresh.elapsed', { duration: elapsedTime(now - lastRefreshedAt, locale) })}
+          </span>
         )}
         <span className="refresh-interval">
-          {pageRefreshSeconds === 0 ? '自动刷新已关闭' : `每 ${pageRefreshSeconds} 秒自动刷新`}
+          {pageRefreshSeconds === 0
+            ? t('refresh.disabled')
+            : t('refresh.interval', { count: pageRefreshSeconds })}
         </span>
       </div>
       <button type="button" className="text-button refresh-button" onClick={refresh} aria-busy={refreshing}>
         {refreshing ? <span className="spinner" /> : <Icon name="refresh" size={14} />}
-        立即刷新
+        {t('refresh.now')}
       </button>
     </div>
   );

@@ -1,3 +1,4 @@
+import { errorResponse } from '../../../shared/errors';
 import { Hono } from 'hono';
 import { object, parseVersion } from '../../../shared/validation';
 import { parseEventConfig, parseEventUpdateConfig } from '../../../shared/events/validation';
@@ -15,7 +16,7 @@ export function registerEventRoutes(app: Hono<AppEnv>) {
   });
   app.get('/api/admin/events/:id', async (c) => {
     const event = await getEvent(c.env.DB, c.req.param('id'));
-    return event ? c.json(event) : c.json({ error: '事件不存在。' }, 404);
+    return event ? c.json(event) : c.json(errorResponse('event_not_found'), 404);
   });
   app.post('/api/admin/events', async (c) =>
     c.json(await createEvent(c.env.DB, parseEventConfig(await c.req.json())), 201),
@@ -23,7 +24,7 @@ export function registerEventRoutes(app: Hono<AppEnv>) {
   app.patch('/api/admin/events/:id', async (c) => {
     const body = object(await c.req.json());
     const existing = await getEvent(c.env.DB, c.req.param('id'));
-    if (!existing) return c.json({ error: '事件不存在。' }, 404);
+    if (!existing) return c.json(errorResponse('event_not_found'), 404);
     return c.json(
       await editEvent(
         c.env.DB,

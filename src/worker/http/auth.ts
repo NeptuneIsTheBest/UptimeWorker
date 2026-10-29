@@ -1,3 +1,4 @@
+import { errorResponse } from '../../shared/errors';
 import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from 'jose';
 import { createMiddleware } from 'hono/factory';
 import type { AppEnv, Env, Identity } from '../types';
@@ -61,21 +62,21 @@ export function requireAccess(verify: TokenVerifier = verifyAccessToken) {
         accessIssuer(c.env.ACCESS_TEAM_DOMAIN || '');
         if (!c.env.ACCESS_AUD) throw new Error();
       } catch {
-        return c.json({ error: '后台尚未配置 Cloudflare Access，请按 README 完成配置。' }, 503);
+        return c.json(errorResponse('access_unconfigured'), 503);
       }
       const token = c.req.header('Cf-Access-Jwt-Assertion');
-      if (!token) return c.json({ error: '请通过 Cloudflare Access 登录后访问后台。' }, 401);
+      if (!token) return c.json(errorResponse('auth_required'), 401);
       try {
         c.set('identity', await verify(token, c.env));
       } catch {
-        return c.json({ error: '登录凭证无效或已过期，请重新登录。' }, 401);
+        return c.json(errorResponse('auth_expired'), 401);
       }
     }
     if (!['GET', 'HEAD', 'OPTIONS'].includes(c.req.method)) {
       if (c.req.header('Origin') !== new URL(c.req.url).origin)
-        return c.json({ error: '不允许跨站修改监控。' }, 403);
+        return c.json(errorResponse('cross_site_request'), 403);
       if (!c.req.header('Content-Type')?.toLowerCase().startsWith('application/json'))
-        return c.json({ error: '请求必须使用 JSON。' }, 415);
+        return c.json(errorResponse('json_required'), 415);
     }
     await next();
     c.header('Cache-Control', 'no-store');

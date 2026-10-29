@@ -1,3 +1,4 @@
+import { translator, type Locale } from '../../i18n/core';
 import type { MonitorStatus } from '../../../shared/monitors/types';
 import type { StatusEvent } from '../../../shared/events/types';
 
@@ -14,13 +15,15 @@ export function getStatusSummary(
   events: StatusEvent[],
   now: number,
   hasError: boolean,
+  locale: Locale = 'zh-CN',
 ): StatusSummary {
-  const attention = { tone: 'attention', label: 'ATTENTION REQUIRED', icon: 'info' } as const;
+  const t = translator(locale);
+  const attention = { tone: 'attention', label: t('summary.attentionLabel'), icon: 'info' } as const;
   if (hasError)
     return {
       ...attention,
-      title: '状态数据暂时不可用。',
-      description: '无法获取最新状态，请稍后重试。',
+      title: t('summary.unavailable'),
+      description: t('summary.unavailableDescription'),
     };
 
   const open = events.filter((event) => event.status === 'open');
@@ -29,14 +32,17 @@ export function getStatusSummary(
   const stale = statuses.filter((status) => status === 'stale').length;
   if (incidents || down || stale) {
     const reasons = [
-      incidents ? `${incidents} 条未解决故障` : '',
-      down ? `${down} 项服务异常` : '',
-      stale ? `${stale} 项数据过期` : '',
+      incidents ? t('summary.incidentCount', { count: incidents }) : '',
+      down ? t('summary.downCount', { count: down }) : '',
+      stale ? t('summary.staleCount', { count: stale }) : '',
     ].filter(Boolean);
     return {
       ...attention,
-      title: '部分服务需要关注。',
-      description: `${reasons.join('，')}。查看${incidents ? '上方事件进展和下方服务' : '下方服务'}了解详情。`,
+      title: t('summary.attention'),
+      description: t('summary.attentionDescription', {
+        reasons: reasons.join(locale === 'en' ? ', ' : '，'),
+        location: t(incidents ? 'summary.eventsAndServices' : 'summary.services'),
+      }),
     };
   }
 
@@ -47,9 +53,14 @@ export function getStatusSummary(
     const overdue = maintenance.filter((event) => event.endsAt !== null && event.endsAt <= now).length;
     return {
       tone: 'maintenance',
-      title: '部分服务正在维护。',
-      description: `${maintenance.length} 项维护尚未完成${overdue ? `，其中 ${overdue} 项已过计划时间` : ''}。查看上方事件了解进展。`,
-      label: 'MAINTENANCE IN PROGRESS',
+      title: t('summary.maintenance'),
+      description: t('summary.maintenanceDescription', {
+        details: [
+          t('summary.maintenanceCount', { count: maintenance.length }),
+          ...(overdue ? [t('summary.overdueCount', { count: overdue })] : []),
+        ].join(locale === 'en' ? ', ' : '，'),
+      }),
+      label: t('summary.maintenanceLabel'),
       icon: 'info',
     };
   }
@@ -58,28 +69,28 @@ export function getStatusSummary(
   if (active.length && active.every((status) => status === 'up'))
     return {
       tone: 'healthy',
-      title: '所有服务，运行如常。',
-      description: '所有受监控服务运行正常，每一次检测都在为稳定作证。',
-      label: 'ALL SYSTEMS OPERATIONAL',
+      title: t('summary.healthy'),
+      description: t('summary.healthyDescription'),
+      label: t('summary.healthyLabel'),
       icon: 'check',
     };
 
-  const waiting = { tone: 'waiting', label: 'READY WHEN YOU ARE', icon: 'pulse' } as const;
+  const waiting = { tone: 'waiting', label: t('summary.waitingLabel'), icon: 'pulse' } as const;
   if (statuses.includes('unknown'))
     return {
       ...waiting,
-      title: '正在等待第一条心跳。',
-      description: '监控已就绪，定时任务每分钟检查到期的监控，正在等待首次结果。',
+      title: t('summary.waiting'),
+      description: t('summary.waitingDescription'),
     };
   return statuses.length
     ? {
         ...waiting,
-        title: '监控已暂停。',
-        description: '恢复监控后，我们将继续记录服务的每一次响应。',
+        title: t('monitor.paused'),
+        description: t('summary.pausedDescription'),
       }
     : {
         ...waiting,
-        title: '从第一条监控开始。',
-        description: '添加你的 HTTP 服务或 TCP 端口，即可持续了解它们的运行状态。',
+        title: t('summary.empty'),
+        description: t('summary.emptyDescription'),
       };
 }

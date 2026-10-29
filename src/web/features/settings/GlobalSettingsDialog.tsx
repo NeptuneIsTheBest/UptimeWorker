@@ -1,3 +1,5 @@
+import { message, errorMessage, displayMessage, type DisplayMessage } from '../../i18n/core';
+import { useI18n } from '../../i18n/I18nProvider';
 import { useEffect, useState, type FormEvent } from 'react';
 import { isWafToken, parseGlobalSettingsPatch } from '../../../shared/settings/validation';
 import { wafRuleDomains, wafSkipExpression } from '../../../shared/settings/waf';
@@ -22,6 +24,7 @@ export function GlobalSettingsDialog({
   close: () => void;
   saved: (settings: GlobalSettings) => void;
 }) {
+  const { t, locale } = useI18n();
   const [settings, setSettings] = useState<GlobalSettings | null>(null);
   const [enabled, setEnabled] = useState(false);
   const [autoIncidentAfterMinutes, setAutoIncidentAfterMinutes] = useState<number | ''>(5);
@@ -30,9 +33,9 @@ export function GlobalSettingsDialog({
   const [token, setToken] = useState('');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<DisplayMessage | null>(null);
   const [conflict, setConflict] = useState(false);
-  const [copyNotice, setCopyNotice] = useState<string | null>(null);
+  const [copyNotice, setCopyNotice] = useState<DisplayMessage | null>(null);
   const [revision, setRevision] = useState(0);
 
   useEffect(() => {
@@ -55,7 +58,7 @@ export function GlobalSettingsDialog({
         setCustomRefresh(value.pageRefreshSeconds || DEFAULT_PAGE_REFRESH_SECONDS);
       })
       .catch((err: unknown) => {
-        if (!controller.signal.aborted) setError(err instanceof Error ? err.message : '读取全局设置失败');
+        if (!controller.signal.aborted) setError(errorMessage(err, 'settings.loadFailed'));
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
@@ -70,14 +73,14 @@ export function GlobalSettingsDialog({
   function generateToken() {
     const bytes = crypto.getRandomValues(new Uint8Array(32));
     setToken(Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join(''));
-    setCopyNotice('新密钥尚未保存，请先复制并妥善保管，再同步更新目标站点的 WAF 规则。');
+    setCopyNotice(message('settings.newToken'));
   }
-  async function copy(value: string, message: string) {
+  async function copy(value: string, notice: DisplayMessage) {
     try {
       await navigator.clipboard.writeText(value);
-      setCopyNotice(message);
+      setCopyNotice(notice);
     } catch {
-      setCopyNotice('复制失败，请允许浏览器访问剪贴板后重试。');
+      setCopyNotice(message('settings.copyFailed'));
     }
   }
   async function submit(event: FormEvent) {
@@ -104,7 +107,7 @@ export function GlobalSettingsDialog({
       setToken('');
       saved(updated);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '保存失败');
+      setError(errorMessage(err, 'error.save'));
       setConflict(err instanceof ApiError && err.status === 409);
     } finally {
       setBusy(false);
@@ -113,7 +116,7 @@ export function GlobalSettingsDialog({
 
   return (
     <Modal
-      title="全局设置"
+      title={t('settings.title')}
       close={() => {
         if (!busy) close();
       }}
@@ -122,21 +125,21 @@ export function GlobalSettingsDialog({
       {loading ? (
         <div className="loading" role="status">
           <span className="spinner" />
-          正在读取全局设置…
+          {t('settings.loading')}
         </div>
       ) : !settings ? (
         <div className="settings-load-error">
           <ErrorNotice
-            message={error || '读取全局设置失败'}
+            message={error || t('settings.loadFailed')}
             retry={() => setRevision((value) => value + 1)}
           />
         </div>
       ) : (
-        <form onSubmit={submit} className="monitor-form settings-form">
+        <form noValidate onSubmit={submit} className="monitor-form settings-form">
           <fieldset className="settings-fields" disabled={busy}>
-            <legend>离线自动事件</legend>
+            <legend>{t('settings.autoIncidents')}</legend>
             <label className="field">
-              连续离线阈值（分钟）
+              {t('settings.threshold')}
               <input
                 type="number"
                 required
@@ -149,30 +152,27 @@ export function GlobalSettingsDialog({
                 }
               />
             </label>
-            <p className="form-note">
-              默认 5 分钟，支持 1–1440 分钟，设为 0
-              关闭新事件自动发布。达到阈值后由下一次失败检测确认发布，恢复后自动完成原事件。维护窗口或已有手动故障事件期间不重复发布。
-            </p>
+            <p className="form-note">{t('settings.thresholdNote')}</p>
           </fieldset>
           <fieldset className="settings-fields refresh-settings" disabled={busy}>
-            <legend>页面自动刷新</legend>
+            <legend>{t('settings.refresh')}</legend>
             <div className="field">
-              <label htmlFor="page-refresh">刷新间隔</label>
+              <label htmlFor="page-refresh">{t('settings.refreshInterval')}</label>
               <select
                 id="page-refresh"
                 value={refreshPreset}
                 onChange={(event) => setRefreshPreset(event.target.value)}
               >
-                <option value="0">关闭自动刷新</option>
-                <option value="15">每 15 秒</option>
-                <option value="30">每 30 秒（默认）</option>
-                <option value="60">每 60 秒</option>
-                <option value="custom">自定义</option>
+                <option value="0">{t('settings.refreshOff')}</option>
+                <option value="15">{t('settings.refresh15')}</option>
+                <option value="30">{t('settings.refresh30')}</option>
+                <option value="60">{t('settings.refresh60')}</option>
+                <option value="custom">{t('settings.custom')}</option>
               </select>
             </div>
             {refreshPreset === 'custom' && (
               <div className="field">
-                <label htmlFor="custom-page-refresh">自定义间隔（秒）</label>
+                <label htmlFor="custom-page-refresh">{t('settings.customInterval')}</label>
                 <input
                   id="custom-page-refresh"
                   type="number"
@@ -185,16 +185,12 @@ export function GlobalSettingsDialog({
                     setCustomRefresh(event.target.value === '' ? '' : Number(event.target.value))
                   }
                 />
-                <small>支持 5–3600 的整数秒。</small>
+                <small>{t('settings.customNote')}</small>
               </div>
             )}
-            <p className="form-note">
-              统一应用于状态概览、监控详情和管理页。其他页面在下次成功刷新时获取新设置；关闭后可点击“立即刷新”。重新开启后，已关闭的页面需手动刷新或重新打开。
-            </p>
+            <p className="form-note">{t('settings.refreshNote')}</p>
           </fieldset>
-          <p className="form-intro">
-            为开启单站 WAF 放行的监控提供共享密钥和总开关，需配合目标站点的 WAF Skip 规则。
-          </p>
+          <p className="form-intro">{t('settings.wafDescription')}</p>
           <fieldset className="settings-fields" disabled={busy}>
             <label className="checkbox-field">
               <input
@@ -202,12 +198,14 @@ export function GlobalSettingsDialog({
                 checked={enabled}
                 onChange={(event) => setEnabled(event.target.checked)}
               />
-              <span>启用 Cloudflare WAF 放行</span>
+              <span>{t('settings.wafEnabled')}</span>
             </label>
             <div className="field">
               <label htmlFor="waf-token">
-                放行密钥
-                {settings.wafBypassTokenConfigured && <span className="settings-configured">已配置</span>}
+                {t('settings.token')}
+                {settings.wafBypassTokenConfigured && (
+                  <span className="settings-configured">{t('settings.configured')}</span>
+                )}
               </label>
               <input
                 id="waf-token"
@@ -222,39 +220,32 @@ export function GlobalSettingsDialog({
                   setCopyNotice(null);
                 }}
                 placeholder={
-                  settings.wafBypassTokenConfigured ? '留空保留已保存的密钥' : '生成或输入 32–256 位密钥'
+                  settings.wafBypassTokenConfigured ? t('settings.keepToken') : t('settings.enterToken')
                 }
                 aria-describedby="waf-token-note"
               />
               <div className="settings-tools">
                 <button type="button" className="button small secondary" onClick={generateToken}>
-                  生成随机密钥
+                  {t('settings.generateToken')}
                 </button>
                 <button
                   type="button"
                   className="button small secondary"
                   disabled={!hasNewToken}
-                  onClick={() => void copy(token, '新密钥已复制，保存后不会回显。')}
+                  onClick={() => void copy(token, message('settings.tokenCopied'))}
                 >
-                  复制新密钥
+                  {t('settings.copyToken')}
                 </button>
               </div>
-              <small id="waf-token-note">
-                新密钥请在保存前复制，保存后不会回显。留空保留原密钥，更换后需同步更新 WAF 规则。
-              </small>
+              <small id="waf-token-note">{t('settings.tokenNote')}</small>
             </div>
             <details className="waf-rule-help">
-              <summary>Cloudflare Skip 规则配置</summary>
-              <p>
-                在目标站点的「Security rules」中新建自定义规则，操作选择
-                Skip，置于相关拦截规则之前，并选择需要跳过的安全功能。
-              </p>
+              <summary>{t('settings.skipHelp')}</summary>
+              <p>{t('settings.skipInstructions')}</p>
               {rule ? (
                 <>
-                  <p>
-                    模板域名来自已开启 WAF 放行的监控，包含已暂停监控。调整监控域名后需同步更新目标站点规则。
-                  </p>
-                  <pre aria-label="WAF 规则模板">{rule}</pre>
+                  <p>{t('settings.ruleDomains')}</p>
+                  <pre aria-label={t('settings.ruleTemplate')}>{rule}</pre>
                   <button
                     type="button"
                     className="button small secondary"
@@ -262,37 +253,32 @@ export function GlobalSettingsDialog({
                     onClick={() =>
                       void copy(
                         hasNewToken ? wafSkipExpression(ruleDomains, token) : rule,
-                        hasNewToken
-                          ? '完整规则已复制，包含尚未保存的新密钥。'
-                          : '模板已复制，请将 <YOUR_TOKEN> 替换为已保存的密钥。',
+                        hasNewToken ? message('settings.fullRuleCopied') : message('settings.templateCopied'),
                       )
                     }
                   >
-                    {hasNewToken ? '复制完整规则' : '复制规则模板'}
+                    {hasNewToken ? t('settings.copyFullRule') : t('settings.copyTemplate')}
                   </button>
-                  <p>
-                    模板中的 &lt;YOUR_TOKEN&gt;
-                    需替换为放行密钥。启用前先保存目标站点的规则；更换密钥时需同步修改规则。
-                  </p>
+                  <p>{t('settings.ruleTokenNote')}</p>
                 </>
               ) : (
-                <p>在网站监控中开启 WAF 放行并保存后显示规则模板。</p>
+                <p>{t('settings.noRule')}</p>
               )}
               <p>
-                普通 Bot Fight Mode 无法通过 Skip 跳过。
+                {t('settings.botFightNote')}{' '}
                 <a
                   href="https://developers.cloudflare.com/waf/custom-rules/skip/options/"
                   target="_blank"
                   rel="noreferrer"
                 >
-                  查看支持范围
+                  {t('settings.supportedFeatures')}
                 </a>
               </p>
             </details>
           </fieldset>
           {copyNotice && (
             <p className="settings-copy-notice" role="status">
-              {copyNotice}
+              {displayMessage(copyNotice, locale)}
             </p>
           )}
           {error && <ErrorNotice message={error} />}
@@ -302,19 +288,17 @@ export function GlobalSettingsDialog({
               className="text-button settings-reload"
               onClick={() => setRevision((value) => value + 1)}
             >
-              重新加载最新设置（放弃当前编辑）
+              {t('settings.reload')}
             </button>
           )}
-          <p className="form-note">
-            WAF 设置保存后应用于新的连接测试及下一轮调度。关闭 WAF 总开关会保留密钥和单站开关设置。
-          </p>
+          <p className="form-note">{t('settings.applyNote')}</p>
           <div className="modal-actions">
             <button type="button" className="button secondary" disabled={busy} onClick={close}>
-              取消
+              {t('common.cancel')}
             </button>
             <button className="button primary" disabled={busy || conflict}>
               {busy ? <span className="spinner" /> : <Icon name="check" size={17} />}
-              {busy ? '正在保存…' : '保存设置'}
+              {busy ? t('common.saving') : t('settings.save')}
             </button>
           </div>
         </form>

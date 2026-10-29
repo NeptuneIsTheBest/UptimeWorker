@@ -1,3 +1,6 @@
+import { errorMessage, type DisplayMessage } from '../../i18n/core';
+import { useI18n } from '../../i18n/I18nProvider';
+import { localizedEventTitle } from './presentation';
 import { useEffect, useState } from 'react';
 import type { AdminEvent, EventConfig, EventsResponse } from '../../../shared/events/types';
 import type { AdminMonitor } from '../../../shared/monitors/types';
@@ -18,6 +21,7 @@ export function EventManager({
   monitors: AdminMonitor[];
   settings?: GlobalSettings;
 }) {
+  const { t, locale } = useI18n();
   const [cursor, setCursor] = useState<string | null>(null);
   const [previous, setPrevious] = useState<(string | null)[]>([]);
   const remote = useRemote<EventsResponse>(
@@ -30,7 +34,7 @@ export function EventManager({
   const [progress, setProgress] = useState<AdminEvent | null>(null);
   const [deleting, setDeleting] = useState<AdminEvent | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<DisplayMessage | null>(null);
   async function save(config: EventConfig) {
     const existing = editor !== 'new' ? editor : null;
     await api(existing ? `/api/admin/events/${existing.id}` : '/api/admin/events', {
@@ -57,7 +61,7 @@ export function EventManager({
       setDeleting(null);
       remote.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : '删除失败');
+      setError(errorMessage(err, 'error.delete'));
     } finally {
       setBusy(false);
     }
@@ -65,9 +69,9 @@ export function EventManager({
   return (
     <div className="event-manager">
       <div className="event-toolbar">
-        <p className="muted">发布维护安排，记录故障处理与恢复过程。</p>
+        <p className="muted">{t('event.manageDescription')}</p>
         <button className="button primary" disabled={!monitors.length} onClick={() => setEditor('new')}>
-          发布事件
+          {t('event.publish')}
         </button>
       </div>
       <RefreshStatus {...remote} />
@@ -80,11 +84,11 @@ export function EventManager({
           actions={(event) => (
             <>
               <button className="button small secondary" onClick={() => setProgress(event)}>
-                追加进展
+                {t('event.addUpdate')}
               </button>
               {event.source === 'manual' && (
                 <button className="button small secondary" onClick={() => setEditor(event)}>
-                  编辑事件
+                  {t('event.edit')}
                 </button>
               )}
               {(event.source === 'manual' || event.status !== 'open') && (
@@ -95,7 +99,7 @@ export function EventManager({
                     setError(null);
                   }}
                 >
-                  删除事件
+                  {t('event.delete')}
                 </button>
               )}
             </>
@@ -112,10 +116,10 @@ export function EventManager({
                 setPrevious((values) => values.slice(0, -1));
               }}
             >
-              上一页
+              {t('common.previous')}
             </button>
             <button className="button secondary" onClick={latest}>
-              返回最新
+              {t('event.newest')}
             </button>
           </>
         )}
@@ -127,7 +131,7 @@ export function EventManager({
               setCursor(remote.data!.nextCursor);
             }}
           >
-            更早事件
+            {t('event.older')}
           </button>
         )}
       </div>
@@ -142,19 +146,19 @@ export function EventManager({
       {progress && <ProgressEditor event={progress} saved={latest} close={() => setProgress(null)} />}
       {deleting && (
         <Modal
-          title="删除事件"
+          title={t('event.delete')}
           close={() => {
             if (!busy) setDeleting(null);
           }}
         >
-          <p>确定删除「{deleting.title}」及其全部进展记录？</p>
+          <p>{t('event.deleteQuestion', { title: localizedEventTitle(deleting, locale) })}</p>
           {error && <ErrorNotice message={error} />}
           <div className="modal-actions">
             <button className="button secondary" disabled={busy} onClick={() => setDeleting(null)}>
-              取消
+              {t('common.cancel')}
             </button>
             <button className="button destructive" disabled={busy} onClick={() => void remove()}>
-              确认删除事件
+              {t('event.confirmDelete')}
             </button>
           </div>
         </Modal>

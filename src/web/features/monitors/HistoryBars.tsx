@@ -1,44 +1,47 @@
+import { useI18n } from '../../i18n/I18nProvider';
 import type { DailyStat } from '../../../shared/monitors/types';
 import { percent } from '../../lib/format';
 
 export function HistoryBars({ days }: { days: DailyStat[] }) {
+  const { t, locale } = useI18n();
   return (
     <div className="history">
-      <div className="history-bars" aria-label="最近 90 天每日检测成功率（UTC）">
+      <div className="history-bars" aria-label={t('history.label')}>
         {days.map((day) => (
           <span
             key={day.day}
             className={`history-bar ${day.uptime === null ? 'empty' : day.uptime === 100 ? 'up' : day.uptime === 0 ? 'down' : 'partial'}`}
-            title={`${day.day} UTC · ${day.total ? `${percent(day.uptime)} · ${day.successful}/${day.total} 次成功` : '暂无数据'}`}
+            title={`${day.day} UTC · ${day.total ? `${percent(day.uptime, locale)} · ${t('history.successful', { successful: day.successful, total: day.total })}` : t('history.noData')}`}
           />
         ))}
       </div>
       <div className="history-labels">
-        <span>90 天前</span>
-        <span>每日可用率 · UTC</span>
-        <span>今天</span>
+        <span>{t('history.start')}</span>
+        <span>{t('history.daily')}</span>
+        <span>{t('history.today')}</span>
       </div>
     </div>
   );
 }
 export function Legend() {
+  const { t } = useI18n();
   return (
     <div className="legend">
       <span>
         <i className="legend-dot up" />
-        正常
+        {t('history.healthy')}
       </span>
       <span>
         <i className="legend-dot partial" />
-        部分异常
+        {t('history.partial')}
       </span>
       <span>
         <i className="legend-dot down" />
-        异常
+        {t('history.down')}
       </span>
       <span>
         <i className="legend-dot empty" />
-        无数据
+        {t('history.empty')}
       </span>
     </div>
   );

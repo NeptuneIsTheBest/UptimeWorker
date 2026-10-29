@@ -1,3 +1,4 @@
+import { useI18n } from '../../i18n/I18nProvider';
 import type { HistoryResponse } from '../../../shared/status/types';
 import { useRemote } from '../../hooks/useRemote';
 import { EventList } from '../events/EventList';
@@ -8,10 +9,11 @@ import { Icon } from '../../components/Icon';
 import { Layout } from '../../app/Layout';
 import { ResponseChart } from './ResponseChart';
 import { StatusBadge, effectiveStatus } from './status';
-import { formatTime, latency, percent } from '../../lib/format';
+import { number, formatTime, latency, percent } from '../../lib/format';
 import { useNow } from '../../hooks/useNow';
 
 export function DetailPage({ id }: { id: string }) {
+  const { t, locale } = useI18n();
   const remote = useRemote<HistoryResponse>(`/api/monitors/${encodeURIComponent(id)}/history`);
   const { data, error, loading, refresh } = remote;
   const now = useNow();
@@ -19,7 +21,7 @@ export function DetailPage({ id }: { id: string }) {
     <Layout>
       <a className="back-link" href="/">
         <Icon name="back" size={17} />
-        返回状态概览
+        {t('nav.back')}
       </a>
       {!data && <RefreshStatus {...remote} />}
       {error && <ErrorNotice message={error} retry={refresh} />}
@@ -31,11 +33,15 @@ export function DetailPage({ id }: { id: string }) {
             <EventList events={data.events ?? []} variant="open" />
             <div className="detail-heading">
               <div>
-                <div className="page-eyebrow">SERVICE INSIGHTS · {data.monitor.type.toUpperCase()}</div>
+                <div className="page-eyebrow">
+                  {t('page.insights')} · {data.monitor.type.toUpperCase()}
+                </div>
                 <h1>{data.monitor.name}</h1>
                 <p className="muted">
-                  每 {data.monitor.intervalMinutes} 分钟检测 · 最近检测{' '}
-                  {formatTime(data.monitor.lastCheckedAt, true)}
+                  {t('monitor.detailSchedule', {
+                    count: data.monitor.intervalMinutes,
+                    time: formatTime(data.monitor.lastCheckedAt, true, locale),
+                  })}
                 </p>
               </div>
               <StatusBadge status={effectiveStatus(data.monitor, now)} />
@@ -43,28 +49,28 @@ export function DetailPage({ id }: { id: string }) {
             <RefreshStatus {...remote} />
             <div className="detail-metrics">
               <div>
-                <span>当前响应时间</span>
-                <strong>{latency(data.monitor.latencyMs)}</strong>
+                <span>{t('monitor.currentLatency')}</span>
+                <strong>{latency(data.monitor.latencyMs, locale)}</strong>
               </div>
               <div>
-                <span>30 日可用率</span>
-                <strong>{percent(data.monitor.uptime30d)}</strong>
+                <span>{t('monitor.uptime')}</span>
+                <strong>{percent(data.monitor.uptime30d, locale)}</strong>
               </div>
               <div>
-                <span>24 小时检测次数</span>
-                <strong>{data.checks.length}</strong>
+                <span>{t('monitor.checkCount')}</span>
+                <strong>{number(data.checks.length, locale)}</strong>
               </div>
             </div>
             <section className="panel">
               <div className="panel-heading">
-                <h2>响应时间</h2>
-                <span className="muted">最近 24 小时 · 毫秒</span>
+                <h2>{t('monitor.latency')}</h2>
+                <span className="muted">{t('monitor.chartPeriod')}</span>
               </div>
               <ResponseChart checks={data.checks} now={now} intervalMinutes={data.monitor.intervalMinutes} />
             </section>
             <section className="panel">
               <div className="panel-heading">
-                <h2>运行历史</h2>
+                <h2>{t('monitor.history')}</h2>
                 <Legend />
               </div>
               <HistoryBars days={data.monitor.days} />

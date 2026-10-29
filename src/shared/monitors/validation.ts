@@ -52,7 +52,7 @@ export function parseHttpUrl(value: string): URL {
   try {
     url = new URL(value);
   } catch {
-    throw new ValidationError('请输入完整的 HTTP 或 HTTPS 地址');
+    throw new ValidationError('http_url_invalid');
   }
   if (
     !['http:', 'https:'].includes(url.protocol) ||
@@ -60,7 +60,7 @@ export function parseHttpUrl(value: string): URL {
     url.password ||
     !isPublicHostname(url.hostname)
   ) {
-    throw new ValidationError('仅支持公网 HTTP/HTTPS 地址，不能包含用户名或密码');
+    throw new ValidationError('http_url_not_public');
   }
   url.hash = '';
   return url;
@@ -92,7 +92,7 @@ const reservedHeaders = new Set([
 export function parseRequestHeaders(value: unknown): Record<string, string> {
   if (value === undefined) return {};
   if (!value || typeof value !== 'object' || Array.isArray(value))
-    throw new ValidationError('请求头必须是名称和值组成的对象');
+    throw new ValidationError('headers_object_required');
   const entries: [string, string][] = [];
   const names = new Set<string>();
   let size = 0;
@@ -103,32 +103,31 @@ export function parseRequestHeaders(value: unknown): Record<string, string> {
       typeof content !== 'string' ||
       /[^\t\x20-\x7e\x80-\xff]/.test(content)
     )
-      throw new ValidationError('请求头名称或值无效，不能包含换行或不支持的字符');
-    if (reservedHeaders.has(key))
-      throw new ValidationError('不能覆盖 WAF 凭据、Host、Content-Length 或逐跳传输头');
-    if (names.has(key)) throw new ValidationError('请求头名称不能重复（不区分大小写）');
+      throw new ValidationError('header_invalid');
+    if (reservedHeaders.has(key)) throw new ValidationError('header_reserved');
+    if (names.has(key)) throw new ValidationError('header_duplicate');
     names.add(key);
     size += new TextEncoder().encode(`${name}: ${content}\r\n`).byteLength;
     entries.push([key, content.trim()]);
   }
-  if (size > MAX_REQUEST_HEADER_BYTES) throw new ValidationError('请求头合计不能超过 8 KiB');
+  if (size > MAX_REQUEST_HEADER_BYTES) throw new ValidationError('headers_too_large');
   return Object.fromEntries(entries);
 }
 
 function parseRequestBody(value: unknown, method: HttpMethod): RequestBody | null {
   if (value === undefined || value === null) return null;
-  if (method === 'GET' || method === 'HEAD') throw new ValidationError('GET 和 HEAD 不支持请求体');
-  if (typeof value !== 'object' || Array.isArray(value)) throw new ValidationError('请求体格式无效');
+  if (method === 'GET' || method === 'HEAD') throw new ValidationError('body_method_unsupported');
+  if (typeof value !== 'object' || Array.isArray(value)) throw new ValidationError('body_invalid');
   const body = value as Record<string, unknown>;
   if ((body.format !== 'text' && body.format !== 'json') || typeof body.content !== 'string')
-    throw new ValidationError('请求体需选择文本或 JSON 格式并填写内容');
+    throw new ValidationError('body_content_required');
   if (new TextEncoder().encode(body.content).byteLength > MAX_REQUEST_BODY_BYTES)
-    throw new ValidationError('请求体不能超过 16 KiB');
+    throw new ValidationError('body_too_large');
   if (body.format === 'json') {
     try {
       JSON.parse(body.content);
     } catch {
-      throw new ValidationError('请求体不是有效的 JSON');
+      throw new ValidationError('body_json_invalid');
     }
   }
   return { format: body.format, content: body.content };
@@ -136,35 +135,35 @@ function parseRequestBody(value: unknown, method: HttpMethod): RequestBody | nul
 
 function parseKeywords(value: unknown): string[] {
   if (!Array.isArray(value) || value.some((word) => typeof word !== 'string'))
-    throw new ValidationError('关键词必须是字符串列表');
-  if (value.length > MAX_KEYWORDS) throw new ValidationError('每组最多填写 20 个关键词');
+    throw new ValidationError('keywords_invalid');
+  if (value.length > MAX_KEYWORDS) throw new ValidationError('keywords_too_many');
   const words = value.map((word: string) => word.trim()).filter(Boolean);
   if (words.some((word) => word.length > MAX_KEYWORD_LENGTH || /[\r\n]/.test(word)))
-    throw new ValidationError('每个关键词最多 256 个字符，且不能包含换行');
+    throw new ValidationError('keyword_invalid');
   return [...new Set(words)];
 }
 
 function parseResponseCheck(value: unknown, method: HttpMethod): ResponseCheck | null {
   if (value === undefined || value === null) return null;
-  if (typeof value !== 'object' || Array.isArray(value)) throw new ValidationError('响应校验配置无效');
+  if (typeof value !== 'object' || Array.isArray(value)) throw new ValidationError('response_check_invalid');
   const check = value as Record<string, unknown>;
-  if (typeof check.ignoreCase !== 'boolean') throw new ValidationError('忽略大小写选项无效');
+  if (typeof check.ignoreCase !== 'boolean') throw new ValidationError('ignore_case_invalid');
   const includes = parseKeywords(check.includes);
   const excludes = parseKeywords(check.excludes);
   if (!includes.length && !excludes.length) return null;
-  if (method === 'HEAD') throw new ValidationError('HEAD 不支持响应内容校验，请选择其他请求方法');
+  if (method === 'HEAD') throw new ValidationError('head_response_check_unsupported');
   return { includes, excludes, ignoreCase: check.ignoreCase };
 }
 
 export function parseMonitorConfig(value: unknown): MonitorConfig {
   if (!value || typeof value !== 'object' || Array.isArray(value))
-    throw new ValidationError('监控配置必须是对象');
+    throw new ValidationError('monitor_object_required');
   const v = value as Record<string, unknown>;
   const name = typeof v.name === 'string' ? v.name.trim() : '';
-  if (!name || name.length > 80) throw new ValidationError('名称需为 1–80 个字符');
+  if (!name || name.length > 80) throw new ValidationError('monitor_name_invalid');
   const groupId = v.groupId ?? null;
   if (groupId !== null && (typeof groupId !== 'string' || !groupId || groupId.length > 100))
-    throw new ValidationError('分组无效');
+    throw new ValidationError('group_invalid');
   const intervalMinutes = v.intervalMinutes === undefined ? DEFAULT_INTERVAL_MINUTES : v.intervalMinutes;
   if (
     typeof intervalMinutes !== 'number' ||
@@ -172,10 +171,13 @@ export function parseMonitorConfig(value: unknown): MonitorConfig {
     intervalMinutes < MIN_INTERVAL_MINUTES ||
     intervalMinutes > MAX_INTERVAL_MINUTES
   )
-    throw new ValidationError(`检测间隔需为 ${MIN_INTERVAL_MINUTES}–${MAX_INTERVAL_MINUTES} 分钟的整数`);
+    throw new ValidationError('monitor_interval_invalid', {
+      min: MIN_INTERVAL_MINUTES,
+      max: MAX_INTERVAL_MINUTES,
+    });
   if (!Number.isInteger(v.timeoutSeconds) || Number(v.timeoutSeconds) < 1 || Number(v.timeoutSeconds) > 30)
-    throw new ValidationError('超时需为 1–30 秒的整数');
-  if (typeof v.enabled !== 'boolean') throw new ValidationError('启用状态无效');
+    throw new ValidationError('timeout_invalid');
+  if (typeof v.enabled !== 'boolean') throw new ValidationError('enabled_invalid');
   const common = {
     name,
     groupId,
@@ -184,14 +186,13 @@ export function parseMonitorConfig(value: unknown): MonitorConfig {
     enabled: v.enabled,
   };
   if (v.type === 'http') {
-    if (typeof v.url !== 'string' || v.url.length > 2048) throw new ValidationError('URL 无效或过长');
+    if (typeof v.url !== 'string' || v.url.length > 2048) throw new ValidationError('url_too_long');
     const url = parseHttpUrl(v.url).toString();
     const method = v.method === undefined ? 'GET' : (v.method as HttpMethod);
-    if (!HTTP_METHODS.includes(method)) throw new ValidationError('请求方法无效');
+    if (!HTTP_METHODS.includes(method)) throw new ValidationError('http_method_invalid');
     const wafBypassEnabled = v.wafBypassEnabled === undefined ? false : v.wafBypassEnabled;
-    if (typeof wafBypassEnabled !== 'boolean') throw new ValidationError('WAF 放行开关无效');
-    if (wafBypassEnabled && !wafMonitorDomain(url))
-      throw new ValidationError('WAF 放行仅支持公网域名，不支持 IP 地址');
+    if (typeof wafBypassEnabled !== 'boolean') throw new ValidationError('waf_enabled_invalid');
+    if (wafBypassEnabled && !wafMonitorDomain(url)) throw new ValidationError('waf_domain_required');
     if (
       !Number.isInteger(v.expectedStatusMin) ||
       !Number.isInteger(v.expectedStatusMax) ||
@@ -199,7 +200,7 @@ export function parseMonitorConfig(value: unknown): MonitorConfig {
       Number(v.expectedStatusMax) > 599 ||
       Number(v.expectedStatusMin) > Number(v.expectedStatusMax)
     )
-      throw new ValidationError('期望状态码范围无效');
+      throw new ValidationError('status_range_invalid');
     return {
       ...common,
       type: 'http',
@@ -215,23 +216,23 @@ export function parseMonitorConfig(value: unknown): MonitorConfig {
   }
   if (v.type === 'tcp') {
     if (typeof v.hostname !== 'string' || /[\s/@?#]/.test(v.hostname))
-      throw new ValidationError('请输入公网域名或 IP，不包含协议和路径');
+      throw new ValidationError('hostname_required');
     const raw = v.hostname;
     if (raw.includes(':') && !raw.startsWith('[') && raw.split(':').length === 2)
-      throw new ValidationError('端口请单独填写');
+      throw new ValidationError('port_separate');
     const address = raw.includes(':') && !raw.startsWith('[') ? `[${raw}]` : raw;
-    if (address.startsWith('[') && !address.endsWith(']')) throw new ValidationError('端口请单独填写');
+    if (address.startsWith('[') && !address.endsWith(']')) throw new ValidationError('port_separate');
     let hostname: string;
     try {
       hostname = new URL(`http://${address}/`).hostname;
     } catch {
-      throw new ValidationError('主机地址无效');
+      throw new ValidationError('hostname_invalid');
     }
     if (!isPublicHostname(hostname) || new URL(`http://${address}/`).port)
-      throw new ValidationError('请输入公网主机地址，端口请单独填写');
+      throw new ValidationError('hostname_not_public');
     if (!Number.isInteger(v.port) || Number(v.port) < 1 || Number(v.port) > 65535 || Number(v.port) === 25)
-      throw new ValidationError('端口需为 1–65535，Cloudflare 不支持 TCP 端口 25');
+      throw new ValidationError('port_invalid');
     return { ...common, type: 'tcp', hostname: hostname.replace(/^\[|\]$/g, ''), port: Number(v.port) };
   }
-  throw new ValidationError('检测类型必须为 HTTP 或 TCP');
+  throw new ValidationError('monitor_type_invalid');
 }

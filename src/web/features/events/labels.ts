@@ -1,12 +1,15 @@
+import { translator, type Locale } from '../../i18n/core';
 import type { StatusEvent } from '../../../shared/events/types';
 
-export function eventLabel(event: StatusEvent, now: number) {
-  if (event.status === 'resolved') return event.type === 'maintenance' ? '已完成' : '已恢复';
-  if (event.status === 'stopped') return '已停止跟踪';
+export function eventLabel(event: StatusEvent, now: number, locale: Locale = 'zh-CN') {
+  const t = translator(locale);
+  if (event.status === 'resolved')
+    return event.type === 'maintenance' ? t('event.status.completed') : t('event.status.resolved');
+  if (event.status === 'stopped') return t('event.status.stopped');
   if (event.type === 'maintenance') {
-    if (now < event.startsAt!) return '待开始';
-    if (now >= event.endsAt!) return '已过计划时间';
-    return '维护进行中';
+    if (now < event.startsAt!) return t('event.status.scheduled');
+    if (now >= event.endsAt!) return t('event.status.overdue');
+    return t('event.status.maintenance');
   }
-  return '处理中';
+  return t('event.status.open');
 }

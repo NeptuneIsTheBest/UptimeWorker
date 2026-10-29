@@ -1,7 +1,8 @@
+import { useI18n } from '../../i18n/I18nProvider';
 import { useEffect, useRef, useState } from 'react';
 import type { ProbeResult } from '../../../shared/monitors/types';
 import { Empty } from '../../components/feedback';
-import { formatTime } from '../../lib/format';
+import { number, formatTime } from '../../lib/format';
 
 export function ResponseChart({
   checks,
@@ -12,6 +13,7 @@ export function ResponseChart({
   now: number;
   intervalMinutes: number;
 }) {
+  const { t, locale } = useI18n();
   const container = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(960);
   const hasData = checks.length > 0;
@@ -23,8 +25,8 @@ export function ResponseChart({
   }, [hasData]);
   if (!checks.length)
     return (
-      <Empty title="还没有响应时间数据" icon="pulse">
-        定时检测完成后，这里将展示最近 24 小时的响应趋势。
+      <Empty title={t('monitor.noLatency')} icon="pulse">
+        {t('monitor.noLatencyDescription')}
       </Empty>
     );
   const w = width,
@@ -48,7 +50,7 @@ export function ResponseChart({
         className="response-chart"
         viewBox={`0 0 ${w} ${h}`}
         role="img"
-        aria-label="最近 24 小时响应时间折线图，红点表示检测失败"
+        aria-label={t('monitor.chartLabel')}
       >
         {[0, 0.25, 0.5, 0.75, 1].map((n) => (
           <g key={n}>
@@ -61,7 +63,7 @@ export function ResponseChart({
               strokeDasharray="3 5"
             />
             <text x={x0 - 12} y={y(n * max) + 4} textAnchor="end">
-              {Math.round(n * max)}
+              {number(Math.round(n * max), locale)}
             </text>
           </g>
         ))}
@@ -77,7 +79,8 @@ export function ResponseChart({
               fill={c.ok ? 'var(--green)' : 'var(--red)'}
             >
               <title>
-                {formatTime(c.checkedAt)} · {c.ok ? '检测成功' : '检测失败'}
+                {formatTime(c.checkedAt, false, locale)} ·{' '}
+                {c.ok ? t('monitor.checkSucceeded') : t('monitor.checkFailed')}
               </title>
             </circle>
           ))}
@@ -88,7 +91,7 @@ export function ResponseChart({
             y={h - 4}
             textAnchor={hours === 0 ? 'start' : hours === 24 ? 'end' : 'middle'}
           >
-            {hours === 24 ? '现在' : `${24 - hours} 小时前`}
+            {hours === 24 ? t('time.now') : t('time.hoursAgo', { count: 24 - hours })}
           </text>
         ))}
       </svg>

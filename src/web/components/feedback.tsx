@@ -1,24 +1,28 @@
+import { displayMessage, type DisplayMessage } from '../i18n/core';
+import { useI18n } from '../i18n/I18nProvider';
 import type { ReactNode } from 'react';
 import { Icon } from './Icon';
 
-export function ErrorNotice({ message, retry }: { message: string; retry?: () => void }) {
+export function ErrorNotice({ message, retry }: { message: DisplayMessage; retry?: () => void }) {
+  const { t, locale } = useI18n();
   return (
     <div className="error-notice" role="alert">
       <Icon name="info" />
-      <span>{message}</span>
+      <span>{displayMessage(message, locale)}</span>
       {retry && (
         <button className="text-button" onClick={retry}>
-          重试
+          {t('common.retry')}
         </button>
       )}
     </div>
   );
 }
 export function Loading() {
+  const { t } = useI18n();
   return (
     <div className="loading" role="status">
       <span className="spinner" />
-      <span>正在读取服务状态…</span>
+      <span>{t('common.loading')}</span>
     </div>
   );
 }

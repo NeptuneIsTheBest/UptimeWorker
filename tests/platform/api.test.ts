@@ -38,6 +38,10 @@ describe('API boundaries', () => {
     ]) {
       const response = await app.request(`https://status.test${path}`, { method }, env);
       expect(response.status).toBe(401);
+      expect(await response.json()).toMatchObject({
+        error: '请通过 Cloudflare Access 登录后访问后台。',
+        code: 'auth_required',
+      });
       expect(response.headers.get('cache-control')).toBe('no-store');
     }
     const response = await app.request('https://status.test/admin', { headers }, env);
@@ -87,7 +91,12 @@ describe('API boundaries', () => {
     const row = (await created.json()) as { id: string; version: number };
     const path = `admin/monitors/${row.id}`;
     expect((await request(path, 'PATCH', { version: row.version, enabled: false })).status).toBe(200);
-    expect((await request(path, 'PATCH', { version: row.version, enabled: true })).status).toBe(409);
+    const conflict = await request(path, 'PATCH', { version: row.version, enabled: true });
+    expect(conflict.status).toBe(409);
+    expect(await conflict.json()).toEqual({
+      error: '监控已被修改，请刷新后重试。',
+      code: 'monitor_conflict',
+    });
     expect(await findMonitor(fixture.db, row.id)).toMatchObject({ enabled: 0, interval_minutes: 5 });
     expect((await request(path, 'DELETE', {})).status).toBe(200);
     expect((await request(path, 'DELETE', {})).status).toBe(404);
@@ -118,7 +127,11 @@ describe('API boundaries', () => {
     for (const intervalMinutes of [0, 61, 1.5, '1', null]) {
       const created = await request('admin/monitors', 'POST', { ...httpConfig, intervalMinutes });
       expect(created.status).toBe(400);
-      expect(await created.json()).toHaveProperty('error', '检测间隔需为 1–60 分钟的整数');
+      expect(await created.json()).toEqual({
+        error: '检测间隔需为 1–60 分钟的整数',
+        code: 'monitor_interval_invalid',
+        params: { min: 1, max: 60 },
+      });
       const updated = await request(`admin/monitors/${row.id}`, 'PATCH', { version: 1, intervalMinutes });
       expect(updated.status).toBe(400);
     }
@@ -139,6 +152,7 @@ describe('API boundaries', () => {
     expect((await request('monitors/nope/history')).status).toBe(404);
     const unknown = await request('not-an-endpoint');
     expect(unknown.status).toBe(404);
+    expect(await unknown.json()).toEqual({ error: '接口不存在。', code: 'endpoint_not_found' });
     expect(unknown.headers.get('content-type')).toContain('application/json');
     expect(await fixture.db.prepare('SELECT version FROM global_settings').first('version')).toBe(1);
   });

@@ -1,3 +1,4 @@
+import { useI18n } from '../../i18n/I18nProvider';
 import type { PublicMonitor } from '../../../shared/monitors/types';
 import { HistoryBars } from './HistoryBars';
 import { Icon } from '../../components/Icon';
@@ -5,6 +6,7 @@ import { StatusBadge, effectiveStatus } from './status';
 import { formatTime, latency, percent } from '../../lib/format';
 
 export function MonitorCard({ monitor, now }: { monitor: PublicMonitor; now: number }) {
+  const { t, locale } = useI18n();
   return (
     <article className="monitor-card">
       <div className="monitor-top">
@@ -19,19 +21,21 @@ export function MonitorCard({ monitor, now }: { monitor: PublicMonitor; now: num
             </a>
             <div className="monitor-meta">
               <span className="protocol">{monitor.type === 'http' ? 'HTTP' : 'TCP'}</span>
-              <span>每 {monitor.intervalMinutes} 分钟</span>
-              <span className="last-check">最近检测 {formatTime(monitor.lastCheckedAt)}</span>
+              <span>{t('monitor.interval', { count: monitor.intervalMinutes })}</span>
+              <span className="last-check">
+                {t('monitor.lastCheck', { time: formatTime(monitor.lastCheckedAt, false, locale) })}
+              </span>
             </div>
           </div>
         </div>
         <div className="monitor-figures">
           <div className="inline-metric">
-            <strong>{latency(monitor.latencyMs)}</strong>
-            <span>响应时间</span>
+            <strong>{latency(monitor.latencyMs, locale)}</strong>
+            <span>{t('monitor.latency')}</span>
           </div>
           <div className="inline-metric">
-            <strong>{percent(monitor.uptime30d)}</strong>
-            <span>30 日可用率</span>
+            <strong>{percent(monitor.uptime30d, locale)}</strong>
+            <span>{t('monitor.uptime')}</span>
           </div>
           <StatusBadge status={effectiveStatus(monitor, now)} />
         </div>

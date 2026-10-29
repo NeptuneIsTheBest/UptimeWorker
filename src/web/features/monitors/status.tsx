@@ -1,3 +1,4 @@
+import { useI18n } from '../../i18n/I18nProvider';
 import { STATUS_LABELS } from './labels';
 import type { MonitorStatus, PublicMonitor } from '../../../shared/monitors/types';
 
@@ -9,10 +10,11 @@ export function effectiveStatus(monitor: PublicMonitor, now: number): MonitorSta
     : monitor.status;
 }
 export function StatusBadge({ status }: { status: MonitorStatus }) {
+  const { t } = useI18n();
   return (
     <span className={`status-badge ${status}`}>
       <span className="status-dot" />
-      {STATUS_LABELS[status]}
+      {t(STATUS_LABELS[status])}
     </span>
   );
 }

@@ -1,3 +1,6 @@
+import { errorMessage, type DisplayMessage } from '../../i18n/core';
+import { useI18n } from '../../i18n/I18nProvider';
+import { parseGroup } from '../../../shared/groups/validation';
 import { useState, type FormEvent } from 'react';
 import type { MonitorGroup } from '../../../shared/groups/types';
 import { api } from '../../lib/api';
@@ -13,12 +16,13 @@ export function GroupManager({
   changed: () => void;
   close: () => void;
 }) {
+  const { t } = useI18n();
   const [editing, setEditing] = useState<MonitorGroup | null>(null);
   const [name, setName] = useState('');
   const [order, setOrder] = useState(0);
   const [deleting, setDeleting] = useState<MonitorGroup | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<DisplayMessage | null>(null);
   function reset() {
     setEditing(null);
     setName('');
@@ -29,14 +33,15 @@ export function GroupManager({
     setBusy(true);
     setError(null);
     try {
+      const config = parseGroup({ name, sortOrder: order });
       await api(editing ? `/api/admin/groups/${editing.id}` : '/api/admin/groups', {
         method: editing ? 'PATCH' : 'POST',
-        body: JSON.stringify({ name, sortOrder: order, ...(editing ? { version: editing.version } : {}) }),
+        body: JSON.stringify({ ...config, ...(editing ? { version: editing.version } : {}) }),
       });
       reset();
       changed();
     } catch (err) {
-      setError(err instanceof Error ? err.message : '保存失败');
+      setError(errorMessage(err, 'error.save'));
     } finally {
       setBusy(false);
     }
@@ -54,25 +59,25 @@ export function GroupManager({
       setDeleting(null);
       changed();
     } catch (err) {
-      setError(err instanceof Error ? err.message : '删除失败');
+      setError(errorMessage(err, 'error.delete'));
     } finally {
       setBusy(false);
     }
   }
   return (
     <Modal
-      title="分组管理"
+      title={t('groups.manage')}
       close={() => {
         if (!busy) close();
       }}
     >
-      <p className="form-note">每个节点归属一个分组。排序数字越小越靠前，未分组始终排在最后。</p>
+      <p className="form-note">{t('groups.description')}</p>
       <div className="group-manager-list">
         {groups.map((group) => (
           <div className="group-manager-row" key={group.id}>
             <span>
               <strong>{group.name}</strong>
-              <small>排序 {group.sortOrder}</small>
+              <small>{t('groups.sortValue', { value: group.sortOrder })}</small>
             </span>
             <div>
               <button
@@ -87,7 +92,7 @@ export function GroupManager({
                   setError(null);
                 }}
               >
-                编辑 {group.name}
+                {t('common.editNamed', { name: group.name })}
               </button>
               <button
                 type="button"
@@ -95,7 +100,7 @@ export function GroupManager({
                 disabled={busy}
                 onClick={() => setDeleting(group)}
               >
-                删除 {group.name}
+                {t('common.deleteNamed', { name: group.name })}
               </button>
             </div>
           </div>
@@ -103,23 +108,23 @@ export function GroupManager({
       </div>
       {deleting && (
         <div className="notice group-delete">
-          <p>删除「{deleting.name}」后，其中的节点将转为未分组。</p>
+          <p>{t('groups.deleteQuestion', { name: deleting.name })}</p>
           <button className="button small secondary" disabled={busy} onClick={() => setDeleting(null)}>
-            取消删除
+            {t('groups.cancelDelete')}
           </button>
           <button className="button small destructive" disabled={busy} onClick={() => void remove()}>
-            确认删除分组
+            {t('groups.confirmDelete')}
           </button>
         </div>
       )}
-      <form className="monitor-form" onSubmit={save}>
-        <h3>{editing ? '编辑分组' : '新增分组'}</h3>
+      <form noValidate className="monitor-form" onSubmit={save}>
+        <h3>{editing ? t('groups.edit') : t('groups.add')}</h3>
         <label className="field">
-          分组名称
+          {t('groups.name')}
           <input required maxLength={80} value={name} onChange={(e) => setName(e.target.value)} />
         </label>
         <label className="field">
-          排序
+          {t('groups.sort')}
           <input
             type="number"
             required
@@ -134,11 +139,11 @@ export function GroupManager({
         <div className="modal-actions">
           {editing && (
             <button type="button" className="button secondary" disabled={busy} onClick={reset}>
-              取消编辑
+              {t('groups.cancelEdit')}
             </button>
           )}
           <button className="button primary" disabled={busy}>
-            {busy ? '正在保存…' : '保存分组'}
+            {busy ? t('common.saving') : t('groups.save')}
           </button>
         </div>
       </form>

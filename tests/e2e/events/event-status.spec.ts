@@ -65,7 +65,7 @@ test('homepage reflects incidents while probe metrics and filtered nodes remain 
   const hero = page.locator('.status-hero');
   await expect(hero.getByRole('heading')).toHaveText('部分服务需要关注。');
   await expect(hero).toHaveClass('status-hero attention');
-  await expect(hero.locator('.hero-tag')).toHaveText('ATTENTION REQUIRED');
+  await expect(hero.locator('.hero-tag')).toHaveText('需要关注');
   await expect(hero.locator('p')).toContainText('2 条未解决故障');
   await expect(hero.locator('p')).not.toContainText('0 项');
   await expect(page.locator('.monitor-card .status-badge')).toHaveText(['运行正常', '运行正常']);
@@ -98,7 +98,7 @@ test('homepage reflects incidents while probe metrics and filtered nodes remain 
   await refresh();
   await expect(hero.getByRole('heading')).toHaveText('所有服务，运行如常。');
   await expect(hero).toHaveClass('status-hero healthy');
-  await expect(hero.locator('.hero-tag')).toHaveText('ALL SYSTEMS OPERATIONAL');
+  await expect(hero.locator('.hero-tag')).toHaveText('全部服务正常');
 
   monitors[0].status = 'down';
   await refresh();
@@ -146,7 +146,7 @@ test('homepage advances maintenance by the page clock and waits for explicit com
   await page.clock.runFor(30_000);
   await expect(hero.getByRole('heading')).toHaveText('部分服务正在维护。');
   await expect(hero).toHaveClass('status-hero maintenance');
-  await expect(hero.locator('.hero-tag')).toHaveText('MAINTENANCE IN PROGRESS');
+  await expect(hero.locator('.hero-tag')).toHaveText('维护进行中');
   await expect(hero.locator('p')).not.toContainText('已过计划时间');
   await expect(page.locator('.event-status')).toHaveText('维护进行中');
   await page.clock.runFor(30_000);

@@ -1,4 +1,6 @@
+import { useI18n } from '../i18n/I18nProvider';
 import { useEffect, type ReactNode } from 'react';
+import { LanguageSelect } from '../i18n/LanguageSelect';
 import { Icon } from '../components/Icon';
 
 export function Layout({
@@ -10,9 +12,10 @@ export function Layout({
   admin?: boolean;
   siteName?: string;
 }) {
+  const { t } = useI18n();
   useEffect(() => {
-    document.title = `${siteName} · ${admin ? '监控管理' : '服务状态'}`;
-  }, [siteName, admin]);
+    document.title = `${siteName} · ${admin ? t('nav.admin') : t('page.status')}`;
+  }, [siteName, admin, t]);
   return (
     <>
       <header className="site-header">
@@ -31,17 +34,18 @@ export function Layout({
               )}
             </span>
           </a>
-          <nav aria-label="主导航">
+          <nav aria-label={t('nav.main')}>
             <a href="/" className={!admin ? 'active' : ''}>
-              状态概览
+              {t('nav.overview')}
             </a>
             <a href="/admin" className={admin ? 'active' : ''}>
-              监控管理
+              {t('nav.admin')}
             </a>
           </nav>
+          <LanguageSelect />
           <span className="header-note">
             <span className="live-dot" />
-            持续观测中
+            {t('nav.live')}
           </span>
         </div>
       </header>
@@ -50,8 +54,8 @@ export function Layout({
         <span>
           <Icon size={15} /> UptimeWorker
         </span>
-        <span>让每一次连接，都有迹可循。</span>
-        <span>每日统计按 UTC 汇总</span>
+        <span>{t('footer.tagline')}</span>
+        <span>{t('footer.utc')}</span>
       </footer>
     </>
   );

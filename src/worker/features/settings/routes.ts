@@ -1,3 +1,4 @@
+import { errorResponse } from '../../../shared/errors';
 import { Hono } from 'hono';
 import { parseGlobalSettingsPatch } from '../../../shared/settings/validation';
 import type { AppEnv } from '../../types';
@@ -12,11 +13,8 @@ export function registerSettingsRoutes(app: Hono<AppEnv>) {
     const body = await c.req.json();
     const { settings } = await getGlobalSettings(c.env.DB);
     const patch = parseGlobalSettingsPatch(body, adminSettings(settings));
-    if (patch.version !== settings.version)
-      return c.json({ error: '全局设置已被修改，请重新加载后重试。' }, 409);
+    if (patch.version !== settings.version) return c.json(errorResponse('settings_conflict'), 409);
     const updated = await updateGlobalSettings(c.env.DB, patch);
-    return updated
-      ? c.json(adminSettings(updated))
-      : c.json({ error: '全局设置已被修改，请重新加载后重试。' }, 409);
+    return updated ? c.json(adminSettings(updated)) : c.json(errorResponse('settings_conflict'), 409);
   });
 }

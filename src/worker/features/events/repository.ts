@@ -102,7 +102,7 @@ export async function listEvents(db: D1Database, options: { cursor?: string } = 
     try {
       cursor = JSON.parse(options.cursor);
     } catch {
-      throw new ValidationError('分页游标无效');
+      throw new ValidationError('cursor_invalid');
     }
     if (
       !Array.isArray(cursor) ||
@@ -110,7 +110,7 @@ export async function listEvents(db: D1Database, options: { cursor?: string } = 
       !Number.isSafeInteger(cursor[0]) ||
       typeof cursor[1] !== 'string'
     )
-      throw new ValidationError('分页游标无效');
+      throw new ValidationError('cursor_invalid');
     predicates.push('(e.updated_at < ? OR (e.updated_at = ? AND e.id < ?))');
     values.push(cursor[0], cursor[0], cursor[1]);
   }
@@ -198,7 +198,7 @@ export async function createEvent(db: D1Database, config: EventConfig, now = Dat
       ),
     ...addAssociations(db, id, token, config, now),
   ]);
-  if (!writes[0].meta.changes) throw new ValidationError('关联节点不存在，请刷新后重新选择');
+  if (!writes[0].meta.changes) throw new ValidationError('event_monitor_not_found');
   return (await getEvent(db, id))!;
 }
 export async function editEvent(
@@ -238,8 +238,7 @@ export async function editEvent(
       .bind(id, id, token),
     ...addAssociations(db, id, token, config, now),
   ]);
-  if (!writes[0].meta.changes)
-    throw new ConflictError('事件或关联节点已变更；自动事件不能编辑，请刷新后重试。');
+  if (!writes[0].meta.changes) throw new ConflictError('event_edit_conflict');
   return (await getEvent(db, id))!;
 }
 export async function appendEventUpdate(
@@ -250,10 +249,10 @@ export async function appendEventUpdate(
   now = Date.now(),
 ) {
   const event = await getEvent(db, id);
-  if (!event || event.version !== version) throw new ConflictError('事件已变更，请刷新后重试。');
+  if (!event || event.version !== version) throw new ConflictError('event_changed');
   // Preserve the legacy completion conflict while fixed choices are validated below.
   if (config.title === null && config.resolve && (event.source !== 'manual' || event.status !== 'open'))
-    throw new ConflictError('该事件状态由检测维护，或事件已结束，请刷新后重试。');
+    throw new ConflictError('event_managed_or_ended');
   const { title, body, resolve } = resolveEventUpdateConfig(event, config);
   const token = crypto.randomUUID();
   const writes = await db.batch([
@@ -272,7 +271,7 @@ export async function appendEventUpdate(
       .bind(crypto.randomUUID(), id, title, body, resolve ? 'resolved' : null, now, id, token),
     ...(resolve ? endSuppressions(db, id, token, now) : []),
   ]);
-  if (!writes[0].meta.changes) throw new ConflictError('事件已变更，或该事件状态由检测维护，请刷新后重试。');
+  if (!writes[0].meta.changes) throw new ConflictError('event_update_conflict');
   return (await getEvent(db, id))!;
 }
 export async function deleteEvent(db: D1Database, id: string, version: number, now = Date.now()) {
@@ -287,5 +286,5 @@ export async function deleteEvent(db: D1Database, id: string, version: number, n
     ...endSuppressions(db, id, token, now),
     db.prepare('DELETE FROM events WHERE id = ? AND write_token = ?').bind(id, token),
   ]);
-  if (!writes[0].meta.changes) throw new ConflictError('事件已变更，或自动事件仍在进行中，请刷新后重试。');
+  if (!writes[0].meta.changes) throw new ConflictError('event_delete_conflict');
 }

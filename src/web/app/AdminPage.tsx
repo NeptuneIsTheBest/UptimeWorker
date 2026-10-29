@@ -1,3 +1,5 @@
+import { message } from '../i18n/core';
+import { useI18n } from '../i18n/I18nProvider';
 import { useState } from 'react';
 import type { GlobalSettings } from '../../shared/settings/types';
 import { useRemote } from '../hooks/useRemote';
@@ -10,6 +12,7 @@ import { MonitorManager } from '../features/monitors/MonitorManager';
 import type { AdminResponse, MonitorEditorState, MonitorNotice } from '../features/monitors/types';
 
 export function AdminPage() {
+  const { t } = useI18n();
   const remote = useRemote<AdminResponse>('/api/admin/monitors');
   const { data, refresh } = remote;
   const [editor, setEditor] = useState<MonitorEditorState>(null);
@@ -21,20 +24,20 @@ export function AdminPage() {
   return (
     <Layout admin>
       <div className="page-eyebrow">
-        <span className="eyebrow-line" /> MONITORING CONSOLE
+        <span className="eyebrow-line" /> {t('page.console')}
       </div>
       <div className="admin-heading">
         <div>
-          <h1>监控管理</h1>
-          <p className="muted">管理监控、服务器分组与服务事件。</p>
+          <h1>{t('nav.admin')}</h1>
+          <p className="muted">{t('admin.description')}</p>
         </div>
         <div className="admin-heading-actions">
           <button className="button secondary" disabled={!data} onClick={() => setGroupsOpen(true)}>
-            分组管理
+            {t('groups.manage')}
           </button>
           <button className="button secondary" onClick={() => setSettingsOpen(true)}>
             <Icon name="shield" size={18} />
-            全局设置
+            {t('settings.title')}
           </button>
           <button
             className="button primary"
@@ -42,16 +45,16 @@ export function AdminPage() {
             disabled={!data || data.monitors.length >= data.limit}
           >
             <Icon name="plus" size={18} />
-            新增监控
+            {t('monitors.add')}
           </button>
         </div>
       </div>
-      <div className="admin-tabs" role="tablist" aria-label="管理内容">
+      <div className="admin-tabs" role="tablist" aria-label={t('admin.content')}>
         <button role="tab" aria-selected={tab === 'monitors'} onClick={() => setTab('monitors')}>
-          监控
+          {t('admin.monitors')}
         </button>
         <button role="tab" aria-selected={tab === 'events'} onClick={() => setTab('events')}>
-          事件
+          {t('admin.events')}
         </button>
       </div>
       <MonitorManager
@@ -75,7 +78,7 @@ export function AdminPage() {
             setSavedSettings(settings);
             setSettingsOpen(false);
             setNotice({
-              text: '全局设置已保存，页面刷新和自动事件设置已生效。WAF 设置应用于新的连接测试及下一轮调度。',
+              text: message('settings.saved'),
               error: false,
             });
           }}

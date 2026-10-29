@@ -1,3 +1,4 @@
+import { useI18n } from '../i18n/I18nProvider';
 import { AdminPage } from './AdminPage';
 import { DetailPage } from '../features/monitors/DetailPage';
 import { EventDetailPage } from '../features/events/EventDetailPage';
@@ -6,6 +7,7 @@ import { Empty } from '../components/feedback';
 import { Layout } from './Layout';
 
 export function App() {
+  const { t } = useI18n();
   const path = location.pathname.replace(/\/$/, '') || '/';
   const detail = path.match(/^\/monitors\/([^/]+)$/);
   const eventDetail = path.match(/^\/events\/([^/]+)$/);
@@ -20,11 +22,11 @@ export function App() {
       <EventDetailPage id={decodeURIComponent(eventDetail[1])} />
     ) : (
       <Layout>
-        <Empty title="页面不存在">
-          这个地址没有对应的页面。
+        <Empty title={t('page.notFound')}>
+          {t('page.notFoundDescription')}
           <br />
           <a className="button secondary empty-action" href="/">
-            返回状态概览
+            {t('nav.back')}
           </a>
         </Empty>
       </Layout>

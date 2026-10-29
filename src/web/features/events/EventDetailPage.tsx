@@ -1,3 +1,4 @@
+import { useI18n } from '../../i18n/I18nProvider';
 import { eventLabel } from './labels';
 import type { EventDetailResponse } from '../../../shared/events/types';
 import { useRemote } from '../../hooks/useRemote';
@@ -6,10 +7,18 @@ import { Icon } from '../../components/Icon';
 import { Layout } from '../../app/Layout';
 import { useNow } from '../../hooks/useNow';
 import { EventMonitors } from './EventList';
-import { eventTime, eventTimeline, relativeEventTime } from './presentation';
+import {
+  eventTime,
+  eventTimeline,
+  relativeEventTime,
+  localizedEventTitle,
+  localizedEntryBody,
+  PROGRESS_LABELS,
+} from './presentation';
 import { RefreshStatus } from '../../components/RefreshStatus';
 
 export function EventDetailPage({ id }: { id: string }) {
+  const { t, locale } = useI18n();
   const remote = useRemote<EventDetailResponse>(`/api/events/${encodeURIComponent(id)}`);
   const { data, error, loading, refresh } = remote;
   const event = data?.event;
@@ -18,7 +27,7 @@ export function EventDetailPage({ id }: { id: string }) {
     <Layout siteName={data?.siteName}>
       <a className="back-link" href="/">
         <Icon name="back" size={17} />
-        返回状态概览
+        {t('nav.back')}
       </a>
       {error && <ErrorNotice message={error} retry={refresh} />}
       {loading ? (
@@ -28,49 +37,52 @@ export function EventDetailPage({ id }: { id: string }) {
           <article className="event-detail">
             <header className="event-detail-header">
               <p className="event-last-updated">
-                最后更新于{' '}
-                <time dateTime={new Date(event.updatedAt).toISOString()} title={eventTime(event.updatedAt)}>
-                  {relativeEventTime(event.updatedAt, now)}
+                {t('event.updated')}{' '}
+                <time
+                  dateTime={new Date(event.updatedAt).toISOString()}
+                  title={eventTime(event.updatedAt, locale)}
+                >
+                  {relativeEventTime(event.updatedAt, now, locale)}
                 </time>
               </p>
               <div className="event-tags">
                 <span className={`event-status ${event.status === 'open' ? event.type : event.status}`}>
-                  {eventLabel(event, now)}
+                  {eventLabel(event, now, locale)}
                 </span>
                 <span className="muted">
-                  {event.type === 'maintenance' ? '计划维护' : '故障事件'} ·{' '}
-                  {event.source === 'automatic' ? '自动检测' : '管理员发布'}
+                  {event.type === 'maintenance' ? t('event.maintenance') : t('event.incident')} ·{' '}
+                  {event.source === 'automatic' ? t('event.automatic') : t('event.manual')}
                 </span>
               </div>
-              <h1>{event.title}</h1>
-              <p className="event-id">事件 ID：{event.id}</p>
+              <h1>{localizedEventTitle(event, locale)}</h1>
+              <p className="event-id">{t('event.id', { id: event.id })}</p>
               <EventMonitors event={event} />
               <dl className="event-detail-times">
                 {event.type === 'maintenance' ? (
                   <>
                     <div>
-                      <dt>计划开始</dt>
+                      <dt>{t('event.plannedStart')}</dt>
                       <dd>
                         <time dateTime={new Date(event.startsAt!).toISOString()}>
-                          {eventTime(event.startsAt!)}
+                          {eventTime(event.startsAt!, locale)}
                         </time>
                       </dd>
                     </div>
                     <div>
-                      <dt>计划结束</dt>
+                      <dt>{t('event.plannedEnd')}</dt>
                       <dd>
                         <time dateTime={new Date(event.endsAt!).toISOString()}>
-                          {eventTime(event.endsAt!)}
+                          {eventTime(event.endsAt!, locale)}
                         </time>
                       </dd>
                     </div>
                   </>
                 ) : (
                   <div>
-                    <dt>{event.source === 'automatic' ? '首次失败' : '开始时间'}</dt>
+                    <dt>{event.source === 'automatic' ? t('event.firstFailure') : t('event.started')}</dt>
                     <dd>
                       <time dateTime={new Date(event.startedAt).toISOString()}>
-                        {eventTime(event.startedAt)}
+                        {eventTime(event.startedAt, locale)}
                       </time>
                     </dd>
                   </div>
@@ -79,13 +91,15 @@ export function EventDetailPage({ id }: { id: string }) {
                   <div>
                     <dt>
                       {event.status === 'stopped'
-                        ? '停止跟踪'
+                        ? t('event.stopped')
                         : event.type === 'maintenance'
-                          ? '完成时间'
-                          : '恢复时间'}
+                          ? t('event.completedAt')
+                          : t('event.recoveredAt')}
                     </dt>
                     <dd>
-                      <time dateTime={new Date(event.endedAt).toISOString()}>{eventTime(event.endedAt)}</time>
+                      <time dateTime={new Date(event.endedAt).toISOString()}>
+                        {eventTime(event.endedAt, locale)}
+                      </time>
                     </dd>
                   </div>
                 )}
@@ -93,8 +107,8 @@ export function EventDetailPage({ id }: { id: string }) {
             </header>
             <section className="event-timeline" aria-labelledby="timeline-heading">
               <div className="event-timeline-heading">
-                <h2 id="timeline-heading">时间线</h2>
-                <span className="muted">时间按浏览器时区显示</span>
+                <h2 id="timeline-heading">{t('event.timeline')}</h2>
+                <span className="muted">{t('time.browserZone')}</span>
               </div>
               <ol>
                 {eventTimeline(event).map((entry, index) => (
@@ -104,17 +118,20 @@ export function EventDetailPage({ id }: { id: string }) {
                   >
                     <span className="event-timeline-dot" aria-hidden="true" />
                     <div className="event-timeline-entry-heading">
-                      <h3>{entry.title}</h3>
-                      <span className="muted">{relativeEventTime(entry.createdAt, now)}</span>
+                      <h3>{t(PROGRESS_LABELS[entry.title])}</h3>
+                      <span className="muted">{relativeEventTime(entry.createdAt, now, locale)}</span>
                     </div>
                     <p className="event-timeline-meta">
                       <time dateTime={new Date(entry.createdAt).toISOString()}>
-                        {eventTime(entry.createdAt)}
+                        {eventTime(entry.createdAt, locale)}
                       </time>
-                      <span> · {entry.source === 'automatic' ? '自动检测' : '管理员发布'}</span>
+                      <span>
+                        {' '}
+                        · {entry.source === 'automatic' ? t('event.automatic') : t('event.manual')}
+                      </span>
                     </p>
                     {entry.legacyTitle && <p className="event-legacy-title">{entry.legacyTitle}</p>}
-                    <p className="event-body">{entry.body}</p>
+                    <p className="event-body">{localizedEntryBody(entry, locale)}</p>
                   </li>
                 ))}
               </ol>

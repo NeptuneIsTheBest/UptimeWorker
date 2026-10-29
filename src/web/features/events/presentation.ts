@@ -1,8 +1,10 @@
+import { intlLocale, type Locale } from '../../../shared/locale';
+import { translate, type MessageKey } from '../../i18n/core';
 import { isEventProgressTitle } from '../../../shared/events/progress';
 import type { EventProgressTitle, EventUpdate, StatusEvent } from '../../../shared/events/types';
 
-export const eventTime = (time: number) =>
-  new Intl.DateTimeFormat('zh-CN', {
+export const eventTime = (time: number, locale: Locale = 'zh-CN') =>
+  new Intl.DateTimeFormat(intlLocale(locale), {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -12,10 +14,10 @@ export const eventTime = (time: number) =>
     timeZoneName: 'short',
   }).format(time);
 
-const relativeTime = new Intl.RelativeTimeFormat('zh-CN', { numeric: 'always' });
-export function relativeEventTime(time: number, now: number) {
+export function relativeEventTime(time: number, now: number, locale: Locale = 'zh-CN') {
+  const relativeTime = new Intl.RelativeTimeFormat(intlLocale(locale), { numeric: 'always' });
   const elapsed = Math.max(0, now - time);
-  if (elapsed < 60_000) return '刚刚';
+  if (elapsed < 60_000) return translate(locale, 'time.justNow');
   for (const [duration, unit] of [
     [604_800_000, 'week'],
     [86_400_000, 'day'],
@@ -24,7 +26,7 @@ export function relativeEventTime(time: number, now: number) {
   ] as const) {
     if (elapsed >= duration) return relativeTime.format(-Math.floor(elapsed / duration), unit);
   }
-  return '刚刚';
+  return translate(locale, 'time.justNow');
 }
 
 interface EventEntry {
@@ -70,4 +72,32 @@ export function eventTimeline(event: StatusEvent): EventEntry[] {
     .reverse()
     .map((update) => progressEntry(event, update))
     .concat(initialEntry(event));
+}
+
+export const PROGRESS_LABELS: Record<EventProgressTitle | 'Stopped', MessageKey> = {
+  Scheduled: 'progress.Scheduled',
+  Updated: 'progress.Updated',
+  'In Progress': 'progress.InProgress',
+  Completed: 'progress.Completed',
+  Investigating: 'progress.Investigating',
+  Identified: 'progress.Identified',
+  Monitoring: 'progress.Monitoring',
+  Resolved: 'progress.Resolved',
+  Stopped: 'progress.Stopped',
+};
+// Recognize only our persisted templates. Manual content and unfamiliar legacy text stay untouched.
+export function localizedEventTitle(event: Pick<StatusEvent, 'source' | 'title'>, locale: Locale) {
+  const suffix = ' 服务异常';
+  return event.source === 'automatic' && event.title.endsWith(suffix)
+    ? translate(locale, 'auto.title', { name: event.title.slice(0, -suffix.length) })
+    : event.title;
+}
+export function localizedEntryBody(entry: Pick<EventEntry, 'source' | 'body'>, locale: Locale) {
+  if (entry.source !== 'automatic') return entry.body;
+  const templates: Record<string, MessageKey> = {
+    '定时检测持续失败，已达到自动发布阈值。恢复后将自动更新此事件。': 'auto.body',
+    '检测已恢复正常。': 'auto.recovered',
+    '节点已删除，已停止跟踪。': 'auto.stopped',
+  };
+  return Object.hasOwn(templates, entry.body) ? translate(locale, templates[entry.body]) : entry.body;
 }

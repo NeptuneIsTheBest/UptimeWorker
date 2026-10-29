@@ -1,3 +1,4 @@
+import { errorMessage, type DisplayMessage } from '../i18n/core';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { isPageRefreshSeconds } from '../../shared/settings/validation';
 import { DEFAULT_PAGE_REFRESH_SECONDS } from '../../shared/settings/constants';
@@ -6,7 +7,7 @@ import { api } from '../lib/api';
 
 export function useRemote<T extends PageRefreshSettings>(path: string) {
   const [data, setData] = useState<T | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<DisplayMessage | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(true);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<number | null>(null);
@@ -59,7 +60,7 @@ export function useRemote<T extends PageRefreshSettings>(path: string) {
         }
       } catch (err) {
         if (active && id === requestId && !(err instanceof DOMException && err.name === 'AbortError'))
-          setError(err instanceof Error ? err.message : '网络连接失败');
+          setError(errorMessage(err, 'error.network'));
       } finally {
         if (active && id === requestId) {
           setLoading(false);

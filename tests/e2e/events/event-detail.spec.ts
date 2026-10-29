@@ -72,7 +72,7 @@ test('opens a shareable timeline with latest-only cards, legacy text and full lo
   await page.route(`**/api/events/${event.id}`, (route) => route.fulfill({ json: detail(event) }));
   await page.goto('/');
   const card = page.locator('.event-card');
-  await expect(card.locator('.event-latest h4')).toHaveText('In Progress');
+  await expect(card.locator('.event-latest h4')).toHaveText('维护进行中');
   await expect(card).not.toContainText(event.body);
   await expect(card).not.toContainText(legacyTitle);
   await expect(card.locator('details')).toHaveCount(0);
@@ -85,7 +85,7 @@ test('opens a shareable timeline with latest-only cards, legacy text and full lo
   await expect(page.locator('.brand')).toContainText('区域服务状态');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(event.title);
   await expect(page.locator('.event-last-updated time')).toHaveText('2分钟前');
-  await expect(page.locator('.event-timeline h3')).toHaveText(['In Progress', 'Updated', 'Scheduled']);
+  await expect(page.locator('.event-timeline h3')).toHaveText(['维护进行中', '进展更新', '计划维护']);
   await expect(page.locator('.event-timeline .event-legacy-title')).toHaveText(legacyTitle);
   await expect(page.locator('.event-timeline img')).toHaveCount(0);
   await expect(page.locator('.event-timeline .event-body').first()).toHaveText(latestBody);
@@ -99,7 +99,7 @@ test('opens a shareable timeline with latest-only cards, legacy text and full lo
     '/monitors/hong-kong',
   );
   await page.reload();
-  await expect(page.locator('.event-timeline h3')).toHaveText(['In Progress', 'Updated', 'Scheduled']);
+  await expect(page.locator('.event-timeline h3')).toHaveText(['维护进行中', '进展更新', '计划维护']);
   for (const [width, height] of [
     [1440, 1000],
     [390, 844],
@@ -133,7 +133,7 @@ test('refreshes event progress, keeps data on failure and derives maintenance bo
   fail = false;
   await page.getByRole('button', { name: '重试', exact: true }).click();
   await expect(page.locator('.event-status')).toHaveText('待开始');
-  await expect(page.locator('.event-timeline h3')).toHaveText(['Scheduled']);
+  await expect(page.locator('.event-timeline h3')).toHaveText(['计划维护']);
   async function poll() {
     const response = page.waitForResponse((value) => value.url().endsWith(`/api/events/${event.id}`));
     await page.clock.runFor(30_000);
@@ -144,7 +144,7 @@ test('refreshes event progress, keeps data on failure and derives maintenance bo
   await expect(page.locator('.event-status')).toHaveText('维护进行中');
   await poll();
   await expect(page.locator('.event-status')).toHaveText('已过计划时间');
-  await expect(page.locator('.event-timeline h3')).toHaveText(['Scheduled']);
+  await expect(page.locator('.event-timeline h3')).toHaveText(['计划维护']);
   const lastRefreshed = await page.locator('.refresh-status time').getAttribute('datetime');
   event = {
     ...event,
@@ -172,7 +172,7 @@ test('refreshes event progress, keeps data on failure and derives maintenance bo
   await poll();
   await expect(page.getByRole('alert')).toHaveCount(0);
   await expect(page.locator('.event-status')).toHaveText('已完成');
-  await expect(page.locator('.event-timeline h3')).toHaveText(['Completed', 'Scheduled']);
+  await expect(page.locator('.event-timeline h3')).toHaveText(['维护完成', '计划维护']);
   await expect(page.locator('.event-detail-times')).toContainText('完成时间');
   await expect(page.locator('.refresh-interval')).toHaveText('自动刷新已关闭');
   const disabledCalls = calls;
@@ -239,9 +239,7 @@ for (const status of ['open', 'resolved', 'stopped'] as const) {
     await editor.getByRole('button', { name: '取消', exact: true }).click();
     await page.getByRole('link', { name: '查看时间线', exact: true }).click();
     await expect(page.locator('.event-timeline h3')).toHaveText(
-      status === 'open'
-        ? ['Investigating']
-        : [status === 'resolved' ? 'Resolved' : 'Stopped', 'Investigating'],
+      status === 'open' ? ['正在排查'] : [status === 'resolved' ? '故障恢复' : '已停止跟踪', '正在排查'],
     );
   });
 }
