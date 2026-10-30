@@ -13,6 +13,10 @@ import { Legend } from '../monitors/HistoryBars';
 import { effectiveStatus } from '../monitors/status';
 import { useNow } from '../../hooks/useNow';
 import { MonitorCard } from '../monitors/MonitorCard';
+import { UNGROUPED_ID } from '../../../shared/groups/types';
+import { monitorGroupKey, orderedGroups } from '../../../shared/groups/ordering';
+import { GroupHeading } from '../groups/GroupHeading';
+import { useCollapsedGroups } from '../groups/useCollapsedGroups';
 
 export function StatusPage() {
   const { t, locale } = useI18n();
@@ -22,6 +26,13 @@ export function StatusPage() {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
   const [groupFilter, setGroupFilter] = useState('all');
+  const collapsedGroups = useCollapsedGroups('public');
+  const filtering = search !== '' || filter !== 'all' || groupFilter !== 'all';
+  const displayGroups = orderedGroups(data?.groups ?? [], {
+    id: UNGROUPED_ID,
+    name: t('groups.ungrouped'),
+    sortOrder: data?.ungrouped?.sortOrder ?? Infinity,
+  });
   const monitors = data?.monitors ?? [];
   const statuses = monitors.map((m) => effectiveStatus(m, now));
   const up = statuses.filter((s) => s === 'up').length;
@@ -43,7 +54,7 @@ export function StatusPage() {
           m.name.toLowerCase().includes(search.toLowerCase()) &&
           (filter === 'all' || effectiveStatus(m, now) === filter) &&
           (groupFilter === 'all' ||
-            (data?.groups?.some((group) => group.id === m.groupId) ? m.groupId : '') === groupFilter),
+            monitorGroupKey(m.groupId, data?.groups ?? []) === (groupFilter || UNGROUPED_ID)),
       ),
     [monitors, search, filter, groupFilter, now, data?.groups],
   );
@@ -135,12 +146,11 @@ export function StatusPage() {
                 onChange={(e) => setGroupFilter(e.target.value)}
               >
                 <option value="all">{t('status.allGroups')}</option>
-                {(data?.groups ?? []).map((group) => (
-                  <option key={group.id} value={group.id}>
+                {displayGroups.map((group) => (
+                  <option key={group.id} value={group.id === UNGROUPED_ID ? '' : group.id}>
                     {group.name}
                   </option>
                 ))}
-                <option value="">{t('groups.ungrouped')}</option>
               </select>
               <select
                 aria-label={t('status.statusFilter')}
@@ -174,20 +184,25 @@ export function StatusPage() {
               {t('status.noMatchDescription')}
             </Empty>
           ) : (
-            [...(data?.groups ?? []), { id: '', name: t('groups.ungrouped') }].map((group) => {
+            displayGroups.map((group) => {
               const members = visible.filter(
-                (monitor) =>
-                  (data?.groups?.some((item) => item.id === monitor.groupId) ? monitor.groupId : '') ===
-                  group.id,
+                (monitor) => monitorGroupKey(monitor.groupId, data?.groups ?? []) === group.id,
               );
+              const collapsed = !filtering && collapsedGroups.isCollapsed(group.id);
+              const controls = `public-group-${group.id}`;
               return (
                 members.length > 0 && (
-                  <section className="monitor-group" key={group.id || 'ungrouped'} aria-label={group.name}>
-                    <h3 className="group-heading">
-                      {group.name}
-                      <span className="count-badge">{number(members.length, locale)}</span>
-                    </h3>
-                    <div className="monitor-group-list">
+                  <section className="monitor-group" key={group.id} aria-label={group.name}>
+                    <GroupHeading
+                      name={group.name}
+                      count={members.length}
+                      collapsed={collapsed}
+                      controls={controls}
+                      toggle={() => collapsedGroups.toggle(group.id)}
+                      variant="public"
+                      filtering={filtering}
+                    />
+                    <div className="monitor-group-list" id={controls} hidden={collapsed}>
                       {members.map((monitor) => (
                         <MonitorCard key={monitor.id} monitor={monitor} now={now} />
                       ))}

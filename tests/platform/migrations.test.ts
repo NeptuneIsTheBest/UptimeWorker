@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, it } from 'vitest';
-import { findMonitor } from '../../src/worker/features/monitors/repository';
+import { findMonitor, orderedMonitorsQuery } from '../../src/worker/features/monitors/repository';
 import { applyMigration, databaseFixture, httpConfig, tcpConfig, timestamp } from '../support/fixtures';
 
 // Seed old schemas without using repository code that requires the latest columns.
@@ -31,6 +31,73 @@ beforeAll(async () => {
 });
 afterAll(async () => {
   await fixture?.dispose();
+});
+
+it('adds Ungrouped after existing groups without changing their order or monitoring data', async () => {
+  const legacy = await databaseFixture('0008_display_order.sql');
+  try {
+    const db = legacy.db;
+    await db.batch([
+      db.prepare("INSERT INTO monitor_groups VALUES ('a', '未分组', 50, 3, 1)"),
+      db.prepare("INSERT INTO monitor_groups VALUES ('b', 'B', 1000000, 2, 2)"),
+    ]);
+    const grouped = await createMonitor(db, httpConfig, timestamp);
+    await createMonitor(db, tcpConfig, timestamp + 1);
+    await db.prepare("UPDATE monitors SET group_id = 'a' WHERE id = ?").bind(grouped.id).run();
+    await db
+      .prepare(
+        `INSERT INTO check_results
+      (monitor_id, monitor_version, scheduled_at, checked_at, ok, latency_ms)
+      VALUES (?, 1, ?, ?, 0, 42)`,
+      )
+      .bind(grouped.id, timestamp, timestamp)
+      .run();
+    const tables = [
+      'monitors',
+      'check_results',
+      'daily_stats',
+      'monitor_outages',
+      'events',
+      'global_settings',
+      'scheduler_state',
+    ];
+    const snapshot = async () =>
+      (await db.batch(tables.map((table) => db.prepare(`SELECT * FROM ${table}`)))).map(
+        (result) => result.results,
+      );
+    const before = await snapshot();
+    const groups = (await db.prepare('SELECT * FROM monitor_groups ORDER BY id').all()).results;
+    const order = (await db.prepare(orderedMonitorsQuery).all()).results;
+    await applyMigration(db, '0009_ungrouped_order.sql');
+    expect(await snapshot()).toEqual(before);
+    expect(
+      (await db.prepare("SELECT * FROM monitor_groups WHERE id != '__ungrouped__' ORDER BY id").all())
+        .results,
+    ).toEqual(groups);
+    expect(await db.prepare("SELECT * FROM monitor_groups WHERE id = '__ungrouped__'").first()).toEqual({
+      id: '__ungrouped__',
+      name: '',
+      sort_order: 1000001,
+      version: 1,
+      created_at: 0,
+    });
+    expect((await db.prepare(orderedMonitorsQuery).all()).results).toEqual(order);
+    expect((await db.prepare('PRAGMA foreign_key_check').all()).results).toEqual([]);
+  } finally {
+    await legacy.dispose();
+  }
+});
+
+it('initializes Ungrouped at zero on an empty installation', async () => {
+  const legacy = await databaseFixture('0008_display_order.sql');
+  try {
+    await applyMigration(legacy.db, '0009_ungrouped_order.sql');
+    expect(
+      (await legacy.db.prepare('SELECT id, sort_order, version FROM monitor_groups').all()).results,
+    ).toEqual([{ id: '__ungrouped__', sort_order: 0, version: 1 }]);
+  } finally {
+    await legacy.dispose();
+  }
 });
 
 it('initializes display positions in legacy order without changing monitoring state or groups', async () => {

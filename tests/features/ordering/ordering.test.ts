@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
 import type { AdminMonitor } from '../../../src/shared/monitors/types';
-import type { MonitorGroup } from '../../../src/shared/groups/types';
+import { UNGROUPED_ID, type GroupListing, type MonitorGroup } from '../../../src/shared/groups/types';
+import { orderedGroups } from '../../../src/shared/groups/ordering';
 import { orderItems } from '../../../src/shared/ordering';
 import {
   adminMonitor,
@@ -9,7 +10,12 @@ import {
   listMonitors,
   updateMonitor,
 } from '../../../src/worker/features/monitors/repository';
-import { deleteGroup, listGroups, saveGroup } from '../../../src/worker/features/groups/repository';
+import {
+  deleteGroup,
+  listGroupOrder,
+  listGroups,
+  saveGroup,
+} from '../../../src/worker/features/groups/repository';
 import { saveOrder } from '../../../src/worker/features/ordering/repository';
 import { getStatus } from '../../../src/worker/features/status/queries';
 import { runScheduled } from '../../../src/worker/features/monitors/scheduler';
@@ -44,6 +50,10 @@ const monitor = async (name: string, groupId: string | null = null, enabled = tr
   );
 const current = async () => (await listMonitors(fixture.db)).map((row) => adminMonitor(row));
 const snapshot = async () => (await fixture.db.prepare('SELECT * FROM monitors ORDER BY id').all()).results;
+const groupSnapshot = async () =>
+  (await fixture.db.prepare('SELECT * FROM monitor_groups ORDER BY id').all()).results;
+const groupItems = async (groups: MonitorGroup[]) =>
+  orderItems([...groups, (await listGroupOrder(fixture.db)).ungrouped]);
 
 it('persists group and member ordering consistently in admin and public lists', async () => {
   const { request } = apiClient(fixture.db);
@@ -54,7 +64,7 @@ it('persists group and member ordering consistently in admin and public lists', 
   const a1 = await monitor('A1', first.id);
   const a2 = await monitor('A2', first.id);
   expect((await current()).map((row) => row.name)).toEqual(['A1', 'A2', 'B1', 'Ungrouped']);
-  const response = await request('admin/groups/order', 'PUT', { items: orderItems([second, first]) });
+  const response = await request('admin/groups/order', 'PUT', { items: await groupItems([second, first]) });
   expect(response.status).toBe(200);
   expect(((await response.json()) as { groups: MonitorGroup[] }).groups.map((group) => group.name)).toEqual([
     'Second',
@@ -152,16 +162,131 @@ it('guards group reorders against stale versions and membership changes', async 
   const { request } = apiClient(fixture.db);
   const a = await saveGroup(fixture.db, { name: 'A' });
   const b = await saveGroup(fixture.db, { name: 'B' });
-  const items = orderItems([b, a]);
+  const items = await groupItems([b, a]);
   await saveGroup(fixture.db, { name: 'Renamed' }, a.id, a.version);
   const before = await listGroups(fixture.db);
   expect((await request('admin/groups/order', 'PUT', { items })).status).toBe(409);
   expect(await listGroups(fixture.db)).toEqual(before);
+  const beforeItems = await groupItems(before);
   const c = await saveGroup(fixture.db, { name: 'C' });
-  expect((await request('admin/groups/order', 'PUT', { items: orderItems(before) })).status).toBe(409);
+  expect((await request('admin/groups/order', 'PUT', { items: beforeItems })).status).toBe(409);
   const latest = await listGroups(fixture.db);
+  const latestItems = await groupItems(latest);
   await deleteGroup(fixture.db, c.id, c.version);
-  expect((await request('admin/groups/order', 'PUT', { items: orderItems(latest) })).status).toBe(409);
+  expect((await request('admin/groups/order', 'PUT', { items: latestItems })).status).toBe(409);
+});
+
+it.each([0, 1, 2])('places Ungrouped at position %s in both API lists', async (position) => {
+  const { request } = apiClient(fixture.db);
+  const a = await saveGroup(fixture.db, { name: 'A' });
+  const b = await saveGroup(fixture.db, { name: 'B' });
+  await monitor('A1', a.id);
+  await monitor('B1', b.id);
+  await monitor('U1');
+  const before = await snapshot();
+  const { ungrouped } = await listGroupOrder(fixture.db);
+  const target = [a, b, { ...ungrouped, name: 'Ungrouped' }];
+  target.splice(position, 0, target.pop()!);
+  const response = await request('admin/groups/order', 'PUT', { items: orderItems(target) });
+  expect(response.status).toBe(200);
+  const result = (await response.json()) as GroupListing;
+  expect(result.ungrouped).toMatchObject({ id: UNGROUPED_ID, sortOrder: position });
+  expect(result.groups.map((group) => group.id)).toEqual([a.id, b.id]);
+  const expected = ['A1', 'B1'];
+  expected.splice(position, 0, 'U1');
+  const admin = (await (await request('admin/monitors')).json()) as GroupListing & {
+    monitors: AdminMonitor[];
+  };
+  expect(admin.ungrouped).toEqual(result.ungrouped);
+  expect(admin.monitors.map((row) => row.name)).toEqual(expected);
+  const status = await getStatus(environment(fixture.db));
+  expect(status.monitors.map((row) => row.name)).toEqual(expected);
+  expect(status.ungrouped).toEqual({ id: UNGROUPED_ID, sortOrder: position });
+  expect(status.monitors.find((row) => row.name === 'U1')?.groupId).toBeNull();
+  expect(await snapshot()).toEqual(before);
+});
+
+it('requires a complete, current group snapshot including Ungrouped without partial writes', async () => {
+  const { request } = apiClient(fixture.db);
+  const a = await saveGroup(fixture.db, { name: 'A' });
+  const { ungrouped } = await listGroupOrder(fixture.db);
+  const items = orderItems([ungrouped, a]);
+  const before = await groupSnapshot();
+  for (const invalid of [
+    orderItems([a]),
+    orderItems([ungrouped]),
+    [{ ...items[0], expectedVersion: ungrouped.version + 1 }, items[1]],
+    [{ ...items[0], expectedSortOrder: ungrouped.sortOrder + 1 }, items[1]],
+    [{ ...items[0], id: 'missing' }, items[1]],
+  ]) {
+    expect((await request('admin/groups/order', 'PUT', { items: invalid })).status).toBe(409);
+    expect(await groupSnapshot()).toEqual(before);
+  }
+  expect((await request('admin/groups/order', 'PUT', { items: [items[0], items[0]] })).status).toBe(400);
+  expect(await groupSnapshot()).toEqual(before);
+});
+
+it('allows only one concurrent group reorder from the same snapshot', async () => {
+  const { request } = apiClient(fixture.db);
+  const a = await saveGroup(fixture.db, { name: 'A' });
+  const b = await saveGroup(fixture.db, { name: 'B' });
+  const { ungrouped } = await listGroupOrder(fixture.db);
+  const responses = await Promise.all([
+    request('admin/groups/order', 'PUT', { items: orderItems([ungrouped, a, b]) }),
+    request('admin/groups/order', 'PUT', { items: orderItems([b, ungrouped, a]) }),
+  ]);
+  expect(responses.map((response) => response.status).sort()).toEqual([200, 409]);
+});
+
+it('sorts empty groups and Ungrouped even when there are no monitors', async () => {
+  const { request } = apiClient(fixture.db);
+  const initial = await listGroupOrder(fixture.db);
+  expect(initial.groups).toEqual([]);
+  expect(
+    (await request('admin/groups/order', 'PUT', { items: orderItems([initial.ungrouped]) })).status,
+  ).toBe(200);
+  const a = await saveGroup(fixture.db, { name: 'Empty' });
+  const { ungrouped } = await listGroupOrder(fixture.db);
+  expect((await request('admin/groups/order', 'PUT', { items: orderItems([ungrouped, a]) })).status).toBe(
+    200,
+  );
+  expect((await listGroupOrder(fixture.db)).ungrouped.sortOrder).toBe(0);
+  expect(await current()).toEqual([]);
+});
+
+it.each([0, 1, 2])('appends new groups while respecting Ungrouped at position %s', async (position) => {
+  const { request } = apiClient(fixture.db);
+  const a = await saveGroup(fixture.db, { name: 'A' });
+  const b = await saveGroup(fixture.db, { name: 'B' });
+  const { ungrouped } = await listGroupOrder(fixture.db);
+  const target = [a, b, { ...ungrouped, name: '' }];
+  target.splice(position, 0, target.pop()!);
+  expect((await request('admin/groups/order', 'PUT', { items: orderItems(target) })).status).toBe(200);
+  const before = await groupSnapshot();
+  expect((await request('admin/groups', 'POST', { name: 'A' })).status).toBe(409);
+  expect(await groupSnapshot()).toEqual(before);
+  const c = await saveGroup(fixture.db, { name: 'C' });
+  const order = await listGroupOrder(fixture.db);
+  const actual = orderedGroups(order.groups, { ...order.ungrouped, name: '' }).map((group) => group.id);
+  const expected = target.map((group) => group.id);
+  expected.splice(position === 2 ? 2 : 3, 0, c.id);
+  expect(actual).toEqual(expected);
+  await deleteGroup(fixture.db, c.id, c.version);
+  expect((await listGroupOrder(fixture.db)).ungrouped).toEqual(order.ungrouped);
+});
+
+it('keeps SQL ordering and displayed sections consistent for tied numeric positions', async () => {
+  const a = await saveGroup(fixture.db, { name: 'A' });
+  const b = await saveGroup(fixture.db, { name: 'B' });
+  const { ungrouped } = await listGroupOrder(fixture.db);
+  await saveOrder(fixture.db, 'monitor_groups', orderItems([ungrouped, a, b]));
+  const updated = (await listGroups(fixture.db)).find((group) => group.id === b.id)!;
+  await saveGroup(fixture.db, { name: 'B', sortOrder: 0 }, b.id, updated.version);
+  for (const id of [a.id, b.id, null]) await monitor(id ?? UNGROUPED_ID, id);
+  const order = await listGroupOrder(fixture.db);
+  expect((await current()).map((row) => row.name)).toEqual(
+    orderedGroups(order.groups, { ...order.ungrouped, name: '' }).map((group) => group.id),
+  );
 });
 
 it('appends new groups, preserves omitted orders on edits, and supports legacy numeric positions', async () => {

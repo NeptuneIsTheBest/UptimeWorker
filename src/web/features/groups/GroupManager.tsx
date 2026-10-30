@@ -2,7 +2,8 @@ import { displayMessage, errorMessage, type DisplayMessage } from '../../i18n/co
 import { useI18n } from '../../i18n/I18nProvider';
 import { parseGroup } from '../../../shared/groups/validation';
 import { useState, type FormEvent } from 'react';
-import type { MonitorGroup } from '../../../shared/groups/types';
+import { UNGROUPED_ID, type GroupListing, type MonitorGroup } from '../../../shared/groups/types';
+import { orderedGroups } from '../../../shared/groups/ordering';
 import { api } from '../../lib/api';
 import { ErrorNotice } from '../../components/feedback';
 import { Modal } from '../../components/Modal';
@@ -27,15 +28,20 @@ export function GroupManager({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<DisplayMessage | null>(null);
   const ordering = useReorder({
-    items: remote.data?.groups ?? [],
-    disabled: busy || !!editing || !!deleting || remote.locked,
+    items: orderedGroups(remote.data?.groups ?? [], {
+      id: UNGROUPED_ID,
+      name: t('groups.ungrouped'),
+      sortOrder: remote.data?.ungrouped?.sortOrder ?? Infinity,
+      version: remote.data?.ungrouped?.version ?? 0,
+    }),
+    disabled: busy || !!editing || !!deleting || remote.locked || !remote.data?.ungrouped,
     suspend: remote.suspend,
     save: async (items) => {
-      const result = await api<{ groups: MonitorGroup[] }>('/api/admin/groups/order', {
+      const result = await api<GroupListing>('/api/admin/groups/order', {
         method: 'PUT',
         body: JSON.stringify({ items: orderItems(items) }),
       });
-      remote.updateData((current) => ({ ...current, groups: result.groups }));
+      remote.updateData((current) => ({ ...current, ...result }));
     },
   });
   const locked = busy || remote.locked;
@@ -104,27 +110,31 @@ export function GroupManager({
                     handleProps={ordering.handleProps(group)}
                     move={(offset) => ordering.move(group, ordering.items[index + offset])}
                   />
-                  <button
-                    type="button"
-                    className="button small secondary"
-                    disabled={locked}
-                    onClick={() => {
-                      setEditing(group);
-                      setName(group.name);
-                      setDeleting(null);
-                      setError(null);
-                    }}
-                  >
-                    {t('common.editNamed', { name: group.name })}
-                  </button>
-                  <button
-                    type="button"
-                    className="button small secondary"
-                    disabled={locked}
-                    onClick={() => setDeleting(group)}
-                  >
-                    {t('common.deleteNamed', { name: group.name })}
-                  </button>
+                  {group.id !== UNGROUPED_ID && (
+                    <>
+                      <button
+                        type="button"
+                        className="button small secondary"
+                        disabled={locked}
+                        onClick={() => {
+                          setEditing(group);
+                          setName(group.name);
+                          setDeleting(null);
+                          setError(null);
+                        }}
+                      >
+                        {t('common.editNamed', { name: group.name })}
+                      </button>
+                      <button
+                        type="button"
+                        className="button small secondary"
+                        disabled={locked}
+                        onClick={() => setDeleting(group)}
+                      >
+                        {t('common.deleteNamed', { name: group.name })}
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             ))}

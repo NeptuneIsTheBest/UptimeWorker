@@ -2,6 +2,7 @@ import type { AdminMonitor, MonitorConfig, MonitorStatus } from '../../../shared
 import type { MonitorRow } from './types';
 import { parseMonitorConfig } from '../../../shared/monitors/validation';
 import { assertGroup } from '../groups/repository';
+import { UNGROUPED_ID } from '../../../shared/groups/types';
 
 export function monitorConfig(row: MonitorRow): MonitorConfig {
   return parseMonitorConfig({
@@ -39,8 +40,9 @@ export async function listMonitors(db: D1Database) {
   return (await db.prepare(orderedMonitorsQuery).all<MonitorRow>()).results;
 }
 export const orderedMonitorsQuery = `SELECT m.* FROM monitors m
-  LEFT JOIN monitor_groups g ON g.id = m.group_id
-  ORDER BY g.id IS NULL, g.sort_order, g.created_at, g.id, m.sort_order, m.created_at, m.id`;
+  LEFT JOIN monitor_groups g ON g.id = COALESCE(m.group_id, '${UNGROUPED_ID}')
+  ORDER BY g.id IS NULL, g.sort_order, g.id = '${UNGROUPED_ID}', g.created_at, g.id,
+    m.sort_order, m.created_at, m.id`;
 export async function createMonitor(
   db: D1Database,
   config: MonitorConfig,

@@ -62,13 +62,13 @@ GET / PATCH 返回下表字段。PATCH 须携带当前 `version`，其余字段�
 
 ## 分组与事件
 
-分组包含 `id`、`name`、`sortOrder`、`version`。POST / PATCH 提交 `name`（1–80 字符、不重复），可选 `sortOrder`（0–1000000 的整数），PATCH 另须提交 `version`。创建省略顺序时追加到末尾，编辑省略时保留原顺序；兼容旧客户端的数字排序。追加时若已有顺序占满数值范围，会先按现有顺序归一化并更新受影响分组的版本。删除分组后节点的 `groupId` 变为 null，并按原组内顺序追加到未分组末尾。
+分组包含 `id`、`name`、`sortOrder`、`version`。POST / PATCH 提交 `name`（1–80 字符、不重复），可选 `sortOrder`（0–1000000 的整数），PATCH 另须提交 `version`。创建省略顺序时追加到普通分组末尾；未分组原本在末尾时继续留在末尾。编辑省略时保留原顺序，兼容旧客户端的数字排序。追加时若已有顺序占满数值范围，会先按现有顺序归一化并更新受影响分组的版本。删除分组后节点的 `groupId` 变为 null，并按原组内顺序追加到未分组末尾。
 
-监控的 `groupId` 须指向现存分组；创建时省略默认 null，PATCH 省略保留原值，传 null 移出分组。只改名称或分组会增加管理版本，保留当前状态、检测计划和连续失败计时。`GET /api/admin/monitors` 返回 `groups`。
+监控的 `groupId` 须指向现存普通分组；创建时省略默认 null，PATCH 省略保留原值，传 null 移出分组。只改名称或分组会增加管理版本，保留当前状态、检测计划和连续失败计时。`GET /api/admin/groups` 和 `GET /api/admin/monitors` 返回普通分组 `groups`，以及 `ungrouped: {id: "__ungrouped__", sortOrder, version}`。`GET /api/status` 返回相应的公开信息，省略版本。系统项仅参与排序，PATCH / DELETE 返回 `400 group_readonly`；将其 ID 用作监控 `groupId` 返回 `400 group_invalid`，未分组节点仍使用 null。
 
-管理端监控响应增加只读 `sortOrder`，不属于探测配置，普通监控 POST / PATCH 不接受它作为排序指令。新增或换组的服务追加到目标组末尾。管理和公开列表均按分组顺序、组内服务顺序排列，未分组在最后；同序按创建时间、ID 保证稳定。
+管理端监控响应增加只读 `sortOrder`，不属于探测配置，普通监控 POST / PATCH 不接受它作为排序指令。新增或换组的服务追加到目标组末尾。管理和公开列表均按分组顺序、组内服务顺序排列，未分组使用保存的分组位置；普通分组同序按创建时间、ID 保证稳定，未分组在相同序号的普通分组之后。
 
-排序请求的 `items` 必须是目标顺序的完整非空列表，每项为 `{id, expectedVersion, expectedSortOrder}`，其中版本和顺序取自最近一次管理列表响应，而不是目标序号。`PUT /api/admin/groups/order` 提交 `{items}`，返回 `{groups}`；`PUT /api/admin/monitors/order` 提交 `{groupId, items}`，`groupId` 必填，null 表示未分组，返回 `{groupId, monitors}`（该组全部服务）。成功后按数组位置保存从 0 开始的连续序号。
+排序请求的 `items` 必须是目标顺序的完整非空列表，每项为 `{id, expectedVersion, expectedSortOrder}`，其中版本和顺序取自最近一次管理列表响应，而不是目标序号。`PUT /api/admin/groups/order` 提交 `{items}`，必须同时包含全部普通分组及 `__ungrouped__`（包括空分组），返回 `{groups, ungrouped}`；旧请求遗漏系统项返回 `409 order_conflict`。`PUT /api/admin/monitors/order` 提交 `{groupId, items}`，`groupId` 必填，null 表示未分组，返回 `{groupId, monitors}`（该组全部服务）。成功后按数组位置保存从 0 开始的连续序号。
 
 两个排序接口的请求体上限为 256 KiB；缺失或无效参数、重复 ID、空列表返回 `400`，完整成员集合、分组归属、原版本或原顺序与数据库不一致返回 `409 order_conflict`。排序在单条数据库更新中校验全量快照并提交，不发生部分写入。服务排序不修改监控 `version`，正在执行的检测继续有效；分组排序会增加顺序发生变化的分组版本。保存后客户端应使用返回的新快照，冲突时重新读取再提交。
 

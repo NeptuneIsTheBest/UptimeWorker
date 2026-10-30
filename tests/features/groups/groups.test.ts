@@ -1,7 +1,9 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createMonitor, findMonitor, updateMonitor } from '../../../src/worker/features/monitors/repository';
 import { listEvents } from '../../../src/worker/features/events/repository';
-import { saveGroup } from '../../../src/worker/features/groups/repository';
+import { listGroupOrder, saveGroup } from '../../../src/worker/features/groups/repository';
+import { UNGROUPED_ID } from '../../../src/shared/groups/types';
+import { apiClient } from '../../support/api-client';
 import { runScheduled } from '../../../src/worker/features/monitors/scheduler';
 import { databaseFixture, httpConfig, resetDatabase, success, timestamp } from '../../support/fixtures';
 
@@ -33,6 +35,31 @@ const tick = (n: number, ok = false) =>
   );
 const recent = () => listEvents(fixture.db).then((result) => result.events);
 describe('monitor groups', () => {
+  it('protects the system group and rejects assigning monitors to its reserved ID', async () => {
+    const { request } = apiClient(fixture.db);
+    const row = await node();
+    const { ungrouped } = await listGroupOrder(fixture.db);
+    const before = await listGroupOrder(fixture.db);
+    for (const method of ['PATCH', 'DELETE'] as const) {
+      const response = await request(`admin/groups/${UNGROUPED_ID}`, method, {
+        name: 'Renamed',
+        version: ungrouped.version,
+      });
+      expect(response.status).toBe(400);
+      expect(await response.json()).toMatchObject({ code: 'group_readonly' });
+    }
+    expect((await request('admin/monitors', 'POST', { ...httpConfig, groupId: UNGROUPED_ID })).status).toBe(
+      400,
+    );
+    expect(
+      (await request(`admin/monitors/${row.id}`, 'PATCH', { version: 1, groupId: UNGROUPED_ID })).status,
+    ).toBe(400);
+    expect(await findMonitor(fixture.db, row.id)).toMatchObject({ group_id: null, version: 1 });
+    expect(await listGroupOrder(fixture.db)).toEqual(before);
+    const custom = await saveGroup(fixture.db, { name: '未分组' });
+    expect(custom.id).not.toBe(UNGROUPED_ID);
+    expect((await listGroupOrder(fixture.db)).groups).toEqual([custom]);
+  });
   it('keeps current state and failure streaks when changing names/groups; deleting groups ungroups nodes', async () => {
     const row = await node();
     const group = await saveGroup(fixture.db, { name: '亚洲', sortOrder: 2 });

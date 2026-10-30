@@ -124,6 +124,10 @@ export const errorMessages = {
   monitor_object_required: { zh: '监控配置必须是对象', en: 'Monitor configuration must be an object.' },
   monitor_name_invalid: { zh: '名称需为 1–80 个字符', en: 'The name must contain 1–80 characters.' },
   group_invalid: { zh: '分组无效', en: 'Invalid group.' },
+  group_readonly: {
+    zh: '未分组仅支持排序，不能重命名或删除。',
+    en: 'Ungrouped can only be reordered. It cannot be renamed or deleted.',
+  },
   monitor_interval_invalid: {
     zh: '检测间隔需为 {min}–{max} 分钟的整数',
     en: 'The check interval must be an integer from {min} to {max} minutes.',

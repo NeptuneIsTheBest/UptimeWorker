@@ -3,7 +3,8 @@ import { test as base, expect, type APIRequestContext } from '@playwright/test';
 import type { AdminMonitor } from '../../../src/shared/monitors/types';
 import type { GlobalSettings } from '../../../src/shared/settings/types';
 import type { AdminEvent } from '../../../src/shared/events/types';
-import type { MonitorGroup } from '../../../src/shared/groups/types';
+import type { GroupListing } from '../../../src/shared/groups/types';
+import { orderItems } from '../../../src/shared/ordering';
 
 export { expect };
 export const origin = { Origin: 'http://127.0.0.1:4173' };
@@ -60,7 +61,7 @@ export const test = base.extend<{ resetState: void }>({
           ).toBe(true);
       }
       const listing = await request.get('/api/admin/groups');
-      const { groups } = (await listing.json()) as { groups: MonitorGroup[] };
+      const { groups, ungrouped } = (await listing.json()) as GroupListing;
       for (const group of groups)
         expect(
           (
@@ -70,6 +71,14 @@ export const test = base.extend<{ resetState: void }>({
             })
           ).ok(),
         ).toBe(true);
+      expect(
+        (
+          await request.put('/api/admin/groups/order', {
+            headers: origin,
+            data: { items: orderItems([ungrouped]) },
+          })
+        ).ok(),
+      ).toBe(true);
       const response = await request.get('/api/admin/settings');
       expect(response.ok()).toBe(true);
       const current = (await response.json()) as GlobalSettings;

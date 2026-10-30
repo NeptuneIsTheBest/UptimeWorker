@@ -52,19 +52,32 @@ test('dragging groups and services persists the same order on the public page', 
     .getByRole('button', { name: '拖动排序 欧洲', exact: true })
     .dragTo(dialog.locator('.group-manager-row').filter({ hasText: '亚洲' }));
   await expect(dialog.getByRole('status')).toContainText('排序已保存');
-  await expect(dialog.locator('.group-manager-row strong')).toHaveText(['欧洲', '亚洲']);
+  await expect(dialog.locator('.group-manager-row strong')).toHaveText(['欧洲', '亚洲', '未分组']);
   await expect(dialog.getByRole('button', { name: '上移 欧洲', exact: true })).toBeDisabled();
+  await dialog
+    .getByRole('button', { name: '拖动排序 未分组', exact: true })
+    .dragTo(dialog.locator('.group-manager-row').filter({ hasText: '亚洲' }));
+  await expect(dialog.locator('.group-manager-row strong')).toHaveText(['欧洲', '未分组', '亚洲']);
+  await expect(dialog.getByRole('status')).toContainText('排序已保存');
+  await expect(dialog.getByRole('button', { name: '编辑 未分组', exact: true })).toHaveCount(0);
+  await expect(dialog.getByRole('button', { name: '删除 未分组', exact: true })).toHaveCount(0);
   await dialog.getByRole('button', { name: '关闭', exact: true }).click();
   await page.reload();
-  await expect(names(page)).toHaveText(['欧洲二', '欧洲一', '亚洲三', '亚洲一', '亚洲二', '未分组节点']);
+  await expect(names(page)).toHaveText(['欧洲二', '欧洲一', '未分组节点', '亚洲三', '亚洲一', '亚洲二']);
   await page.goto('/');
   await expect(page.locator('.monitor-name')).toHaveText([
     '欧洲二',
     '欧洲一',
+    '未分组节点',
     '亚洲三',
     '亚洲一',
     '亚洲二',
-    '未分组节点',
+  ]);
+  await expect(page.getByLabel('按分组筛选').locator('option')).toHaveText([
+    '全部分组',
+    '欧洲',
+    '未分组',
+    '亚洲',
   ]);
   await page.getByLabel('按分组筛选').selectOption(a.id);
   await expect(page.locator('.monitor-name')).toHaveText(['亚洲三', '亚洲一', '亚洲二']);
@@ -117,18 +130,21 @@ for (const kind of ['groups', 'monitors'] as const) {
       held = route;
     });
     await page.getByRole('button', { name: '上移 第二项', exact: true }).click();
-    await expect(rows).toHaveText(['第二项', '第一项']);
+    const withUngrouped = (values: string[]) => (kind === 'groups' ? [...values, '未分组'] : values);
+    await expect(rows).toHaveText(withUngrouped(['第二项', '第一项']));
     await expect(page.getByRole('button', { name: '下移 第二项', exact: true })).toBeDisabled();
     await expect.poll(() => Boolean(held)).toBe(true);
     await held.fulfill({ status: 503, json: { error: '暂时无法保存' } });
     await expect(page.getByRole('alert')).toContainText('暂时无法保存');
-    await expect(rows).toHaveText(['第一项', '第二项']);
+    await expect(rows).toHaveText(withUngrouped(['第一项', '第二项']));
     await page.unroute(endpoint);
 
     const response = await request.get('/api/admin/monitors');
     const latest = (await response.json()) as AdminResponse;
     const items = orderItems(
-      kind === 'groups' ? [...latest.groups!].reverse() : [...latest.monitors].reverse(),
+      kind === 'groups'
+        ? [...latest.groups!].reverse().concat({ ...latest.ungrouped!, name: '' })
+        : [...latest.monitors].reverse(),
     );
     expect(
       (
@@ -137,7 +153,7 @@ for (const kind of ['groups', 'monitors'] as const) {
     ).toBe(200);
     await page.getByRole('button', { name: '上移 第二项', exact: true }).click();
     await expect(page.getByRole('alert')).toContainText('列表或顺序已变更');
-    await expect(rows).toHaveText(['第二项', '第一项']);
+    await expect(rows).toHaveText(withUngrouped(['第二项', '第一项']));
   });
 }
 
@@ -163,6 +179,7 @@ test('ignores a stale in-flight refresh and pauses refresh while saving', async 
   });
   await page.getByRole('button', { name: '上移 第二项', exact: true }).click();
   await expect(names(page)).toHaveText(['第二项', '第一项']);
+  await expect(page.getByRole('button', { name: '折叠 未分组', exact: true })).toBeDisabled();
   await stale.fulfill({ json: old }).catch(() => {}); // The suspended request may already be aborted.
   await page.clock.runFor(60_000);
   expect(reads).toBe(1);
@@ -170,6 +187,7 @@ test('ignores a stale in-flight refresh and pauses refresh while saving', async 
   await expect.poll(() => Boolean(write)).toBe(true);
   await write.continue();
   await saved(page);
+  await expect(page.getByRole('button', { name: '折叠 未分组', exact: true })).toBeEnabled();
   expect(reads).toBeGreaterThan(1);
   await expect(names(page)).toHaveText(['第二项', '第一项']);
   await page.reload();

@@ -16,6 +16,10 @@ import { MonitorEditor } from './MonitorEditor';
 import { SortControls } from '../../components/SortControls';
 import { useReorder } from '../../hooks/useReorder';
 import { orderItems } from '../../../shared/ordering';
+import { UNGROUPED_ID } from '../../../shared/groups/types';
+import { monitorGroupKey, orderedGroups } from '../../../shared/groups/ordering';
+import { GroupHeading } from '../groups/GroupHeading';
+import { useCollapsedGroups } from '../groups/useCollapsedGroups';
 
 export function MonitorManager({
   remote,
@@ -39,15 +43,22 @@ export function MonitorManager({
   const [deleting, setDeleting] = useState<AdminMonitor | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<DisplayMessage | null>(null);
-  const groupOf = (monitor: AdminMonitor) =>
-    data?.groups?.some((group) => group.id === monitor.groupId) ? (monitor.groupId ?? null) : null;
+  const collapsedGroups = useCollapsedGroups('admin');
+  const displayGroups = orderedGroups(data?.groups ?? [], {
+    id: UNGROUPED_ID,
+    name: t('groups.ungrouped'),
+    sortOrder: data?.ungrouped?.sortOrder ?? Infinity,
+    version: data?.ungrouped?.version ?? 0,
+  });
+  const groupOf = (monitor: AdminMonitor) => monitorGroupKey(monitor.groupId, data?.groups ?? []);
   const ordering = useReorder({
     items: data?.monitors ?? [],
     disabled: orderingDisabled || !!busy || !!editor || !!deleting || remote.locked,
     suspend: remote.suspend,
     scope: groupOf,
     save: async (items) => {
-      const groupId = groupOf(items[0]);
+      const groupKey = groupOf(items[0]);
+      const groupId = groupKey === UNGROUPED_ID ? null : groupKey;
       const result = await api<{ monitors: AdminMonitor[] }>('/api/admin/monitors/order', {
         method: 'PUT',
         body: JSON.stringify({ groupId, items: orderItems(items) }),
@@ -57,7 +68,7 @@ export function MonitorManager({
         return {
           ...current,
           monitors: current.monitors.flatMap((monitor) => {
-            if (groupOf(monitor) !== groupId) return [monitor];
+            if (groupOf(monitor) !== groupKey) return [monitor];
             if (inserted) return [];
             inserted = true;
             return result.monitors;
@@ -160,144 +171,153 @@ export function MonitorManager({
                   </button>
                 </Empty>
               ) : (
-                [...(data.groups ?? []), { id: null, name: t('groups.ungrouped') }].map((group) => {
+                displayGroups.map((group) => {
                   const members = ordering.items.filter((monitor) => groupOf(monitor) === group.id);
+                  const collapsed = collapsedGroups.isCollapsed(group.id);
+                  const controls = `admin-group-${group.id}`;
                   return (
                     members.length > 0 && (
-                      <section className="admin-group" key={group.id ?? 'ungrouped'} aria-label={group.name}>
-                        <h2 className="admin-group-heading">
-                          {group.name}
-                          <span className="count-badge">{members.length}</span>
-                        </h2>
-                        {members.map((monitor, index) => (
-                          <article className="admin-card" key={monitor.id} {...ordering.rowProps(monitor)}>
-                            <div className="admin-card-info">
-                              <span className="service-icon">
-                                <Icon name={monitor.type === 'http' ? 'globe' : 'server'} />
-                              </span>
-                              <div>
-                                <div className="admin-name">
-                                  <h2>{monitor.name}</h2>
-                                  <StatusBadge status={monitor.status} />
-                                </div>
-                                <p
-                                  className="target-text"
-                                  title={monitor.type === 'http' ? monitor.url : monitor.hostname}
-                                >
-                                  {monitor.type === 'http'
-                                    ? monitor.url
-                                    : `${monitor.hostname.includes(':') ? `[${monitor.hostname}]` : monitor.hostname}:${monitor.port}`}
-                                </p>
-                                <div className="monitor-meta">
-                                  <span className="protocol">{monitor.type.toUpperCase()}</span>
-                                  <span>
-                                    {data.groups?.find((group) => group.id === monitor.groupId)?.name ??
-                                      t('groups.ungrouped')}
-                                  </span>
-                                  <span>{t('monitor.interval', { count: monitor.intervalMinutes })}</span>
-                                  <span>{t('monitor.timeout', { count: monitor.timeoutSeconds })}</span>
-                                  <span>
-                                    {t('monitor.lastCheck', {
-                                      time: formatTime(monitor.lastCheckedAt, false, locale),
-                                    })}
-                                  </span>
+                      <section className="admin-group" key={group.id} aria-label={group.name}>
+                        <GroupHeading
+                          name={group.name}
+                          count={members.length}
+                          collapsed={collapsed}
+                          controls={controls}
+                          toggle={() => collapsedGroups.toggle(group.id)}
+                          variant="admin"
+                          disabled={remote.locked || ordering.saving}
+                        />
+                        <div id={controls} hidden={collapsed}>
+                          {members.map((monitor, index) => (
+                            <article className="admin-card" key={monitor.id} {...ordering.rowProps(monitor)}>
+                              <div className="admin-card-info">
+                                <span className="service-icon">
+                                  <Icon name={monitor.type === 'http' ? 'globe' : 'server'} />
+                                </span>
+                                <div>
+                                  <div className="admin-name">
+                                    <h2>{monitor.name}</h2>
+                                    <StatusBadge status={monitor.status} />
+                                  </div>
+                                  <p
+                                    className="target-text"
+                                    title={monitor.type === 'http' ? monitor.url : monitor.hostname}
+                                  >
+                                    {monitor.type === 'http'
+                                      ? monitor.url
+                                      : `${monitor.hostname.includes(':') ? `[${monitor.hostname}]` : monitor.hostname}:${monitor.port}`}
+                                  </p>
+                                  <div className="monitor-meta">
+                                    <span className="protocol">{monitor.type.toUpperCase()}</span>
+                                    <span>
+                                      {data.groups?.find((group) => group.id === monitor.groupId)?.name ??
+                                        t('groups.ungrouped')}
+                                    </span>
+                                    <span>{t('monitor.interval', { count: monitor.intervalMinutes })}</span>
+                                    <span>{t('monitor.timeout', { count: monitor.timeoutSeconds })}</span>
+                                    <span>
+                                      {t('monitor.lastCheck', {
+                                        time: formatTime(monitor.lastCheckedAt, false, locale),
+                                      })}
+                                    </span>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                            <div className="admin-actions">
-                              <SortControls
-                                name={monitor.name}
-                                index={index}
-                                count={members.length}
-                                disabled={ordering.disabled}
-                                handleProps={ordering.handleProps(monitor)}
-                                move={(offset) => ordering.move(monitor, members[index + offset])}
-                              />
-                              <button
-                                className="button small secondary"
-                                disabled={busy === monitor.id || remote.locked}
-                                onClick={() =>
-                                  void action(monitor.id, async () => {
-                                    const result = await api<ProbeResult>(
-                                      `/api/admin/monitors/${monitor.id}/test`,
-                                      {
-                                        method: 'POST',
-                                        body: '{}',
-                                      },
-                                    );
-                                    if (!result.ok)
-                                      throw new NoticeError(
-                                        message('monitor.testFailed', {
-                                          name: monitor.name,
-                                          reason: message(
-                                            result.errorCode
-                                              ? ERROR_LABELS[result.errorCode]
-                                              : 'monitor.checkFailed',
-                                          ),
-                                          latency: latency(result.latencyMs, locale),
-                                        }),
+                              <div className="admin-actions">
+                                <SortControls
+                                  name={monitor.name}
+                                  index={index}
+                                  count={members.length}
+                                  disabled={ordering.disabled}
+                                  handleProps={ordering.handleProps(monitor)}
+                                  move={(offset) => ordering.move(monitor, members[index + offset])}
+                                />
+                                <button
+                                  className="button small secondary"
+                                  disabled={busy === monitor.id || remote.locked}
+                                  onClick={() =>
+                                    void action(monitor.id, async () => {
+                                      const result = await api<ProbeResult>(
+                                        `/api/admin/monitors/${monitor.id}/test`,
+                                        {
+                                          method: 'POST',
+                                          body: '{}',
+                                        },
                                       );
-                                    return message('monitor.testSucceeded', {
+                                      if (!result.ok)
+                                        throw new NoticeError(
+                                          message('monitor.testFailed', {
+                                            name: monitor.name,
+                                            reason: message(
+                                              result.errorCode
+                                                ? ERROR_LABELS[result.errorCode]
+                                                : 'monitor.checkFailed',
+                                            ),
+                                            latency: latency(result.latencyMs, locale),
+                                          }),
+                                        );
+                                      return message('monitor.testSucceeded', {
+                                        name: monitor.name,
+                                        latency: latency(result.latencyMs, locale),
+                                      });
+                                    })
+                                  }
+                                >
+                                  <Icon name="pulse" size={16} />
+                                  {busy === monitor.id ? t('event.status.open') : t('monitor.test')}
+                                </button>
+                                <button
+                                  className="icon-button"
+                                  title={monitor.enabled ? t('monitor.pause') : t('monitor.resume')}
+                                  aria-label={t(
+                                    monitor.enabled ? 'monitor.pauseNamed' : 'monitor.resumeNamed',
+                                    {
                                       name: monitor.name,
-                                      latency: latency(result.latencyMs, locale),
-                                    });
-                                  })
-                                }
-                              >
-                                <Icon name="pulse" size={16} />
-                                {busy === monitor.id ? t('event.status.open') : t('monitor.test')}
-                              </button>
-                              <button
-                                className="icon-button"
-                                title={monitor.enabled ? t('monitor.pause') : t('monitor.resume')}
-                                aria-label={t(
-                                  monitor.enabled ? 'monitor.pauseNamed' : 'monitor.resumeNamed',
-                                  {
-                                    name: monitor.name,
-                                  },
-                                )}
-                                disabled={busy === monitor.id || remote.locked}
-                                onClick={() =>
-                                  void action(monitor.id, async () => {
-                                    await api(`/api/admin/monitors/${monitor.id}`, {
-                                      method: 'PATCH',
-                                      body: JSON.stringify({
-                                        enabled: !monitor.enabled,
-                                        version: monitor.version,
-                                      }),
-                                    });
-                                    return monitor.enabled
-                                      ? message('monitor.paused')
-                                      : message('monitor.resumed');
-                                  })
-                                }
-                              >
-                                <Icon name={monitor.enabled ? 'pause' : 'play'} size={17} />
-                              </button>
-                              <button
-                                className="icon-button"
-                                title={t('monitors.edit')}
-                                aria-label={t('common.editNamed', { name: monitor.name })}
-                                disabled={busy === monitor.id || remote.locked}
-                                onClick={() => setEditor(monitor)}
-                              >
-                                <Icon name="edit" size={17} />
-                              </button>
-                              <button
-                                className="icon-button danger"
-                                title={t('monitor.delete')}
-                                aria-label={t('common.deleteNamed', { name: monitor.name })}
-                                disabled={busy === monitor.id || remote.locked}
-                                onClick={() => {
-                                  setDeleting(monitor);
-                                  setDeleteError(null);
-                                }}
-                              >
-                                <Icon name="trash" size={17} />
-                              </button>
-                            </div>
-                          </article>
-                        ))}
+                                    },
+                                  )}
+                                  disabled={busy === monitor.id || remote.locked}
+                                  onClick={() =>
+                                    void action(monitor.id, async () => {
+                                      await api(`/api/admin/monitors/${monitor.id}`, {
+                                        method: 'PATCH',
+                                        body: JSON.stringify({
+                                          enabled: !monitor.enabled,
+                                          version: monitor.version,
+                                        }),
+                                      });
+                                      return monitor.enabled
+                                        ? message('monitor.paused')
+                                        : message('monitor.resumed');
+                                    })
+                                  }
+                                >
+                                  <Icon name={monitor.enabled ? 'pause' : 'play'} size={17} />
+                                </button>
+                                <button
+                                  className="icon-button"
+                                  title={t('monitors.edit')}
+                                  aria-label={t('common.editNamed', { name: monitor.name })}
+                                  disabled={busy === monitor.id || remote.locked}
+                                  onClick={() => setEditor(monitor)}
+                                >
+                                  <Icon name="edit" size={17} />
+                                </button>
+                                <button
+                                  className="icon-button danger"
+                                  title={t('monitor.delete')}
+                                  aria-label={t('common.deleteNamed', { name: monitor.name })}
+                                  disabled={busy === monitor.id || remote.locked}
+                                  onClick={() => {
+                                    setDeleting(monitor);
+                                    setDeleteError(null);
+                                  }}
+                                >
+                                  <Icon name="trash" size={17} />
+                                </button>
+                              </div>
+                            </article>
+                          ))}
+                        </div>
                       </section>
                     )
                   );

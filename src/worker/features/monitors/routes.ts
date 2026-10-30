@@ -4,7 +4,7 @@ import { parseMonitorConfig } from '../../../shared/monitors/validation';
 import { object } from '../../../shared/validation';
 import { parseOrderGroup, parseOrderItems } from '../../../shared/ordering';
 import { saveOrder } from '../ordering/repository';
-import { listGroups } from '../groups/repository';
+import { listGroupOrder } from '../groups/repository';
 import {
   adminMonitor,
   createMonitor,
@@ -30,14 +30,14 @@ export function registerMonitorRoutes(app: Hono<AppEnv>, probe: Probe) {
     return c.json({ groupId, monitors });
   });
   app.get('/api/admin/monitors', async (c) => {
-    const [monitors, pageRefreshSeconds, groups] = await Promise.all([
+    const [monitors, pageRefreshSeconds, groupOrder] = await Promise.all([
       listMonitors(c.env.DB),
       getPageRefreshSeconds(c.env.DB),
-      listGroups(c.env.DB),
+      listGroupOrder(c.env.DB),
     ]);
     return c.json({
       pageRefreshSeconds,
-      groups,
+      ...groupOrder,
       monitors: monitors.map((row) => adminMonitor(row)),
       identity: c.get('identity'),
     });

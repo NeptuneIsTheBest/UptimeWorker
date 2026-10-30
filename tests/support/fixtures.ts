@@ -84,7 +84,8 @@ export async function resetDatabase(db: D1Database) {
   await db.batch([
     db.prepare('DELETE FROM events'),
     db.prepare('DELETE FROM monitors'),
-    db.prepare('DELETE FROM monitor_groups'),
+    db.prepare("DELETE FROM monitor_groups WHERE id != '__ungrouped__'"),
+    db.prepare("UPDATE monitor_groups SET sort_order = 0, version = 1 WHERE id = '__ungrouped__'"),
     db.prepare('UPDATE scheduler_state SET lease_owner = NULL, lease_until = 0, last_completed_slot = 0'),
     db.prepare(`INSERT INTO global_settings(id) VALUES (1) ON CONFLICT(id) DO UPDATE SET
       page_refresh_seconds = 30, auto_incident_after_minutes = 5, waf_bypass_enabled = 0, waf_bypass_token = NULL,

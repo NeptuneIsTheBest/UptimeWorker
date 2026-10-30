@@ -3,7 +3,7 @@ import type { HistoryResponse, StatusResponse } from '../../../shared/status/typ
 import type { Env } from '../../types';
 import type { MonitorRow } from '../monitors/types';
 import { getPageRefreshSeconds } from '../settings/repository';
-import { listGroups } from '../groups/repository';
+import { listGroupOrder } from '../groups/repository';
 import { listPublicEvents } from '../events/repository';
 import { currentStatus, findMonitor, orderedMonitorsQuery } from '../monitors/repository';
 import { DAY, dayStart, utcDay } from '../../lib/time';
@@ -53,7 +53,7 @@ function publicMonitor(row: MonitorRow, daily: DailyRow[], now: number): PublicM
   };
 }
 export async function getStatus(env: Env, now = Date.now()): Promise<StatusResponse> {
-  const [[monitors, stats], pageRefreshSeconds, groups, events] = await Promise.all([
+  const [[monitors, stats], pageRefreshSeconds, { groups, ungrouped }, events] = await Promise.all([
     env.DB.batch([
       env.DB.prepare(orderedMonitorsQuery),
       env.DB.prepare('SELECT * FROM daily_stats WHERE day >= ? ORDER BY day').bind(
@@ -61,12 +61,13 @@ export async function getStatus(env: Env, now = Date.now()): Promise<StatusRespo
       ),
     ]),
     getPageRefreshSeconds(env.DB),
-    listGroups(env.DB),
+    listGroupOrder(env.DB),
     listPublicEvents(env.DB),
   ]);
   const daily = stats.results as unknown as DailyRow[];
   return {
     groups: groups.map(({ version: _version, ...group }) => group),
+    ungrouped: { id: ungrouped.id, sortOrder: ungrouped.sortOrder },
     events,
     siteName: env.SITE_NAME || 'UptimeWorker',
     pageRefreshSeconds,

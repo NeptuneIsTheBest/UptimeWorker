@@ -5,14 +5,15 @@
 }
 .group-manager-row {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  align-items: flex-start;
+  flex-direction: column;
   gap: 12px;
   padding-bottom: 12px;
   border-bottom: 1px solid var(--line);
 }
 .group-manager-row > span {
   min-width: 0;
+  max-width: 100%;
   overflow-wrap: anywhere;
 }
 .group-manager-row small {
@@ -23,8 +24,9 @@
 }
 .group-manager-row > div {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
-  flex-shrink: 0;
+  max-width: 100%;
 }
 .group-delete {
   flex-wrap: wrap;
@@ -33,17 +35,49 @@
   width: 100%;
   margin: 0;
 }
-@media (max-width: 760px) {
-  .group-manager-row {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-}
-
-.group-manager-row > div {
-  flex-wrap: wrap;
-}
 .group-manager-row .button {
   overflow-wrap: anywhere;
   min-width: 0;
+}
+
+.group-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 36px;
+  padding: 4px 0;
+  border: 0;
+  border-radius: 4px;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.group-toggle:disabled {
+  opacity: 1;
+  cursor: default;
+}
+.group-title {
+  overflow-wrap: anywhere;
+}
+.group-chevron {
+  flex-shrink: 0;
+  transition: transform 120ms ease;
+}
+.group-toggle[aria-expanded='false'] .group-chevron {
+  transform: rotate(-90deg);
+}
+.group-heading,
+.admin-group-heading {
+  flex-wrap: wrap;
+}
+.admin-group-heading {
+  padding-bottom: 12px;
+}
+.group-filter-note {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: normal;
 }
