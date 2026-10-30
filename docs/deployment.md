@@ -1,85 +1,105 @@
-# 部署指南
+<a id="部署指南"></a>
 
-[返回 README](../README.md)
+# Deployment guide
 
-通过 GitHub Actions 手动验证和部署，配置入口见仓库的 [Verify and deploy 工作流](../.github/workflows/deploy.yml)。
+[English](deployment.md) | [简体中文](zh-CN/deployment.md)
 
-## 1. 配置 Cloudflare
+[Back to README](../README.md)
 
-启用 Cloudflare Workers、账户的 `workers.dev` 子域名以及 Zero Trust。创建一个只授权目标账户的 API Token，包含：
+Verify and deploy manually through GitHub Actions using the repository's [Verify and deploy workflow](../.github/workflows/deploy.yml).
 
-| 范围    | 权限                   |
+<a id="1-配置-cloudflare"></a>
+
+## 1. Configure Cloudflare
+
+Enable Cloudflare Workers, the account's `workers.dev` subdomain, and Zero Trust. Create an API Token scoped only to the target account with these permissions:
+
+| Scope   | Permission             |
 | ------- | ---------------------- |
 | Account | Workers Scripts: Edit  |
 | Account | D1: Edit               |
 | Account | Account Settings: Read |
 
-默认通过 `workers.dev` 部署，API Token 只需上述权限；Access 策略在控制台配置。
+Deployment uses `workers.dev` by default, so the API Token only needs the permissions above. Configure Access policies in the dashboard.
 
-## 2. 创建 Access 应用
+<a id="2-创建-access-应用"></a>
 
-在 **Zero Trust → Access → Applications** 中创建一个 **Self-hosted** 应用，在同一个应用中添加两个公共主机名 / 路径：
+## 2. Create an Access application
+
+In **Zero Trust → Access → Applications**, create a **Self-hosted** application and add these two public hostnames / paths to the same application:
 
 ```text
-uptimeworker.<你的 workers.dev 子域名>.workers.dev/admin
-uptimeworker.<你的 workers.dev 子域名>.workers.dev/api/admin
+<WORKER_NAME>.<your workers.dev subdomain>.workers.dev/admin
+<WORKER_NAME>.<your workers.dev subdomain>.workers.dev/api/admin
 ```
 
-保护上述路径及其子路径，保持首页 `/`、监控详情 `/monitors/*`、事件详情 `/events/*`，以及 `/api/status`、`/api/monitors/*/history`、`/api/events/*` 公开。若账户已启用全局 Worker 保护，先为此 Worker 配置公开例外，再保护后台路径。
+Replace `<WORKER_NAME>` with the actual Worker name used for deployment. It must match the `WORKER_NAME` value in GitHub Actions below, which defaults to `uptimeworker`.
 
-配置 **Allow** 策略，仅允许你的邮箱或指定用户组；选择现有身份提供商或邮件一次性验证码。两条路径使用同一个应用的 AUD。
+Protect these paths and their subpaths. Keep the home page `/`, monitor details `/monitors/*`, event details `/events/*`, and `/api/status`, `/api/monitors/*/history`, and `/api/events/*` public. If account-wide Worker protection is enabled, first configure a public exception for this Worker, then protect the admin paths.
 
-记录团队域名（如 `your-team.cloudflareaccess.com`）和 **Application Audience (AUD) Tag**。Worker 会校验登录凭据；Access 未配置或凭据无效时，后台拒绝访问。
+Configure an **Allow** policy limited to your email address or a designated user group. Use an existing identity provider or an email one-time PIN. Both paths use the same application's AUD.
 
-详细规则见 [Workers Access](https://developers.cloudflare.com/workers/configuration/cloudflare-access/) 和 [Access 路径匹配](https://developers.cloudflare.com/cloudflare-one/access-controls/policies/app-paths/)。自定义域名的配置见[下文](#仅使用自定义域名)。
+Record the team domain, such as `your-team.cloudflareaccess.com`, and the **Application Audience (AUD) Tag**. The Worker validates sign-in credentials and denies admin access if Access is not configured or the credentials are invalid.
 
-## 3. 配置 GitHub
+See [Workers Access](https://developers.cloudflare.com/workers/configuration/cloudflare-access/) and [Access path matching](https://developers.cloudflare.com/cloudflare-one/access-controls/policies/app-paths/) for detailed rules. Custom domain setup is covered [below](#using-only-a-custom-domain).
 
-仓库 **Settings → Secrets and variables → Actions**：
+<a id="3-配置-github"></a>
 
-| 类型               | 名称                    | 内容                                   |
-| ------------------ | ----------------------- | -------------------------------------- |
-| Secret             | `CLOUDFLARE_API_TOKEN`  | 上一步创建的 Token                     |
-| Secret             | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare 账户 ID（32 位）            |
-| Variable 或 Secret | `ACCESS_TEAM_DOMAIN`    | 团队域名，可包含 `https://`            |
-| Variable 或 Secret | `ACCESS_AUD`            | Access 应用的 64 位 AUD                |
-| Variable，可选     | `WORKER_NAME`           | 默认 `uptimeworker`                    |
-| Variable，可选     | `WORKERS_DEV`           | 默认 `true`；设为 `false` 关闭默认域名 |
-| Variable，可选     | `D1_DATABASE_NAME`      | 默认 `<WORKER_NAME>-db`                |
-| Variable，可选     | `SITE_NAME`             | 状态页站点名称，默认 `UptimeWorker`    |
+## 3. Configure GitHub
 
-Access 配置同时存在于 Variables 和 Secrets 时，优先使用 Variables 中的值。
+Open the repository's **Settings → Secrets and variables → Actions**:
 
-Worker / D1 名称以小写字母开头，只含小写字母、数字与连字符，最长 63 个字符。每个实例使用独立名称，避免复用其他应用的数据库。
+| Type               | Name                    | Value                                                            |
+| ------------------ | ----------------------- | ---------------------------------------------------------------- |
+| Secret             | `CLOUDFLARE_API_TOKEN`  | The Token created above                                          |
+| Secret             | `CLOUDFLARE_ACCOUNT_ID` | Your 32-character Cloudflare account ID                          |
+| Variable or Secret | `ACCESS_TEAM_DOMAIN`    | The team domain; may include `https://`                          |
+| Variable or Secret | `ACCESS_AUD`            | The Access application's 64-character AUD                        |
+| Variable, optional | `WORKER_NAME`           | Defaults to `uptimeworker`                                       |
+| Variable, optional | `WORKERS_DEV`           | Defaults to `true`; set to `false` to disable the default domain |
+| Variable, optional | `D1_DATABASE_NAME`      | Defaults to `<WORKER_NAME>-db`                                   |
+| Variable, optional | `SITE_NAME`             | Status page site name; defaults to `UptimeWorker`                |
 
-在 **Actions → Verify and deploy → Run workflow** 选择 `main` 手动运行，依次执行：
+If Access settings exist in both Variables and Secrets, the values in Variables take precedence.
 
-1. 安装依赖，运行类型检查、单元 / D1 集成测试、生产构建和 Chromium 浏览器测试。
-2. 检查部署变量，按名称查找 D1 数据库；存在则复用，不存在则创建。
-3. 生成生产配置并重新构建，应用数据库迁移。
-4. 发布 Worker 和静态资源，启用每分钟的 Cron。
+Worker / D1 names must start with a lowercase letter, contain only lowercase letters, digits, and hyphens, and be at most 63 characters long. When using the default database name `<WORKER_NAME>-db`, `WORKER_NAME` is limited to 60 characters to leave room for the suffix. If you explicitly set `D1_DATABASE_NAME`, each name can be up to 63 characters long. Use distinct names for each instance to avoid reusing another application's database.
 
-工作流仅手动触发，其他分支只执行验证。生产发布串行排队，任一步骤失败即停止后续发布；已存在的数据库不会被删除或重建。配置生成过程见[开发指南](development.md#部署配置)。
+In **Actions → Verify and deploy → Run workflow**, select `main` and run the workflow manually. It performs these steps:
 
-默认部署地址为 `https://<WORKER_NAME>.<你的子域名>.workers.dev`；关闭默认域名后，通过已绑定的自定义域名访问。首次添加 Cron 后可能需要数分钟传播，参见 [Cron Triggers](https://developers.cloudflare.com/workers/configuration/cron-triggers/)。
+1. Install dependencies, then run type checks, unit / D1 integration tests, a production build, and Chromium browser tests.
+2. Validate deployment variables and find the D1 database by name. Reuse it if it exists, or create it otherwise.
+3. Generate the production configuration, rebuild, and apply database migrations.
+4. Publish the Worker and static assets, and enable Cron to run every minute.
 
-## 仅使用自定义域名
+The workflow runs only when triggered manually. Other branches run verification only. The production deployment concurrency group allows at most one running job and one pending job. A new pending job cancels and replaces the previous pending job without canceling the running job. See [GitHub's concurrency rules](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency).
 
-在 Cloudflare 控制台将自定义域名绑定到同一 Worker，并在 Access 应用中添加该域名的 `/admin` 和 `/api/admin` 路径及其子路径。后续部署会保留域名绑定。
+A failed step stops the remaining steps of that deployment. Existing databases are never deleted or recreated. See the [development guide](development.md#deployment-configuration) for configuration generation.
 
-在 GitHub Actions Variables 中将 `WORKERS_DEV` 设为 `false`，在 `main` 上重新运行工作流。每次部署都会应用该设置；只在 Cloudflare 控制台关闭默认域名会被后续部署覆盖。[Cloudflare 官方说明](https://developers.cloudflare.com/workers/configuration/routing/workers-dev/)
+The default deployment URL is `https://<WORKER_NAME>.<your-subdomain>.workers.dev`. When the default domain is disabled, use the custom domain already bound to the Worker. A newly added Cron trigger may take a few minutes to propagate; see [Cron Triggers](https://developers.cloudflare.com/workers/configuration/cron-triggers/).
 
-`WORKERS_DEV` 未设置或仅含空白时默认 `true`；去除首尾空白后只接受 `true` / `false`，不区分大小写，其他值会在调用 Cloudflare API 前阻止部署。预览域名始终关闭。此变量用于 GitHub Actions 部署；直接使用 `wrangler.jsonc` 部署时，默认域名仍开启。
+<a id="仅使用自定义域名"></a>
 
-## 首次上线验收
+## Using only a custom domain
 
-1. 未登录访问首页应正常，访问 `/admin` 应进入 Access 登录。
-2. 登录后分别新增一个公开 HTTP 目标和一个允许出站连接的 TCP 目标，先执行“测试连接”。
-3. 等待 Cron 运行，在状态页与详情中确认检测结果、延迟和历史记录已出现。
-4. 重新运行部署，确认日志显示 `Reusing D1 database`，监控与历史仍然存在。
-5. 在 Cloudflare 查看 Worker Cron 日志、CPU 用量及 D1 Row Metrics。
-6. 若设置了 `WORKERS_DEV=false`，首次及再次部署后确认 Worker 的 Production 和 Preview URL 开关均关闭，自定义域名首页与后台登录正常。
+Bind the custom domain to the same Worker in the Cloudflare dashboard. Add its `/admin` and `/api/admin` paths and their subpaths to the Access application. Subsequent deployments preserve the domain binding.
 
-## 回滚与数据库恢复
+Set `WORKERS_DEV` to `false` in GitHub Actions Variables, then rerun the workflow on `main`. Every deployment applies this setting; disabling the default domain only in the Cloudflare dashboard will be overridden by a later deployment. See the [Cloudflare documentation](https://developers.cloudflare.com/workers/configuration/routing/workers-dev/).
 
-代码回滚和数据库恢复分别处理：在 Cloudflare 回退 Worker 版本，数据库按需通过 D1 Time Travel 恢复并评估数据影响。发布失败不会撤销已完成的迁移；回滚前检查[数据库迁移](development.md#数据库迁移)和[兼容性说明](development.md#兼容性说明)。
+An unset or whitespace-only `WORKERS_DEV` defaults to `true`. After trimming whitespace, only `true` / `false` are accepted, case-insensitively. Any other value blocks deployment before the Cloudflare API is called. Preview URLs are always disabled. This variable applies to GitHub Actions deployments; deploying directly with `wrangler.jsonc` leaves the default domain enabled.
+
+<a id="首次上线验收"></a>
+
+## Initial production checks
+
+1. Confirm that the home page is accessible without signing in and that `/admin` redirects to Access sign-in.
+2. After signing in, add a public HTTP target and a TCP target that permits outbound connections, then run **Test connection** for each.
+3. Wait for Cron to run and confirm that check results, response times, and history appear on the status and detail pages.
+4. Deploy again. Confirm that the logs show `Reusing D1 database` and that monitors and history are retained.
+5. Inspect the Worker's Cron logs, CPU usage, and D1 Row Metrics in Cloudflare.
+6. If `WORKERS_DEV=false`, confirm after both the first and subsequent deployments that the Worker's Production and Preview URL switches are off, and that the custom domain's home page and admin sign-in work.
+
+<a id="回滚与数据库恢复"></a>
+
+## Rollback and database recovery
+
+Handle code rollback and database recovery separately: roll back the Worker version in Cloudflare, and use D1 Time Travel to recover the database when needed after assessing the data impact. A failed deployment does not undo completed migrations. Before rolling back, review [database migrations](development.md#database-migrations) and [compatibility notes](development.md#compatibility-notes).

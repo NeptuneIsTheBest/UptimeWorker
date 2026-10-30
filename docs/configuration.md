@@ -1,88 +1,104 @@
-# 监控配置与运行策略
+<a id="监控配置与运行策略"></a>
 
-[返回 README](../README.md)
+# Monitor configuration and operating policies
 
-## 基本配置
+[English](configuration.md) | [简体中文](zh-CN/configuration.md)
 
-- 支持 HTTP/HTTPS 和 TCP Port 监控，目标必须为公开地址。
-- 新建监控默认每 1 分钟检测，可设置为 1–60 的整数分钟；超时范围为 1–30 秒。
-- HTTP 支持 GET / HEAD / POST / PUT / PATCH / DELETE / OPTIONS，并按配置校验期望状态码；TCP 只检查连接建立情况。
-- 后台支持新增、编辑、删除、暂停、恢复和即时连接测试。即时测试使用已保存配置，不改变历史或当前状态。
-- 服务总数没有固定上限；实际检测容量由性能设置和平台资源限制决定。配置字段及请求示例见 [API 参考](api.md#监控配置)。
+[Back to README](../README.md)
 
-## 页面自动刷新
+<a id="基本配置"></a>
 
-在「监控管理 → 全局设置 → 页面自动刷新」统一设置状态概览、监控详情、事件详情和管理页的刷新间隔，对所有访问者生效。默认 30 秒，可选关闭、15 / 30 / 60 秒，或自定义 5–3600 的整数秒。
+## Basic configuration
 
-刷新保留搜索、筛选和未保存的表单内容，不改变监控检测周期。每次请求结束后等待设定间隔再刷新；失败时保留已有数据与上次成功时间，并显示重试提示。自动刷新开启时，页面隐藏后暂停请求，回到前台立即更新。
+- Supports HTTP/HTTPS and TCP port monitors. Targets must have public addresses.
+- New monitors run every 1 minute by default. Intervals accept integer minutes from 1–60; timeouts range from 1–30 seconds.
+- HTTP supports GET / HEAD / POST / PUT / PATCH / DELETE / OPTIONS and validates the configured expected status codes. TCP only checks whether a connection can be established.
+- The admin console supports creating, editing, deleting, pausing, resuming, and immediately testing monitors. Immediate tests use the saved configuration and do not change history or current status.
+- There is no fixed limit on the total number of services. Actual check capacity depends on performance settings and platform resource limits. See the [API reference](api.md#monitor-configuration) for configuration fields and request examples.
 
-关闭自动刷新后，仅在初次打开、点击“立即刷新”或管理员保存设置时加载数据。保存设置后当前管理页立即生效，其他页面在下次成功获取数据时更新；原先已关闭自动刷新的页面需手动刷新或重新打开。
+<a id="页面自动刷新"></a>
 
-公开页面在缓存过期并刷新后显示后台修改，管理接口不缓存；缓存期限见 [API 参考](api.md#全局设置)。“上次刷新”按浏览器时区显示页面成功取得数据的时间，命中缓存也会更新；实际检测时间见各监控的“最近检测”。
+## Automatic page refresh
 
-## 服务器分组与事件
+Use **Monitor management → Global settings → Automatic page refresh** to set a shared refresh interval for the status overview, monitor details, event details, and admin pages. It applies to all visitors. The default is 30 seconds; options are off, 15 / 30 / 60 seconds, or a custom integer from 5–3600 seconds.
 
-在后台「分组管理」创建、重命名、排序或删除分组，在监控编辑器分配节点。每个节点最多属于一个分组；后台和首页按相同分组与组内服务顺序展示。“未分组”也可参与排序，即使没有节点也会出现在分组管理中，但不能重命名或删除。首页支持按分组、名称和状态联合筛选。
+Refreshing preserves search terms, filters, and unsaved form content without changing monitor check intervals. Each request waits until the previous request finishes, then waits the configured interval. On failure, existing data and the last successful refresh time are retained, with a retry prompt. When automatic refresh is enabled, requests pause while the page is hidden and resume immediately when it returns to the foreground.
 
-拖动分组或服务的手柄，或点击上移、下移按钮调整顺序，每次调整自动保存。服务只在组内排序；换组需使用监控编辑器。手机和键盘用户可使用上下移按钮。保存期间暂缓列表刷新，失败时恢复原顺序并重新读取；若提示列表已变更，请在刷新后重试。
+Disabling automatic refresh stops timed polling. Data still loads when the page is first opened, when **Refresh now** is clicked, when paging through events, and after admin operations such as saving settings, creating, editing, or deleting monitors or events, and reordering lists. Saved settings apply immediately to the current admin page. Other pages receive them on their next successful data fetch; pages where automatic refresh was already off can be refreshed manually or reopened to fetch the latest settings.
 
-新建分组追加到普通分组末尾；未分组原本位于末尾时继续保留在末尾。新建或换组的服务追加到目标组末尾。删除分组会将其中的服务按原顺序追加到未分组末尾。排序不会改变检测计划、历史统计、故障计时或正在执行的检测；公开页在现有缓存到期并刷新后显示新顺序，缓存有效期最多 60 秒。
+Public pages show admin changes after the cache expires and the page refreshes. Admin endpoints are not cached; see the [API reference](api.md#global-settings) for cache durations. **Updated** shows when the page last fetched data successfully, in the browser's time zone, and advances even on a cache hit. Each monitor's **Last checked** shows the actual check time.
 
-点击分组标题可折叠或展开节点，支持键盘 Enter / Space；标题仍显示节点数量，空分组在节点列表中隐藏。分组默认展开，前台与后台在当前浏览器分别记忆折叠状态，刷新、改名和排序后保留；浏览器存储不可用时仅在当前页面保留。折叠不影响统计和自动刷新。首页搜索或筛选期间临时展开匹配分组并禁用折叠，清空条件后恢复原状态；后台拖拽及保存排序期间暂时禁用折叠。
+<a id="服务器分组与事件"></a>
 
-在后台「事件」页签填写纯文本标题、正文，关联节点后发布故障或计划维护。首页顶部展示全部未结束事件，节点详情顶部仅展示该节点相关的未结束事件，包括待开始、进行中、已过计划时间但尚未确认完成的维护，以及处理中的故障。已结束事件在页面下方的历史区域展示，最多 20 条；各区域按更新时间倒序排列，同时间按事件 ID 倒序。事件结束后，在下次成功刷新时移入历史区域。后台每页展示 20 条，支持翻页。手动事件可编辑、删除、追加进展和确认完成；自动事件可追加说明，由检测确认恢复，结束后可删除。
+## Server groups and events
 
-单条事件可关联超过 10 个服务，没有固定关联数量上限；关联必须有效，整个事件请求仍受 16 KiB 请求体限制。
+Use **Manage groups** in the admin console to create, rename, reorder, or delete groups, and assign monitors in the monitor editor. Each monitor belongs to at most one group. The admin console and home page use the same group order and service order within each group. **Ungrouped** can also be reordered and appears in group management even when empty, but cannot be renamed or deleted. The home page supports combined filtering by group, name, and status.
 
-事件卡片只展示最新一条进展的固定阶段、发布时间和最多三行正文摘要；没有追加进展时展示事件正文。点击事件标题或“查看时间线”进入 `/events/:id`，可直接打开、刷新或分享该地址。详情展示事件信息，以及从新到旧的全部进展和首次发布记录；每条记录包含相对时间、浏览器时区的完整时间和全文。首次维护记录为 `Scheduled`，首次故障记录为 `Investigating`。编辑事件正文会更新首次发布记录的展示内容，不保留编辑审计历史。
+Drag a group or service handle, or use the **Move up** and **Move down** buttons, to change its order. Each change saves automatically. Services can only be reordered within their current group; use the monitor editor to change groups. Mobile and keyboard users can use the move buttons. List refreshes pause while saving. On failure, the previous order is restored and the list is fetched again; if the list has changed, retry after refreshing.
 
-事件大标题继续手动填写。“追加事件进展”通过「进展阶段」下拉框选择固定英文阶段，按事件发展顺序排列，通用的 `Updated` 放在末尾并保持默认选中，进展说明为必填纯文本：
+New groups are appended after regular groups; if Ungrouped was last, it stays last. New services and services moved to another group are appended to the destination group. Deleting a group appends its services to Ungrouped in their previous relative order. Ordering does not change check schedules, historical statistics, failure timers, or checks already running. Public pages show the new order after the existing cache expires and the page refreshes; cache entries last at most 60 seconds.
 
-- 未结束的维护可选 `Scheduled`、`In Progress`、`Completed`、`Updated`。
-- 未结束的手动故障可选 `Investigating`、`Identified`、`Monitoring`、`Resolved`、`Updated`。
-- 未结束的自动故障可选 `Investigating`、`Identified`、`Monitoring`、`Updated`，恢复仍由检测确认。
-- 已结束事件只能追加 `Updated` 说明，不能重新开启。
+Click a group heading to collapse or expand its monitors, or use Enter / Space on the keyboard. The heading still shows the monitor count, and empty groups are hidden from monitor lists. Groups are expanded by default. The current browser remembers collapsed groups separately for the public page and admin console, preserving them across refreshes, renames, and reordering. If browser storage is unavailable, the preference lasts only for the current page. Collapsing does not affect statistics or automatic refresh. While searching or filtering on the home page, matching groups expand temporarily and cannot be collapsed; clearing the filters restores the previous state. Collapsing is temporarily disabled during admin drag operations and while saving the order.
 
-选择 `Completed` 或 `Resolved` 并保存，会同时结束对应的手动事件和静默窗口，无需另行勾选完成。其他阶段只记录进展，维护开始和超时仍按计划时间显示，不会自动生成时间线记录。系统停止跟踪记录显示为 `Stopped`。历史自由标题保留为记录的补充文字，阶段根据原状态显示为 `Completed`、`Resolved`、`Stopped` 或 `Updated`。后台自动刷新或提交失败时，保留所选阶段和未保存的正文。
+On the admin **Events** tab, enter a plain-text title and description, associate monitors, and publish an incident or scheduled maintenance. The top of the home page shows all open events; the top of a monitor's detail page shows only open events associated with that monitor. These include scheduled maintenance, maintenance in progress, maintenance past its scheduled end but not yet confirmed complete, and ongoing incidents. Closed events appear in the history section below, limited to 20 entries. Each section is sorted by descending update time, then descending event ID. When an event closes, it moves to history on the next successful refresh. The admin console displays 20 events per page and supports pagination. Manual events can be edited, deleted, updated, and completed manually. Automatic incidents accept additional notes, are resolved by successful checks, and can be deleted after closing.
 
-首页总状态结合全站故障、维护与检测结果，不受搜索和筛选影响。获取数据失败时显示状态数据不可用；存在未解决的手动或自动故障，或有检测异常、数据过期时，显示「部分服务需要关注」并列出对应数量。其次，已开始且未确认完成的维护显示「部分服务正在维护」，超过计划结束时间仍保留提示；未来维护只展示事件卡片。已解决或停止跟踪的事件不影响总状态。节点状态、正常服务数量和可用率始终依据检测结果；事件变化在取得最新数据后反映到首页。
+A single event can be associated with more than 10 services; there is no fixed association count limit. Associations must be valid, and the complete event request remains subject to the 16 KiB body limit.
 
-维护时间按浏览器时区填写。页面时钟到开始时间显示进行中，到结束时间显示已过计划时间，完成需管理员确认。维护窗口为 `[开始时间, 结束时间)`，窗口内继续检测并计入可用率，暂停新发自动故障事件。静默不追溯发布前的时间；提前完成会结束该窗口的静默，重叠窗口中任一有效即保持静默。
+Event cards show only the latest update's fixed stage, publication time, and a description preview of up to three lines. If there are no updates, they show the event description. Click the event title or **View timeline** to open `/events/:id`; this URL can be opened directly, refreshed, or shared. The detail page shows event information, all updates, and the initial publication record from newest to oldest. Each record includes a relative time, a full timestamp in the browser's time zone, and its complete text. The initial maintenance stage is **Scheduled**; the initial incident stage is **Investigating**. Editing the event description changes the displayed initial publication record; no edit audit history is kept.
 
-在「全局设置 → 离线自动事件」填写阈值，默认 **5 分钟**，支持 1–1440 的整数分钟；设为 0 关闭新事件自动发布，已有事件仍会随成功检测自动恢复。
+The main event title remains manually entered. In **Add event update**, select a stage from **Progress stage**. Stage labels follow the selected interface language, while API values remain fixed English enums such as `Updated`; see the [API reference](api.md#groups-and-events). The options below use English interface labels and follow the event lifecycle, with the general-purpose **Updated** option last and selected by default. The progress description is required plain text:
 
-- 从首次失败检测计时，后续失败检测确认达到阈值后发布，同一次连续故障只发一条。例如间隔 10 分钟、阈值 5 分钟，最快在第二次失败检测时发布。
-- 首次成功检测清除未发布计时，或为已发布事件追加恢复进展并标记已恢复，记录首次失败到恢复的采样时间；再次离线重新计时。
-- 维护窗口或关联的未完成手动故障事件会暂停新发自动事件。静默结束后从首次失败检测重新计时，包括维护完全发生在两次检测之间的情况。手动事件需手动完成。
-- 暂停、修改检测参数或超过两个检测周期的数据缺口会重置未发布计时；只修改名称或分组则保留。未知、过期状态和即时测试不触发事件；暂停或修改配置也不会将已发布事件标记为恢复。
+- Open maintenance: **Scheduled**, **In Progress**, **Completed**, **Updated**.
+- Open manual incident: **Investigating**, **Identified**, **Monitoring**, **Resolved**, **Updated**.
+- Open automatic incident: **Investigating**, **Identified**, **Monitoring**, **Updated**; successful checks still determine recovery.
+- Closed events accept only **Updated** notes and cannot be reopened.
 
-事件长期保存。删除节点后保留事件及节点名称，进行中的自动事件会停止跟踪并追加说明。
+Selecting **Completed** or **Resolved** and saving also closes the corresponding manual event and suppression window, without a separate completion checkbox. Other stages only record progress. Maintenance start and overdue states still follow scheduled times and do not create timeline records automatically. System records for stopped tracking display **Stopped**. Historical free-form titles remain as supplementary text, with the stage inferred from the original status as **Completed**, **Resolved**, **Stopped**, or **Updated**. Admin automatic refreshes and failed submissions preserve the selected stage and unsaved description.
 
-## HTTP 高级配置
+The overall home page status combines incidents, maintenance, and check results across the site, regardless of search terms or filters. A data-fetch failure displays **Status unavailable**. Unresolved manual or automatic incidents, failed checks, or stale data display **Some services need attention**, with the corresponding counts. Otherwise, maintenance that has started but has not been confirmed complete displays **Maintenance in progress**, even after its scheduled end; future maintenance only appears as event cards. Resolved events and events whose tracking has stopped do not affect overall status. Monitor status, operational service counts, and uptime always come from check results. Event changes appear on the home page after fresh data is fetched.
 
-新增或编辑监控时展开「高级配置（请求参数与响应校验）」：
+Enter maintenance times in the browser's time zone. The page clock switches to in-progress at the start time and past-scheduled-end at the end time; an administrator must confirm completion. The maintenance window is `[start time, end time)`. Checks and uptime statistics continue during the window, while publication of new automatic incidents is suppressed. Suppression does not apply retroactively to times before publication. Completing maintenance early ends that window's suppression; with overlapping windows, any active window keeps suppression in effect.
 
-- **请求头**：支持 Authorization、Cookie 和自定义 API Key 等，合计最多 8 KiB，仅通过管理员接口回显。名称不区分大小写且不能重复，值不能换行；不能覆盖 WAF 凭据、Host、Content-Length 或逐跳传输头。
-- **请求体**：POST / PUT / PATCH / DELETE / OPTIONS 可选择文本或 JSON，最多 16 KiB（按 UTF-8 字节计算）。JSON 校验格式，但原文保持不变；默认内容类型分别为 `text/plain;charset=UTF-8`、`application/json`，自定义 Content-Type 优先。GET / HEAD 不发送请求体。
-- **响应校验**：「必须包含」中的关键词必须全部出现，「不能包含」中的关键词必须全部不出现；每行一个，每组最多 20 个，每个最多 256 字符。默认区分大小写，可勾选忽略大小写；匹配 UTF-8 解码后的响应原文，不解析 HTML、JSON 字段或正则表达式。两组留空时只校验状态码，HEAD 不提供关键词校验。
-- **判定与限制**：状态码和关键词必须同时通过，Cloudflare 挑战页始终失败。关键词校验最多读取 1 MiB 正文，超出返回 `response_too_large`，不匹配返回 `content_mismatch`。响应正文不写入检测历史或日志。
+Set the threshold under **Global settings → Automatic outage incidents**. It defaults to **5 minutes** and accepts integer minutes from 1–1440. Set it to 0 to disable publication of new automatic incidents; existing incidents still resolve on a successful check.
 
-最多跟随三次重定向，每一跳均校验公网地址。301/302 对 POST、303 对非 GET/HEAD 请求改为 GET，并移除请求体和相关头；307/308 保留方法与请求体。跨源（协议、域名或端口变化）后移除全部自定义请求头，后续跳转也不恢复；若仍需转发请求体，则返回 `unsafe_redirect`，需直接填写最终地址。
+- Timing starts with the first failed check. A later failed check publishes an incident once the threshold is reached, with only one incident per continuous outage. For example, a 10-minute interval and a 5-minute threshold can publish at the second failed check at the earliest.
+- The first successful check clears an unpublished failure timer, or adds a recovery update to a published incident and marks it resolved, recording the sampled period from first failure to recovery. A new outage starts a new timer.
+- Maintenance windows and associated open manual incidents suppress new automatic incidents. After suppression ends, timing restarts with the first failed check, including when maintenance falls entirely between two checks. Manual incidents must be resolved manually.
+- Pausing, changing check parameters, or a data gap longer than two check intervals resets the unpublished failure timer. Changing only the name or group preserves it. Unknown or stale states and immediate tests do not trigger incidents; pausing or changing configuration does not resolve a published incident.
 
-切换方法时编辑器保留输入，保存时只提交该方法支持的请求体和关键词配置。所有方法均按监控频率重复执行，失败不自动重试。
+Events are retained indefinitely. Deleting a monitor preserves events and the monitor's saved name; open automatic incidents stop tracking and receive an explanatory update.
 
-## Cloudflare WAF 放行
+<a id="http-高级配置"></a>
 
-此功能需要目标站点的 Cloudflare WAF 管理权限。在「监控管理 → 全局设置」配置共享密钥和总开关，在网站监控中打开「启用 WAF 放行」（默认关闭）。总开关、单站开关均开启且已配置密钥时，检测才携带凭据；保存后无需重新部署。
+## Advanced HTTP configuration
 
-规则模板自动汇总已开启 WAF 的监控域名（含暂停项），规范化并去重。模板中的域名列表仅用于配置 Cloudflare 规则，各监控的凭据发送范围由单站配置决定。
+When creating or editing a monitor, expand **Advanced settings**:
 
-仅向**与当前监控完整域名匹配的 HTTPS 地址**发送 `X-UptimeWorker-WAF-Bypass` 请求头，每次重定向重新判断。跨域或降级为 HTTP 时不携带密钥，跳回原域名的 HTTPS 地址后可再次携带；HTTP 目标只有跳转到同域 HTTPS 后才携带。匹配时忽略大小写、移除尾点并规范化国际化域名，不限制端口，不匹配通配符或子域名。TCP 和 IP 地址不支持此功能；跨域场景请直接配置最终检测地址。
+- **Custom request headers**: supports Authorization, Cookie, custom API keys, and other headers, up to 8 KiB in total. Values are returned only through admin endpoints. Names are case-insensitive and cannot be duplicated; values cannot contain line breaks. WAF credentials, Host, Content-Length, and hop-by-hop headers cannot be overridden.
+- **Request body**: POST / PUT / PATCH / DELETE / OPTIONS can send text or JSON, up to 16 KiB measured in UTF-8 bytes. JSON syntax is validated, but the original text is preserved. Default content types are `text/plain;charset=UTF-8` and `application/json`, respectively; a custom Content-Type takes precedence. GET / HEAD do not send a body.
+- **Response validation**: every keyword in **Must contain** must appear, and every keyword in **Must not contain** must be absent. Enter one keyword per line, up to 20 per list and 256 characters each. Matching is case-sensitive unless **Ignore case** is selected. It checks the raw UTF-8-decoded response text without parsing HTML, JSON fields, or regular expressions. Leave both lists empty to validate only the status code. HEAD does not support keyword validation.
+- **Results and limits**: both the status code and keywords must pass. Cloudflare challenge pages always fail. Keyword validation reads at most 1 MiB of the response body; larger responses return `response_too_large`, and mismatches return `content_mismatch`. Response bodies are not written to check history or logs.
 
-### 配置步骤
+Up to three redirects are followed, with public-address validation at each hop. 301/302 convert POST to GET, and 303 converts non-GET/HEAD requests to GET, removing the body and related headers. 307/308 preserve the method and body. A cross-origin redirect, meaning a change in scheme, hostname, or port, removes all custom headers; they are not restored on later redirects. If forwarding the body is still required, the check returns `unsafe_redirect`; configure the final URL directly.
 
-1. 在网站监控中开启单站 WAF 并保存。在全局设置中点击「生成随机密钥」（32 字节随机数），或输入 32–256 位字母、数字、下划线、连字符组成的密钥。新密钥请在保存前复制保管。
-2. 展开「Cloudflare Skip 规则配置」，复制完整规则；若使用模板，将 `<YOUR_TOKEN>` 替换为相同密钥。规则示例：
+The editor preserves input when switching methods, but saving submits only the body and keyword settings supported by the selected method. All methods run repeatedly at the monitor's configured interval, without automatic retries on failure.
+
+<a id="cloudflare-waf-放行"></a>
+
+## Cloudflare WAF bypass
+
+This feature requires permission to manage Cloudflare WAF on the target site. Configure the shared token and master switch under **Monitor management → Global settings**, then turn on **Enable WAF bypass** for each HTTP monitor; it is off by default. Checks carry the credentials only when both the global and individual switches are on and a token is configured. Saving does not require redeployment.
+
+The rule template collects, normalizes, and deduplicates domains from monitors with WAF bypass enabled, including paused monitors. Its domain list is used only to configure Cloudflare rules; each monitor's own configuration determines where its credentials may be sent.
+
+The `X-UptimeWorker-WAF-Bypass` header is sent only to **HTTPS URLs whose full hostname matches the current monitor's hostname**, with the condition checked again at each redirect. The token is not sent across domains or when downgrading to HTTP; it may be sent again after redirecting back to HTTPS on the original hostname. An HTTP target carries the token only after redirecting to HTTPS on the same hostname. Matching ignores case, removes a trailing dot, and normalizes internationalized domain names. It does not restrict ports and does not match wildcards or subdomains. TCP monitors and IP addresses do not support this feature. For cross-domain targets, configure the final check URL directly.
+
+<a id="配置步骤"></a>
+
+### Setup steps
+
+1. Enable WAF bypass on the HTTP monitor and save it. In Global settings, click **Generate random token** to generate 32 random bytes, or enter a 32–256 character token containing letters, digits, underscores, and hyphens. Copy and store a new token before saving.
+2. Expand **Configure a Cloudflare Skip rule** and copy the complete rule. If using the template, replace `<YOUR_TOKEN>` with the same token. Example rule:
 
    ```text
    (http.host in {"example.com" "api.example.com"}) and
@@ -90,57 +106,65 @@
    (any(http.request.headers["x-uptimeworker-waf-bypass"][*] eq "<YOUR_TOKEN>"))
    ```
 
-3. 在每个目标站点的 Cloudflare **Security rules** 中创建自定义规则，填写表达式，操作选择 **Skip**，放在相关拦截规则之前。按拦截来源选择跳过剩余自定义规则、Managed Rules、Rate Limiting 或 Super Bot Fight Mode 等功能，并保留匹配日志以便验收。普通 **Bot Fight Mode 无法通过 Skip 跳过**；Browser Integrity Check 等产品需要单独选择对应的 Skip 选项。[官方配置步骤](https://developers.cloudflare.com/waf/custom-rules/skip/) · [可跳过的功能](https://developers.cloudflare.com/waf/custom-rules/skip/options/)
-4. 保存目标站点规则，启用全局总开关并保存设置。执行「测试连接」，再等待下一轮定时检测，结合 Cloudflare Security Events 确认请求匹配到放行规则。
+3. Under **Security rules** for each target site in Cloudflare, create a custom rule, enter the expression, choose **Skip**, and place it before the relevant blocking rules. Depending on what blocks the request, choose to skip the remaining custom rules, Managed Rules, Rate Limiting, Super Bot Fight Mode, or other supported features. Keep match logging enabled for verification. Standard **Bot Fight Mode cannot be bypassed with Skip**; products such as Browser Integrity Check require selecting their own Skip options. See the [official setup steps](https://developers.cloudflare.com/waf/custom-rules/skip/) and [features that can be skipped](https://developers.cloudflare.com/waf/custom-rules/skip/options/).
+4. Save the target site's rule, enable the global master switch, and save settings. Run **Test connection**, then wait for the next scheduled check. Use Cloudflare Security Events to confirm that requests match the bypass rule.
 
-### 密钥与规则维护
+<a id="密钥与规则维护"></a>
 
-保存后页面和接口只显示密钥是否已配置，不回传原值，也不写入日志或检测历史。密钥留空或关闭总开关均保留密钥，关闭总开关也保留单站设置。更换密钥或调整监控域名时，需同步更新目标站点规则；重新加载设置后，规则模板中的密钥显示为占位符。旧版升级见[兼容性说明](development.md#兼容性说明)。
+### Token and rule maintenance
 
-收到 `cf-mitigated: challenge` 时，检测返回 `cloudflare_challenge`，需检查放行规则。[挑战响应识别](https://developers.cloudflare.com/cloudflare-challenges/challenge-types/challenge-pages/detect-response/)
+After saving, the interface and API show only whether a token is configured. They never return its raw value or write it to logs or check history. Leaving the token blank or disabling the master switch retains the saved token; disabling the master switch also preserves individual monitor settings. When changing the token or monitor domains, update the target site's rules as well. After reloading settings, the rule template displays a placeholder for the token. For upgrades from older versions, see [compatibility notes](development.md#compatibility-notes).
 
-## 检测、统计与保留策略
+A response with `cf-mitigated: challenge` causes the check to return `cloudflare_challenge`; review the bypass rules. See [challenge response detection](https://developers.cloudflare.com/cloudflare-challenges/challenge-types/challenge-pages/detect-response/).
 
-- 定时任务每分钟按最早到期时间、服务 ID 顺序选择监控，在批量、请求和时间预算内检测。推迟项保持待检测状态，后续轮次优先处理，不记为故障。同一分钟不重复统计，上一轮未完成时跳过重叠调用，不补跑错过的轮次。持续满载、慢请求或平台延迟可能使实际间隔变长。
-- HTTP 耗时包含重定向和最终响应处理；仅配置关键词时读取正文，读取时间计入超时和响应耗时。
-- TCP 耗时为连接建立时间；不执行数据库查询、TLS 握手或应用协议校验。连接成功不代表应用业务正常。
-- TCP 无法连接内网、localhost、Cloudflare IP 或端口 25。Cloudflare 代理后的域名不适合裸 TCP 检测；HTTP 服务应使用 HTTP 检测。[官方限制](https://developers.cloudflare.com/workers/runtime-apis/tcp-sockets/)
-- 检测位置由 Cloudflare 调度决定，非固定城市或多地区探针；位置和网络往返时间会影响响应耗时。
-- 第一次检测前显示“等待检测”，停用显示“已暂停”，超过两个配置周期没有新结果显示“数据过期”。平台或数据库故障不会生成成功样本。
-- 可用率 = 成功检测次数 / 完成检测次数，缺失样本和暂停区间不纳入统计。30 日指包含今天的最近 30 个 UTC 自然日；可用率和状态条基于已有样本，不代表精确的故障持续时间。
-- 数据时间戳使用 UTC 毫秒；每日状态条按 UTC 日汇总，检测时间按浏览器时区显示。
-- 保留最近 7 天明细和包含今天的 90 个 UTC 日汇总，详情页展示最近 24 小时的全部明细。过期数据分批清理，长期停机后可能需要多轮完成。
-- 编辑监控保留历史。修改检测参数会重置当前状态，等待下一轮检测；只修改名称或分组则保留状态。删除监控会删除它的明细与汇总。
+<a id="检测统计与保留策略"></a>
 
-## 性能设置与容量估算
+## Checks, statistics, and retention
 
-在后台「性能」页签调整调度设置。保存后从下一轮生效；估算即时使用未保存的输入，自动刷新服务配置和切换页签均保留编辑。设置与全局设置共用版本号，冲突时需点击「重新加载最新设置（放弃当前编辑）」。
+- Each minute, the scheduler selects monitors by earliest due time, then service ID, and runs checks within batch, request, and time budgets. Deferred monitors stay due and take priority in later runs; they are not recorded as failures. The same minute is not counted twice, overlapping invocations are skipped while the previous run is unfinished, and missed runs are not replayed. Sustained full load, slow requests, or platform delays may lengthen actual intervals.
+- HTTP response time includes redirects and final response processing. The body is read only when keywords are configured, and reading time counts toward both the timeout and response time.
+- TCP response time measures connection establishment only. No database query, TLS handshake, or application protocol validation is performed. A successful connection does not guarantee that the application works.
+- TCP cannot connect to private networks, localhost, Cloudflare IPs, or port 25. Domains proxied by Cloudflare are unsuitable for raw TCP checks; use HTTP checks for HTTP services. See the [official restrictions](https://developers.cloudflare.com/workers/runtime-apis/tcp-sockets/).
+- Cloudflare determines where checks run; they are not probes pinned to a city or multiple regions. Location and network round-trip time affect response times.
+- Before the first check, the status is **Awaiting checks**; disabled monitors show **Paused**. After two configured intervals without a new result, the status becomes **Stale data**. Platform or database failures do not generate successful samples.
+- Uptime = successful checks / completed checks. Missing samples and paused periods are excluded. The 30-day period covers the most recent 30 UTC calendar days, including today. Uptime and status history are based on collected samples, not exact outage durations.
+- Data timestamps use UTC milliseconds. Daily status bars are aggregated by UTC day, while check times are displayed in the browser's time zone.
+- Detailed checks are retained for the last 7 days, and daily aggregates for 90 UTC days including today. Detail pages show all samples from the last 24 hours. Expired data is cleaned in batches; cleanup after a long shutdown may take several runs.
+- Editing a monitor preserves history. Changing check parameters resets the current status until the next check; changing only the name or group preserves status. Deleting a monitor deletes its detailed checks and daily aggregates.
 
-| 设置           | 默认值 | 范围        |
-| -------------- | ------ | ----------- |
-| Workers 套餐   | Free   | Free / Paid |
-| 检测并发数     | 4      | 1–6         |
-| 每轮最大检测数 | 10     | 1–500       |
-| 每轮时间预算   | 50 秒  | 40–180 秒   |
+<a id="性能设置与容量估算"></a>
 
-套餐应与实际订阅一致，仅改变应用预算，不修改 Cloudflare 订阅或部署配置。服务总数不限，每轮最大检测数是单轮候选数量，实际启动量还受其他预算约束：
+## Performance settings and capacity estimates
 
-- HTTP 每项预留 4 次子请求（初始请求及最多 3 次重定向）。Free 单轮最多预留 50 次，因此至多启动 12 个 HTTP 检测；即使目标没有重定向，也保留完整预算。Paid 使用官方默认 10,000 次额度。TCP 不占 HTTP 请求额度，但同样受并发、批量和时间预算限制。
-- 每次启动前须剩余该服务的完整超时时间，另留 5 秒用于保存结果。网络等待计入墙钟时间，不是 CPU 时间；数据库延迟可能使整轮超过该预算。大于一分钟的调度可能导致后续 Cron 因租约而跳过。
-- 未启动项保持到期时间；内部执行异常不生成样本，安排下一分钟重试，避免持续占据队首。原有租约、版本和重复统计保护继续生效。
+Use the admin **Performance** tab to adjust scheduler settings. Saved changes take effect on the next run. Estimates immediately use unsaved input, and edits survive automatic refreshes of service configurations and tab switches. These settings share a version with global settings. After a conflict, click **Reload latest settings (discard current edits)**.
 
-估算仅包含启用服务。每日理论检测量为 `Σ(1440 / intervalMinutes)`；HTTP 理论请求范围为 HTTP 检测量的 1–4 倍，TCP 不计入此范围；7 天明细量为每日理论检测量的 7 倍。均假设检测如期完成，不包含手动测试。
+| Setting                | Default    | Range          |
+| ---------------------- | ---------- | -------------- |
+| Workers plan           | Free       | Free / Paid    |
+| Probe concurrency      | 4          | 1–6            |
+| Maximum checks per run | 10         | 1–500          |
+| Time budget per run    | 50 seconds | 40–180 seconds |
 
-峰值模拟假设全部启用服务同时到期、按 ID 排序、每项耗尽超时、配置读取无延迟，使用与实际调度相同的预算判断，展示启动数、推迟原因和探测耗时。候选耗时上界使用 `ceil(候选数 / 并发) × 最大超时`；80% 起提示接近预算。峰值需要分批不等于持续积压；平均每分钟需求超过配置批量时则无法维持目标频率。
+Select the plan matching your actual subscription. It changes only application budgets, not the Cloudflare subscription or deployment configuration. There is no limit on the total number of services. The maximum checks per run limits the candidate batch; other budgets also constrain how many checks actually start:
 
-D1 基础写入下限按每个检测样本的明细、日汇总、服务状态三次写入计算，不包含索引、自动事件、清理和其他请求。Free 为账户每日额度；Paid 为每月包含用量，超额计费，面板的写入提示按 30 天投影。不能将这个下限视为实际计费用量。
+- Each HTTP check reserves 4 subrequests: the initial request and up to 3 redirects. Free permits at most 50 reserved subrequests per run, allowing at most 12 HTTP checks to start. The full budget is reserved even if a target does not redirect. Paid uses the official default quota of 10,000. TCP does not consume the HTTP request budget, but still uses concurrency, batch, and time budgets.
+- Before a check starts, enough time must remain for its full timeout plus 5 seconds to save results. Network waiting consumes wall-clock time, not CPU time. Database delays may push the complete run beyond this budget. Runs lasting longer than a minute may cause later Cron invocations to be skipped because of the lease.
+- Checks that do not start retain their due time. Internal execution errors do not generate samples and schedule a retry for the next minute, preventing a persistent failure from blocking the front of the queue. Existing lease, version, and duplicate-counting safeguards remain in effect.
 
-平台基准核对于 2026-10-29，集中维护于共享性能模块，页面无需访问 Cloudflare。CPU、总内存、实际 D1 读写和账户总用量需要实测，面板不保证不会超限。当前每分钟 Cron 的 Free/Paid CPU 上限分别为 10 毫秒/30 秒，Cron 墙钟时长上限为 15 分钟，每个 isolate 内存上限为 128 MB。其他应用、页面请求、实际账期和自定义部署限制也会影响容量。[Workers 限制](https://developers.cloudflare.com/workers/platform/limits/) · [D1 限制](https://developers.cloudflare.com/d1/platform/limits/) · [D1 计费](https://developers.cloudflare.com/d1/platform/pricing/)
+Estimates include only enabled services. The theoretical daily check count is `Σ(1440 / intervalMinutes)`; theoretical HTTP requests range from 1–4 times the HTTP check count, excluding TCP. Seven days of detailed samples equal seven times the daily check count. These estimates assume checks complete on schedule and exclude manual tests.
 
-## 资源用量与运行观测
+The peak simulation assumes all enabled services are due simultaneously, ordered by ID, with every check taking its full timeout and no configuration read latency. It uses the same budget rules as the scheduler and shows the number started, reasons for deferral, and probe duration. The upper bound for candidate duration is `ceil(candidate count / concurrency) × maximum timeout`; usage at or above 80% is marked as near the budget. A peak requiring multiple batches does not necessarily mean a sustained backlog. Average demand per minute above the configured batch size, however, cannot sustain the target frequency.
 
-例如，10 个监控均采用 1 分钟间隔且如期完成时，每天产生 14,400 次定时检测；默认每轮批量 10 项均为 HTTP 时最多预留 40 次出站请求。出站检测次数不等于 Worker 调用次数。
+The lower bound for base D1 writes counts three writes per check sample: the detailed check, daily aggregate, and service status. It excludes indexes, automatic incidents, cleanup, and other requests. Free uses a daily account quota; Paid uses a monthly included allowance with overage charges. The panel projects Paid write warnings over 30 days. This lower bound is not actual billable usage.
 
-在 Cloudflare 仪表盘查看 Worker CPU 和 D1 Row Metrics。`scheduled_run` 日志提供检测数 `checked`、写入样本数 `stored`、数据库读写数 `rowsRead` / `rowsWritten` 和总耗时 `elapsedMs`；总耗时与 CPU 时间分开统计。
+The platform baseline was verified on 2026-10-29 and is maintained centrally in the shared performance module; the page does not contact Cloudflare. CPU, total memory, actual D1 reads and writes, and total account usage must be measured. The panel does not guarantee that limits will not be exceeded. For the current per-minute Cron schedule, Free/Paid CPU limits are 10 milliseconds/30 seconds, respectively; the Cron wall-clock limit is 15 minutes, and memory is limited to 128 MB per isolate. Other applications, page requests, actual billing periods, and custom deployment limits also affect capacity. See [Workers limits](https://developers.cloudflare.com/workers/platform/limits/), [D1 limits](https://developers.cloudflare.com/d1/platform/limits/), and [D1 pricing](https://developers.cloudflare.com/d1/platform/pricing/).
 
-资源消耗随检测频率、访问量、缓存节点及数据库索引、触发器和清理操作变化。账户用量包含同账户其他应用，配额与价格见 [D1 计费](https://developers.cloudflare.com/d1/platform/pricing/)。调整性能设置前参阅[请求与检测流程](architecture.md#请求与检测流程)。
+<a id="资源用量与运行观测"></a>
+
+## Resource usage and operational monitoring
+
+For example, 10 monitors with 1-minute intervals produce 14,400 scheduled checks per day if all run on schedule. A default batch of 10 HTTP checks reserves at most 40 outbound requests per run. Outbound check requests are not the same as Worker invocations.
+
+Inspect Worker CPU and D1 Row Metrics in the Cloudflare dashboard. The `scheduled_run` log records the number of checks as `checked`, stored samples as `stored`, database reads and writes as `rowsRead` / `rowsWritten`, and total duration as `elapsedMs`. Total duration is measured separately from CPU time.
+
+Resource usage varies with check frequency, traffic, cache locations, database indexes, triggers, and cleanup operations. Account usage includes other applications on the same account; see [D1 pricing](https://developers.cloudflare.com/d1/platform/pricing/) for quotas and pricing. Before changing performance settings, review the [request and check flow](architecture.md#request-and-check-flow).

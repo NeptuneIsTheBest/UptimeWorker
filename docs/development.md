@@ -1,24 +1,32 @@
-# 开发与维护
+<a id="开发与维护"></a>
 
-[返回 README](../README.md)
+# Development and maintenance
 
-## 本地环境
+[English](development.md) | [简体中文](zh-CN/development.md)
 
-首次安装和启动见 [README 本地运行](../README.md#本地运行)。以下命令均在仓库根目录执行。
+[Back to README](../README.md)
 
-[`.dev.vars.example`](../.dev.vars.example) 中的 `DEV_ACCESS_BYPASS=true` 仅在 Vite 开发模式下对 localhost / 回环地址生效，生产构建会移除该分支。开发服务器应只供本机访问。
+<a id="本地环境"></a>
 
-开发模式绕过 Worker 公共响应缓存。本地数据库位于 `.wrangler/state/`；浏览器测试使用独立、可丢弃的 `.wrangler/e2e-state/`，与开发及云端数据隔离。
+## Local environment
 
-本地 Cron 不会自动按时运行。在开发服务器运行期间，可以手动触发一轮：
+See [Local development in the README](../README.md#local-development) for initial installation and startup. Run all commands below from the repository root.
+
+`DEV_ACCESS_BYPASS=true` in [`.dev.vars.example`](../.dev.vars.example) applies only to localhost / loopback addresses in Vite development mode. Production builds remove this branch. Keep the development server accessible only from the local machine.
+
+Development mode bypasses the Worker's public response cache. The local database lives in `.wrangler/state/`. Browser tests use a separate, disposable `.wrangler/e2e-state/`, isolated from development and cloud data.
+
+Local Cron does not run automatically on a schedule. While the development server is running, trigger a run manually:
 
 ```sh
 curl 'http://127.0.0.1:5173/cdn-cgi/local/scheduled?cron=*+*+*+*+*'
 ```
 
-同一分钟内重复触发或上一轮未结束时会跳过。新增或编辑监控后，等待下一个时间窗，或使用后台的“测试连接”。调度行为见[检测、统计与保留策略](configuration.md#检测统计与保留策略)。
+Repeated triggers in the same minute, or triggers while the previous run is unfinished, are skipped. After creating or editing a monitor, wait for the next time window or use **Test connection** in the admin console. See [checks, statistics, and retention](configuration.md#checks-statistics-and-retention) for scheduler behavior.
 
-## 验证命令
+<a id="验证命令"></a>
+
+## Verification commands
 
 ```sh
 npm run check
@@ -26,92 +34,118 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-`npm run check` 执行严格类型检查（含未使用的局部声明与参数）、单元 / D1 集成测试和生产构建，并检查 D1、Cron 配置及开发鉴权分支的移除。浏览器测试单独运行；GitHub Actions 会执行两组检查。
+`npm run check` runs strict type checks, including unused local declarations and parameters, unit / D1 integration tests, and a production build. It also checks the D1 and Cron configuration and verifies that development authentication branches are removed. Browser tests run separately; GitHub Actions runs both sets of checks.
 
-按需单独运行：
+Run individual checks as needed:
 
-| 命令                                                        | 用途                         |
-| ----------------------------------------------------------- | ---------------------------- |
-| `npm run typecheck`                                         | TypeScript 类型检查          |
-| `npm test`                                                  | 单元与 D1 集成测试           |
-| `npm run test:watch`                                        | 监听模式运行 Vitest          |
-| `npm run build`                                             | 生产构建及产物检查           |
-| `npm test -- tests/platform/api.test.ts`                    | 只验证 API 边界              |
-| `npm run test:e2e -- tests/e2e/monitors/management.spec.ts` | 独立运行一个浏览器测试文件   |
-| `npm run format`                                            | 使用 Prettier 格式化整个仓库 |
+| Command                                                     | Purpose                                    |
+| ----------------------------------------------------------- | ------------------------------------------ |
+| `npm run typecheck`                                         | TypeScript type checks                     |
+| `npm test`                                                  | Unit and D1 integration tests              |
+| `npm run test:watch`                                        | Vitest in watch mode                       |
+| `npm run build`                                             | Production build and output checks         |
+| `npm test -- tests/platform/api.test.ts`                    | API boundary checks only                   |
+| `npm run test:e2e -- tests/e2e/monitors/management.spec.ts` | Run one browser test file independently    |
+| `npm run format`                                            | Format the entire repository with Prettier |
 
-局部格式化使用 `npx prettier --write <文件路径>`，仅检查时改用 `--check`。
+For selected files, use `npx prettier --write <file-path>`; replace `--write` with `--check` to check without changing files.
 
-使用本机 Chromium 时，将 `PLAYWRIGHT_CHROMIUM_EXECUTABLE` 设为可执行文件路径。
+To use a locally installed Chromium, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` to its executable path.
 
-## 测试职责与隔离
+<a id="测试职责与隔离"></a>
 
-| 测试                                    | 主要职责                                                                        |
-| --------------------------------------- | ------------------------------------------------------------------------------- |
-| [monitors](../tests/features/monitors/) | 配置校验、HTTP/TCP 探测、WAF 凭据范围、高级配置、检测快照、调度租约、去重与统计 |
-| [groups](../tests/features/groups/)     | 改名与分组调整保留检测状态，删除分组后节点归属与自动事件连续性                  |
-| [events](../tests/features/events/)     | 事件、进展阶段、静默区间、自动故障恢复、并发与事务回滚                          |
-| [settings](../tests/features/settings/) | 密钥生命周期、旧设置兼容、并发保存、刷新配置与读取失败                          |
-| [status](../tests/features/status/)     | 首页状态优先级、维护时间边界及数据错误                                          |
-| [platform](../tests/platform/)          | API 鉴权与缓存、请求限制、版本冲突、JWT、数据库迁移和部署配置                   |
-| [浏览器测试](../tests/e2e/)             | 管理与公开页面交互、表单保留、自动刷新、事件时间线及桌面／移动端布局            |
+## Test responsibilities and isolation
 
-单元测试使用 HTTP / socket 替身，D1 集成测试在本地 workerd 中运行迁移、SQL 和触发器，JWT 测试使用本地 RSA 密钥。D1 和浏览器测试需要允许监听回环端口。
+| Tests                                   | Main responsibilities                                                                                                                                |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [monitors](../tests/features/monitors/) | Configuration validation, HTTP/TCP probes, WAF credential scope, advanced settings, check snapshots, scheduler leases, deduplication, and statistics |
+| [groups](../tests/features/groups/)     | Preserving check state across renames and group changes, monitor membership after group deletion, and automatic incident continuity                  |
+| [events](../tests/features/events/)     | Events, progress stages, suppression windows, automatic incident recovery, concurrency, and transaction rollback                                     |
+| [settings](../tests/features/settings/) | Token lifecycle, legacy settings compatibility, concurrent saves, refresh settings, and read failures                                                |
+| [status](../tests/features/status/)     | Home page status priorities, maintenance time boundaries, and data errors                                                                            |
+| [platform](../tests/platform/)          | API authentication and caching, request limits, version conflicts, JWTs, database migrations, and deployment configuration                           |
+| [Browser tests](../tests/e2e/)          | Admin and public page interactions, form preservation, automatic refresh, event timelines, and desktop / mobile layouts                              |
 
-[API 测试客户端](../tests/support/api-client.ts) 统一身份、请求头和 JSON 请求。新增断言放入对应功能测试，浏览器测试聚焦交互流程。目录与依赖约定见[架构与代码组织](architecture.md)。
+Unit tests use HTTP / socket test doubles. D1 integration tests run migrations, SQL, and triggers in local workerd, and JWT tests use local RSA keys. D1 and browser tests require permission to listen on loopback ports.
 
-[浏览器测试夹具](../tests/e2e/support/fixtures.ts) 在每个用例前清理监控、事件和分组，恢复 5 分钟自动事件阈值和 30 秒刷新间隔，关闭全局 WAF 并写入固定测试密钥。特殊页面状态使用请求替身构造。各文件应可独立运行；测试串行共用数据库，不要并行启动多个浏览器测试进程。
+The [API test client](../tests/support/api-client.ts) centralizes identity, headers, and JSON requests. Place new assertions in the relevant feature tests; keep browser tests focused on interaction flows. See [architecture and code organization](architecture.md) for directory and dependency conventions.
 
-自动刷新测试使用可控时钟验证轮询、相对时间、慢请求和后台暂停。
+Before each case, the [browser test fixtures](../tests/e2e/support/fixtures.ts) clear monitors, events, and groups; restore the 5-minute automatic incident threshold and 30-second refresh interval; disable global WAF bypass; and save a fixed test token. Special page states use request stubs. Each file should run independently. Tests run serially against a shared database, so do not start multiple browser test processes in parallel.
 
-排序测试覆盖 D1 原子更新、旧快照冲突、换组和删除分组后的追加顺序、排序期间检测结果写入，以及浏览器拖拽、键盘按钮、失败恢复和自动刷新竞争。
+Automatic refresh tests use a controllable clock to verify polling, relative times, slow requests, and pausing in the background.
 
-失败时保存截图和 trace 到 `test-results/`，GitHub Actions 会上传该目录。
+Ordering tests cover atomic D1 updates, conflicts with old snapshots, append order after group changes or group deletion, check-result writes during reordering, browser dragging, keyboard buttons, failure recovery, and races with automatic refresh.
 
-## 代码组织
+On failure, screenshots and traces are saved in `test-results/`, which GitHub Actions uploads.
 
-代码按 `web / worker / shared` 分层，各层内按监控、分组、事件、设置和状态展示归档。功能职责、依赖方向、请求与检测流程、样式组织及新增功能约定见[架构与代码组织](architecture.md)。
+<a id="代码组织"></a>
 
-## 部署配置
+## Code organization
 
-`npm run deploy:prepare` 校验环境变量，按名称创建或复用 D1，生成不含 API Token 的 `wrangler.deploy.json`。工作流设置 `UPTIME_WRANGLER_CONFIG=wrangler.deploy.json` 重新构建，再运行 `npm run deploy:migrate` 应用远端迁移，成功后发布。变量与操作步骤见[部署指南](deployment.md)。
+Code is divided into `web / worker / shared` layers, with monitors, groups, events, settings, and status features inside each layer. See [architecture and code organization](architecture.md) for feature responsibilities, dependency directions, request and check flows, styles, and conventions for adding features.
 
-## 数据库迁移
+<a id="部署配置"></a>
 
-新增数据库变更使用 `migrations/NNNN_description.sql`，不修改已应用到生产的迁移。优先保持向后兼容，先迁移数据库再部署代码；本地升级执行 `npm run db:migrate`，远端由部署工作流应用。恢复操作见[部署指南](deployment.md#回滚与数据库恢复)。
+## Deployment configuration
 
-| 迁移                            | 内容与兼容性                                                                                                                                 |
-| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `0001_initial.sql`              | 初始监控、检测明细、日汇总和调度租约表，以及统计触发器。                                                                                     |
-| `0002_global_settings.sql`      | 新增全局 WAF 设置、密钥与版本字段；历史域名列保留以兼容旧 schema。                                                                           |
-| `0003_flexible_intervals.sql`   | 将间隔扩展为 1–60 的整数；同一事务中替换间隔列并恢复汇总触发器，保留配置、历史、统计、调度状态及外键关系。                                   |
-| `0004_page_refresh.sql`         | 新增 `page_refresh_seconds`，默认 30，允许 0 或 5–3600 的整数秒；保留设置版本、WAF 配置和监控数据，旧代码可继续运行。                        |
-| `0005_groups_events.sql`        | 新增分组、事件、节点名称快照、进展、连续失败计时和静默区间；保留监控及统计，已有节点默认未分组，自动事件阈值默认 5 分钟，不补发历史故障。    |
-| `0006_event_update_titles.sql`  | 新增可空的进展标题；保留历史正文、状态及关联，旧写入与自动进展省略标题时为 null。先应用迁移再部署代码，旧代码仍可运行。                      |
-| `0007_performance_settings.sql` | 新增套餐、并发、单轮批量和时间预算，默认 Free / 4 / 10 / 50 秒，以及到期监控索引；保留既有设置版本、密钥、服务、历史和租约，旧代码仍可运行。 |
+`npm run deploy:prepare` validates environment variables, creates or reuses D1 by name, and generates `wrangler.deploy.json` without an API Token. The workflow rebuilds with `UPTIME_WRANGLER_CONFIG=wrangler.deploy.json`, then runs `npm run deploy:migrate` to apply remote migrations before publishing. See the [deployment guide](deployment.md) for variables and steps.
 
-迁移测试使用对应旧 schema 的原始 INSERT 准备数据，避免依赖最新列的业务 repository。
+<a id="数据库迁移"></a>
 
-`0008_display_order.sql` 为服务增加独立顺序列和索引，按旧的创建时间与 ID 初始化组内顺序，保留分组排序、监控版本、状态、统计与故障计时。先应用迁移，再部署排序功能。旧代码仍可运行，但不会使用服务排序，旧代码新建服务也不会遵循追加顺序。
+## Database migrations
 
-`0009_ungrouped_order.sql` 在 `monitor_groups` 增加内部名称为空的 `__ungrouped__` 系统排序记录，初始位置在现有分组之后，节点仍使用 `group_id = NULL`，已有分组和监控数据不变。先应用迁移再部署对应代码。新分组排序请求必须包含系统项；旧页面遗漏时会收到排序冲突，刷新页面后重试。旧读取响应没有 `ungrouped` 时，新页面将未分组放在末尾展示。回滚到不识别该系统项的代码可能将其作为普通分组暴露，应同步处理该兼容性问题。
+Use `migrations/NNNN_description.sql` for new database changes; do not edit migrations already applied in production. Prefer backward-compatible changes and migrate the database before deploying code. Run `npm run db:migrate` for local upgrades; the deployment workflow applies remote migrations. See the [deployment guide](deployment.md#rollback-and-database-recovery) for recovery.
 
-## 兼容性说明
+| Migration                       | Changes and compatibility                                                                                                                                                                                                                                                                              |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `0001_initial.sql`              | Initial monitor, detailed check, daily aggregate, and scheduler lease tables, plus statistics triggers.                                                                                                                                                                                                |
+| `0002_global_settings.sql`      | Adds global WAF settings, token, and version fields. Legacy domain columns remain for compatibility with the old schema.                                                                                                                                                                               |
+| `0003_flexible_intervals.sql`   | Expands intervals to integers from 1–60. Replaces the interval column and restores aggregate triggers in one transaction, preserving configuration, history, statistics, scheduler state, and foreign-key relationships.                                                                               |
+| `0004_page_refresh.sql`         | Adds `page_refresh_seconds`, defaulting to 30 and accepting 0 or integer seconds from 5–3600. Preserves the settings version, WAF configuration, and monitor data; old code can still run.                                                                                                             |
+| `0005_groups_events.sql`        | Adds groups, events, monitor name snapshots, updates, continuous failure timing, and suppression intervals. Preserves monitors and statistics. Existing monitors default to Ungrouped, and the automatic incident threshold defaults to 5 minutes. Historical outages are not published retroactively. |
+| `0006_event_update_titles.sql`  | Adds nullable update titles, preserving historical descriptions, statuses, and associations. Old writes and automatic updates that omit the title store null. Apply the migration before deploying code; old code can still run.                                                                       |
+| `0007_performance_settings.sql` | Adds plan, concurrency, batch size, and time budget settings, defaulting to Free / 4 / 10 / 50 seconds, plus an index for due monitors. Preserves existing settings versions, tokens, services, history, and leases; old code can still run.                                                           |
 
-- 性能设置升级须先应用 `0007_performance_settings.sql`，再部署代码。旧设置 PATCH 省略 `performance` 时保留当前性能设置；新管理列表不再返回 `limit`，管理端同步更新。旧代码回滚后会重新实施原来的创建和调度限制，应避免在已超过 10 个服务的部署中回滚此功能。
+Migration tests prepare data with raw INSERT statements against the corresponding old schema, avoiding feature repositories that depend on the newest columns.
 
-- 事件进展读取兼容旧自由标题和无标题记录；新写入使用固定阶段，并保留无标题的旧版 `resolve` 请求兼容。具体规则统一见 [API 参考](api.md#分组与事件)。
+`0008_display_order.sql` adds an independent service order column and index, initializing order within each group from the previous creation time and ID order. It preserves group order, monitor versions, status, statistics, and failure timing. Apply the migration before deploying ordering support. Old code can still run but will not use service ordering, and services created by old code will not follow the append-order convention.
 
-- 检测间隔升级保留已有值。保存过 1、2、7 分钟等间隔后，回滚代码也必须支持 1–60 分钟校验。
-- 旧监控缺少单站 `wafBypassEnabled` 时按关闭处理。旧 WAF 域名列保留但不再读写，域名名单不再决定凭据发送范围；此变更无需新增迁移，接口兼容行为见 [API 参考](api.md#全局设置)。
-- 从旧版 GET/HEAD WAF 规则模板升级时，需同步更新目标站点的 Cloudflare 规则，以放行当前支持的 HTTP 方法。
+`0009_ungrouped_order.sql` adds a system ordering record named `__ungrouped__` to `monitor_groups`, with an empty internal name and an initial position after existing groups. Monitors continue to use `group_id = NULL`, and existing group and monitor data is unchanged. Apply the migration before deploying the corresponding code. New group ordering requests must include the system item; older pages that omit it receive an ordering conflict and must refresh before retrying. If an old read response lacks `ungrouped`, new pages display Ungrouped last. Rolling back to code that does not recognize the system item may expose it as a regular group; address this compatibility issue as part of the rollback.
 
-## 界面语言
+<a id="兼容性说明"></a>
 
-界面使用 React Context 与 `src/web/i18n/messages.ts` 中的类型安全双语词典，无额外运行时依赖。新文案同时补充中文和英文；包含数量的英文文案可使用 `one` / `other`。动态值使用命名参数，持久显示的通知保存 `message(key, params)`，错误通过 `errorMessage` 归一化，在渲染时使用当前语言解析。
+## Compatibility notes
 
-语言优先级为有效的 `localStorage["uptimeworker.locale"]`（`zh-CN` / `en`）、浏览器首选语言、英文。任何 `zh` 语言变体使用简体中文；手动切换会同步同源标签页，存储被禁用时仍可在当前页面切换。页面时间使用浏览器时区，统计继续按 UTC 汇总。
+- Before upgrading performance settings, apply `0007_performance_settings.sql`, then deploy the code. Older settings PATCH requests that omit `performance` retain the current performance settings. The new admin list no longer returns `limit`, so update the admin client together with it. Rolling back to old code restores the previous creation and scheduling limits; avoid rolling back this feature on deployments with more than 10 services.
 
-共享校验与 Worker 错误使用稳定错误码和参数，保留旧中文错误说明。固定事件阶段只翻译显示名称，接口值不变。自动事件仅在展示时识别既有系统模板，保留原始标题中的服务名；手动内容和未知历史文本保持原文，无需数据库迁移。
+- Event update reads support old free-form titles and untitled records. New writes use fixed stages, while untitled legacy `resolve` requests remain supported. See the [API reference](api.md#groups-and-events) for the complete rules.
 
-现有浏览器测试固定为 `zh-CN`，`tests/e2e/platform/i18n.spec.ts` 覆盖英文、语言持久化、跨标签页切换、编辑保留和双语移动布局。新增功能需同时检查两种语言的标签、提示、错误、标题和无障碍名称。
+- Interval upgrades preserve existing values. After saving intervals such as 1, 2, or 7 minutes, any rollback code must also support 1–60 minute validation.
+- Older monitors without an individual `wafBypassEnabled` setting treat it as off. Legacy WAF domain columns remain but are no longer read or written, and domain lists no longer determine where credentials are sent. This change requires no new migration; see the [API reference](api.md#global-settings) for compatibility behavior.
+- When upgrading from an older GET/HEAD WAF rule template, update the target site's Cloudflare rule to permit the currently supported HTTP methods.
+
+<a id="界面语言"></a>
+
+## Interface languages
+
+The interface uses React Context and the type-safe bilingual dictionary in `src/web/i18n/messages.ts`, with no additional runtime dependency. Add both Chinese and English for new copy. English messages containing counts may use `one` / `other`. Dynamic values use named parameters. Persistent notifications store `message(key, params)`, and errors are normalized with `errorMessage`, then resolved in the current language during rendering.
+
+Language precedence is a valid `localStorage["uptimeworker.locale"]` value (`zh-CN` / `en`), the browser's preferred language, then English. Any `zh` language variant uses Simplified Chinese. Manual changes synchronize across tabs on the same origin; if storage is disabled, switching still works on the current page. Page times use the browser's time zone, while statistics remain aggregated in UTC.
+
+Shared validation and Worker errors use stable error codes and parameters, retaining older Chinese error descriptions. Fixed event stages translate only their display names; API values stay unchanged. Automatic events recognize existing system templates only when displayed, preserving the service name from the original title. Manual content and unknown historical text retain their original wording. No database migration is required.
+
+Existing browser tests use `zh-CN`. `tests/e2e/platform/i18n.spec.ts` covers English, language persistence, switching across tabs, preserving edits, and mobile layouts in both languages. For new features, check labels, hints, errors, titles, and accessible names in both languages.
+
+## Documentation maintenance
+
+English is the default entry point, using `README.md` at the repository root and `docs/*.md`. Simplified Chinese uses `README.zh-CN.md` at the root and `docs/zh-CN/*.md`, with matching filenames for each guide. When changing features, APIs, or operating instructions, update both languages in the same change and keep sections, examples, and technical parameters aligned.
+
+Keep an `English | 简体中文` switch at the top of every page linking to the same document in each language. Document indexes, links back to the README, and cross-references should stay in the current language. Legacy Chinese heading anchors on English pages preserve historical links. Retain these explicit anchors when renaming headings and update affected section references. Chinese guides use `../../` to reach source, test, or configuration files relative to the repository root.
+
+Translate prose, tables, example explanations, and directory tree comments using operation names from the corresponding interface language. Keep commands, API fields, enums, error codes, configuration values, and numeric limits accurate. Preserve Chinese error text in real API responses and explain its compatibility purpose in English. Keep the license in its original language.
+
+Before submitting, check that both versions cover the same content, language switches and relative links work, section anchors resolve, and JSON examples parse. Compare commands and technical parameters, then inspect tables, code blocks, and navigation in a Markdown preview. Run the documentation format check:
+
+```sh
+npx prettier --check README.md README.zh-CN.md "docs/**/*.md"
+```

@@ -1,85 +1,97 @@
-# 架构与代码组织
+<a id="架构与代码组织"></a>
 
-[返回 README](../README.md) · [开发与维护](development.md)
+# Architecture and code organization
 
-UptimeWorker 在同一个 Cloudflare Worker 上提供 API、定时检测和前端静态资源，D1 保存监控配置、检测历史与事件。代码先按运行环境分层，再按功能组织。
+[English](architecture.md) | [简体中文](zh-CN/architecture.md)
 
-## 目录与职责
+[Back to README](../README.md) · [Development and maintenance](development.md)
+
+UptimeWorker serves the API, scheduled checks, and frontend static assets from a single Cloudflare Worker. D1 stores monitor configurations, check history, and events. Code is organized first by runtime layer, then by feature.
+
+<a id="目录与职责"></a>
+
+## Directories and responsibilities
 
 ```text
 src/
-  shared/                 前后端共享的纯类型、常量和校验
-    monitors/             监控配置、检测结果、限制与地址校验
-    groups/               分组类型与校验
-    ordering.ts           排序快照类型与校验
-    events/               事件类型、进展阶段与校验
-    settings/             全局设置、刷新规则与 WAF 规则模板
-    status/               公开状态及监控历史响应类型
-    errors.ts             配置校验错误
-    validation.ts         对象、文本与版本号校验
+  shared/                 Pure types, constants, and validation shared by frontend and backend
+    monitors/             Monitor configuration, check results, limits, and address validation
+    groups/               Group types and validation
+    ordering.ts           Ordering snapshot types and validation
+    events/               Event types, progress stages, and validation
+    settings/             Global settings, refresh rules, and WAF rule templates
+    status/               Public status and monitor history response types
+    errors.ts             Configuration validation errors
+    validation.ts         Object, text, and version validation
   web/
-    app/                  页面选择、站点布局与管理页装配
-    features/             monitors、groups、events、settings、status
-    components/           图标、弹窗、加载、错误与刷新提示
-    hooks/                数据刷新和页面时钟
-    lib/                  API 请求与显示格式化
-    styles/               样式入口、基础、布局、通用组件与可访问性规则
+    app/                  Page selection, site layout, and admin page composition
+    features/             monitors, groups, events, settings, status
+    components/           Icons, dialogs, loading, error, and refresh feedback
+    hooks/                Data refresh and page clocks
+    lib/                  API requests and display formatting
+    styles/               Style entry point, base, layout, shared components, and accessibility rules
   worker/
-    index.ts              Worker fetch / scheduled 入口
-    app.ts                应用装配、路由注册与静态管理页
-    http/                 Access 鉴权、请求限制、缓存与错误响应
-    features/             monitors、groups、events、settings、status
-    lib/                  UTC 日期工具
-    types.ts              环境绑定与请求上下文
-    errors.ts             并发写入冲突错误
+    index.ts              Worker fetch / scheduled entry points
+    app.ts                Application composition, route registration, and the static admin page
+    http/                 Access authentication, request limits, caching, and error responses
+    features/             monitors, groups, events, settings, status
+    lib/                  UTC date utilities
+    types.ts              Environment bindings and request context
+    errors.ts             Concurrent write conflict errors
 tests/
-  features/               按功能组织的单元与 D1 集成测试
-  platform/               鉴权、API 边界、迁移与部署测试
-  support/                D1 夹具、测试数据与 API 客户端
-  e2e/                    按功能组织的浏览器测试及共享夹具
+  features/               Unit and D1 integration tests organized by feature
+  platform/               Authentication, API boundary, migration, and deployment tests
+  support/                D1 fixtures, test data, and the API client
+  e2e/                    Browser tests organized by feature, with shared fixtures
 ```
 
-[scripts](../scripts/) 存放构建检查、部署配置和浏览器测试服务器脚本；[migrations](../migrations/) 存放按编号执行的 D1 迁移。
+[scripts](../scripts/) contains build checks, deployment configuration, and browser test server scripts. [migrations](../migrations/) contains D1 migrations applied in numerical order.
 
-| 功能     | 前端职责                                     | Worker 职责                                  |
-| -------- | -------------------------------------------- | -------------------------------------------- |
-| monitors | 监控编辑、管理列表、详情、状态徽标与历史图表 | 监控 CRUD、HTTP/TCP 探测、检测快照与定时调度 |
-| groups   | 分组管理                                     | 分组读写、版本检查与归属校验                 |
-| events   | 事件编辑、进展编辑、列表与时间线             | 事件读写、分页、关联节点及静默区间           |
-| settings | 全局设置、密钥输入与规则模板                 | 设置读写、公开刷新间隔与内部检测凭据         |
-| status   | 首页汇总、分组展示与筛选                     | 公开状态、监控历史与事件详情接口的聚合       |
+| Feature  | Frontend responsibilities                                                   | Worker responsibilities                                                             |
+| -------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| monitors | Monitor editor, management list, details, status badges, and history charts | Monitor CRUD, HTTP/TCP probes, check snapshots, and scheduling                      |
+| groups   | Group management                                                            | Group reads and writes, version checks, and membership validation                   |
+| events   | Event and update editors, lists, and timelines                              | Event reads and writes, pagination, monitor associations, and suppression intervals |
+| settings | Global settings, token input, and rule templates                            | Settings reads and writes, public refresh interval, and internal check credentials  |
+| status   | Home page summary, grouped display, and filtering                           | Aggregation for public status, monitor history, and event detail endpoints          |
 
-## 依赖与接口边界
+<a id="依赖与接口边界"></a>
 
-- `shared` 使用纯 TypeScript 和 Web 标准能力，不依赖 React、Hono、D1 或运行环境模块。业务类型和常量放在对应功能中，聚合响应类型引用各功能类型。
-- 前端由 `app` 组合功能，功能使用公共组件、hooks 和请求客户端。状态页组合监控卡片与事件列表；页面刷新和业务表单状态分别管理，使刷新可以保留未保存的输入。
-- Worker 由 `app` 注册 HTTP 中间件和功能路由。路由处理请求、校验和响应；repository 负责数据库访问。公开聚合位于 `status`，监控检测快照可以读取设置模块提供的查询与解码能力。
-- 模块直接导入实际定义文件。新增共用能力放到所属的较低层，不通过旧路径转发或跨层反向依赖形成循环。
+## Dependency and interface boundaries
 
-页面地址由 [App](../src/web/app/App.tsx) 选择，HTTP 接口由各功能的 `routes.ts` 注册。公开接口契约见 [API 参考](api.md)，共享类型可从 [shared](../src/shared/) 按功能查找。
+- `shared` uses pure TypeScript and Web standards, with no dependency on React, Hono, D1, or runtime-specific modules. Domain types and constants live in their feature directories; aggregate response types reference those feature types.
+- The frontend's `app` composes features, which use shared components, hooks, and the request client. The status page combines monitor cards and event lists. Page refresh state is managed separately from form state so refreshes preserve unsaved input.
+- The Worker's `app` registers HTTP middleware and feature routes. Routes handle requests, validation, and responses; repositories handle database access. Public aggregation lives in `status`. Monitor check snapshots can use queries and decoding provided by the settings module.
+- Modules import directly from the files that define their dependencies. Add shared capabilities to the appropriate lower layer; avoid cycles caused by forwarding through old paths or reverse dependencies across layers.
 
-## 请求与检测流程
+[App](../src/web/app/App.tsx) selects pages by URL, and each feature's `routes.ts` registers HTTP endpoints. Public endpoint contracts are documented in the [API reference](api.md); shared types are organized by feature in [shared](../src/shared/).
 
-HTTP 请求先应用安全响应头、请求大小限制和 Access 鉴权，再进入功能路由。只有明确列出的公开 GET 接口使用缓存；管理接口及错误响应不缓存。管理页通过同一个鉴权入口返回 SPA 资源，保持原导航地址。
+<a id="请求与检测流程"></a>
 
-定时调度先申请 D1 租约，再在同一 `DB.batch` 中读取全局设置和已启用的到期监控。查询通过 `monitors_due` 索引按 `next_check_at, id` 排序，在 SQL 中按保存的批量限制候选数量。即时连接测试复用快照读取和探测实现，只读取指定 ID；读取失败时不执行检测或生成样本。
+## Request and check flow
 
-默认每轮 10 项、4 并发、50 秒预算，均可在性能页签修改。共享性能模块提供设置校验、平台基准、预算准入和纯配置估算，Worker 与前端复用相同的批量、HTTP 请求和完整超时预留规则。推迟项不更新到期时间或生成失败样本；内部异常仅安排下一分钟重试，保留当前状态和历史，避免坏配置阻塞队首。240 秒租约仍保护跨轮执行，未到期或暂停项不进入调度候选。
+HTTP requests pass through security headers, request-size limits, and Access authentication before reaching feature routes. Only explicitly listed public GET endpoints use caching; admin endpoints and error responses are not cached. Admin pages return SPA assets through the same authentication entry point while preserving the original navigation URL.
 
-探测结果批量写入时再次校验监控版本、启用状态和租约；唯一键防止重复统计。数据库触发器在样本写入事务中更新统计和自动事件，并读取当前自动事件规则。事件状态、关联、进展和静默区间的写入使用版本检查与私有写入令牌，防止并发操作修改其他版本的子记录。
+The scheduler first acquires a D1 lease, then reads global settings and enabled, due monitors in the same `DB.batch`. The query uses the `monitors_due` index, orders by `next_check_at, id`, and limits candidates in SQL using the saved batch size. Immediate connection tests reuse the snapshot-reading and probe implementation but read only the specified ID. If reading fails, no check runs and no sample is generated.
 
-展示排序由 `worker/features/ordering` 统一保存：JSON 参数携带目标顺序与原版本、原序号，在物化快照中校验完整成员集合，再用单条 UPDATE 原子提交。服务排序独立于监控配置版本，避免丢弃正在执行的检测。前端共享 `useReorder` 和 `SortControls`；`useRemote.suspend` 在拖动及保存期间中止旧读取、暂停刷新，保存后合并接口结果并恢复刷新。
+Defaults are 10 candidates per run, concurrency of 4, and a 50-second budget, all adjustable on the Performance tab. The shared performance module provides settings validation, platform baselines, budget admission rules, and estimates based only on configuration. The Worker and frontend share the same batch, HTTP request, and full-timeout reservation rules. Deferred monitors do not receive new due times or failed samples. Internal errors only schedule a retry for the next minute, preserving current status and history so invalid configuration does not block the front of the queue. The 240-second lease still protects against overlapping runs; monitors that are paused or not yet due do not enter the candidate batch.
 
-未分组的显示位置保存在 `monitor_groups` 的系统记录 `__ungrouped__`，节点归属仍为 null；接口将其排序元数据放在独立的 `ungrouped` 字段。`shared/groups/ordering` 在前端合并普通分组与系统项，遵循数据库相同的排序规则。分组标题复用 `GroupHeading`，`useCollapsedGroups` 分别保存前后台的浏览器偏好；筛选时的临时展开不写回偏好。
+When probe results are written in a batch, monitor versions, enabled state, and the lease are checked again. Unique keys prevent duplicate counting. Database triggers update statistics and automatic incidents within the sample-write transaction, using the current automatic incident rules. Writes to event status, associations, updates, and suppression intervals use version checks and private write tokens to prevent concurrent operations from modifying another version's child records.
 
-每轮清理最多 500 条过期检测明细、100 条过期日汇总和 100 条过期静默记录。检测频率、统计口径、事件规则与保留期限统一见[监控配置与运行策略](configuration.md)。
+`worker/features/ordering` centralizes display-order persistence. JSON parameters carry the desired order and original versions and positions. The complete member set is validated in a materialized snapshot, then committed atomically with a single UPDATE. Service ordering is independent of the monitor configuration version, so checks already running are not discarded. The frontend shares `useReorder` and `SortControls`. During dragging and saving, `useRemote.suspend` cancels earlier reads and pauses refreshes; after saving, it merges the API response and resumes refreshing.
 
-服务总数和单条事件关联数没有固定上限。事件关联校验通过单个 JSON 参数及 `json_each` 查询，避免动态展开 ID 导致超过 D1 的 100 个绑定参数限制；子记录写入保留事务与写入令牌保护。调度通常执行 5 次 D1 调用（含快照、结果及清理批次），`DB.batch` 在单次调用额度中计为一次，不按内部语句数计数。调整性能设置时仍需一起评估 CPU、D1 行用量和清理积压。
+Ungrouped's display position is stored in the `__ungrouped__` system record in `monitor_groups`, while monitor membership remains null. The API exposes its ordering metadata in a separate `ungrouped` field. On the frontend, `shared/groups/ordering` merges regular groups and the system item using the same ordering rules as the database. Group headings share `GroupHeading`; `useCollapsedGroups` stores separate browser preferences for the public page and admin console. Temporary expansion during filtering does not overwrite those preferences.
 
-## 前端样式与新增功能
+Each run cleans up at most 500 expired detailed checks, 100 expired daily aggregates, and 100 expired suppression records. See [monitor configuration and operating policies](configuration.md) for check frequency, statistical definitions, event rules, and retention periods.
 
-[样式入口](../src/web/styles/index.css) 显式加载基础、通用组件、布局、各功能样式和可访问性规则。功能样式与对应组件放在一起，媒体查询留在所属样式文件中。涉及跨文件覆盖时需检查选择器优先级和加载顺序，并对照桌面与移动端画面。
+There is no fixed limit on the total number of services or the number associated with a single event. Event association validation uses a single JSON parameter with `json_each`, avoiding dynamic ID expansion that could exceed D1's limit of 100 bound parameters. Child-record writes retain transaction and write-token protection. Scheduling normally makes 5 D1 calls, including snapshot, result, and cleanup batches. A `DB.batch` counts as one call toward the per-invocation quota, regardless of the number of statements inside it. When adjusting performance settings, also evaluate CPU, D1 row usage, and cleanup backlog.
 
-新增功能时，先确定共享契约，再添加 Worker 路由与数据访问、前端组件及对应功能测试。跨功能聚合放在页面或聚合服务中，通用 HTTP 行为放在 `http`，不要让基础组件承担业务数据读取。
+<a id="前端样式与新增功能"></a>
 
-数据库变更、兼容性要求及验证命令见[开发与维护](development.md)。接口变化同步更新 API 参考，操作变化同步更新配置或部署指南。
+## Frontend styles and adding features
+
+The [style entry point](../src/web/styles/index.css) explicitly loads base styles, shared components, layout, feature styles, and accessibility rules. Feature styles live alongside their components, with media queries in the corresponding style file. For overrides across files, check selector specificity and load order, and compare desktop and mobile rendering.
+
+When adding a feature, define the shared contract first, then add Worker routes and data access, frontend components, and relevant feature tests. Cross-feature aggregation belongs in pages or aggregation services; generic HTTP behavior belongs in `http`. Base components should not fetch domain data.
+
+See [development and maintenance](development.md) for database changes, compatibility requirements, and verification commands. Update the API reference when interfaces change, and the configuration or deployment guide when operating procedures change.
