@@ -13,8 +13,6 @@ A service monitoring website built on Cloudflare Workers and D1, with a public s
 - Admin sign-in through Cloudflare Access, with monitor management, groups, ordering, pause/resume controls, and immediate connection tests.
 - Public maintenance events and incidents with multiple associated monitors and progress updates. Sustained outages publish incidents automatically, and recovery resolves them.
 
-On the first visit, the interface follows the browser's preferred language: Chinese uses Simplified Chinese, and all other languages use English. The language selector is in the page header. Manual choices are saved in the current browser and synchronized across tabs on the same origin. User-entered names and event content retain their original text; automatic event messages follow the interface language.
-
 <a id="本地运行"></a>
 
 ## Local development

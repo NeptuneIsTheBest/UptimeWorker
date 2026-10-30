@@ -71,7 +71,7 @@ In **Actions → Verify and deploy → Run workflow**, select `main` and run the
 3. Generate the production configuration, rebuild, and apply database migrations.
 4. Publish the Worker and static assets, and enable Cron to run every minute.
 
-The workflow runs only when triggered manually. Other branches run verification only. The production deployment concurrency group allows at most one running job and one pending job. A new pending job cancels and replaces the previous pending job without canceling the running job. See [GitHub's concurrency rules](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency).
+The workflow runs manually and deploys only from `main`; other branches run verification only. Production deployments run one at a time. See [GitHub's concurrency rules](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency) for queue behavior.
 
 A failed step stops the remaining steps of that deployment. Existing databases are never deleted or recreated. See the [development guide](development.md#deployment-configuration) for configuration generation.
 
@@ -85,7 +85,7 @@ Bind the custom domain to the same Worker in the Cloudflare dashboard. Add its `
 
 Set `WORKERS_DEV` to `false` in GitHub Actions Variables, then rerun the workflow on `main`. Every deployment applies this setting; disabling the default domain only in the Cloudflare dashboard will be overridden by a later deployment. See the [Cloudflare documentation](https://developers.cloudflare.com/workers/configuration/routing/workers-dev/).
 
-An unset or whitespace-only `WORKERS_DEV` defaults to `true`. After trimming whitespace, only `true` / `false` are accepted, case-insensitively. Any other value blocks deployment before the Cloudflare API is called. Preview URLs are always disabled. This variable applies to GitHub Actions deployments; deploying directly with `wrangler.jsonc` leaves the default domain enabled.
+`WORKERS_DEV` accepts `true` / `false` and defaults to `true`; invalid values stop deployment. Preview URLs are always disabled. This variable applies to GitHub Actions; deploying directly with `wrangler.jsonc` leaves the default domain enabled.
 
 <a id="首次上线验收"></a>
 

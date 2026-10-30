@@ -34,7 +34,7 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-`npm run check` runs strict type checks, including unused local declarations and parameters, unit / D1 integration tests, and a production build. It also checks the D1 and Cron configuration and verifies that development authentication branches are removed. Browser tests run separately; GitHub Actions runs both sets of checks.
+`npm run check` runs type checks, unit / D1 integration tests, and a production build. Build checks cover D1 and Cron configuration and removal of development authentication. Browser tests run separately; GitHub Actions runs both.
 
 Run individual checks as needed:
 
@@ -56,27 +56,21 @@ To use a locally installed Chromium, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` to its
 
 ## Test responsibilities and isolation
 
-| Tests                                   | Main responsibilities                                                                                                                                |
-| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [monitors](../tests/features/monitors/) | Configuration validation, HTTP/TCP probes, WAF credential scope, advanced settings, check snapshots, scheduler leases, deduplication, and statistics |
-| [groups](../tests/features/groups/)     | Preserving check state across renames and group changes, monitor membership after group deletion, and automatic incident continuity                  |
-| [events](../tests/features/events/)     | Events, progress stages, suppression windows, automatic incident recovery, concurrency, and transaction rollback                                     |
-| [settings](../tests/features/settings/) | Token lifecycle, legacy settings compatibility, concurrent saves, refresh settings, and read failures                                                |
-| [status](../tests/features/status/)     | Home page status priorities, maintenance time boundaries, and data errors                                                                            |
-| [platform](../tests/platform/)          | API authentication and caching, request limits, version conflicts, JWTs, database migrations, and deployment configuration                           |
-| [Browser tests](../tests/e2e/)          | Admin and public page interactions, form preservation, automatic refresh, event timelines, and desktop / mobile layouts                              |
+| Tests                                                                         | Main responsibilities                                                         |
+| ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| [monitors](../tests/features/monitors/)                                       | Configuration, HTTP/TCP probes, WAF, scheduling, and statistics               |
+| [groups](../tests/features/groups/) / [ordering](../tests/features/ordering/) | Group membership, atomic ordering, conflicts, and preservation of check state |
+| [events](../tests/features/events/)                                           | Event lifecycle, stages, suppression, recovery, and transactions              |
+| [settings](../tests/features/settings/)                                       | Settings validation, tokens, compatibility, and concurrent saves              |
+| [status](../tests/features/status/)                                           | Overall status, maintenance boundaries, and data errors                       |
+| [platform](../tests/platform/)                                                | API contracts, authentication, caching, migrations, and deployment            |
+| [Browser tests](../tests/e2e/)                                                | Page interactions, refreshes, forms, ordering, and responsive layouts         |
 
-Unit tests use HTTP / socket test doubles. D1 integration tests run migrations, SQL, and triggers in local workerd, and JWT tests use local RSA keys. D1 and browser tests require permission to listen on loopback ports.
+Unit tests use HTTP / socket test doubles and local RSA keys for JWTs. D1 integration tests run migrations, SQL, and triggers in local workerd. D1 and browser tests require loopback port access.
 
-The [API test client](../tests/support/api-client.ts) centralizes identity, headers, and JSON requests. Place new assertions in the relevant feature tests; keep browser tests focused on interaction flows. See [architecture and code organization](architecture.md) for directory and dependency conventions.
+Use the [API test client](../tests/support/api-client.ts) for identity, headers, and JSON requests, and place assertions in the relevant feature tests. Browser tests focus on interactions; use a controllable clock for refresh and timing behavior.
 
-Before each case, the [browser test fixtures](../tests/e2e/support/fixtures.ts) clear monitors, events, and groups; restore the 5-minute automatic incident threshold and 30-second refresh interval; disable global WAF bypass; and save a fixed test token. Special page states use request stubs. Each file should run independently. Tests run serially against a shared database, so do not start multiple browser test processes in parallel.
-
-Automatic refresh tests use a controllable clock to verify polling, relative times, slow requests, and pausing in the background.
-
-Ordering tests cover atomic D1 updates, conflicts with old snapshots, append order after group changes or group deletion, check-result writes during reordering, browser dragging, keyboard buttons, failure recovery, and races with automatic refresh.
-
-On failure, screenshots and traces are saved in `test-results/`, which GitHub Actions uploads.
+The [browser fixtures](../tests/e2e/support/fixtures.ts) reset data and settings before each case. Each file must run independently; tests share a database and run serially, so do not start multiple browser test processes in parallel. Failures save screenshots and traces to `test-results/`, which GitHub Actions uploads.
 
 <a id="代码组织"></a>
 
@@ -94,57 +88,52 @@ Code is divided into `web / worker / shared` layers, with monitors, groups, even
 
 ## Database migrations
 
-Use `migrations/NNNN_description.sql` for new database changes; do not edit migrations already applied in production. Prefer backward-compatible changes and migrate the database before deploying code. Run `npm run db:migrate` for local upgrades; the deployment workflow applies remote migrations. See the [deployment guide](deployment.md#rollback-and-database-recovery) for recovery.
+Use `migrations/NNNN_description.sql` for new database changes; do not edit migrations already applied in production. Prefer backward-compatible changes and migrate before deploying code. Run `npm run db:migrate` locally; the deployment workflow applies remote migrations. Review [compatibility notes](#compatibility-notes) before upgrades and [database recovery](deployment.md#rollback-and-database-recovery) before rollbacks.
 
-| Migration                       | Changes and compatibility                                                                                                                                                                                                                                                                              |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `0001_initial.sql`              | Initial monitor, detailed check, daily aggregate, and scheduler lease tables, plus statistics triggers.                                                                                                                                                                                                |
-| `0002_global_settings.sql`      | Adds global WAF settings, token, and version fields. Legacy domain columns remain for compatibility with the old schema.                                                                                                                                                                               |
-| `0003_flexible_intervals.sql`   | Expands intervals to integers from 1–60. Replaces the interval column and restores aggregate triggers in one transaction, preserving configuration, history, statistics, scheduler state, and foreign-key relationships.                                                                               |
-| `0004_page_refresh.sql`         | Adds `page_refresh_seconds`, defaulting to 30 and accepting 0 or integer seconds from 5–3600. Preserves the settings version, WAF configuration, and monitor data; old code can still run.                                                                                                             |
-| `0005_groups_events.sql`        | Adds groups, events, monitor name snapshots, updates, continuous failure timing, and suppression intervals. Preserves monitors and statistics. Existing monitors default to Ungrouped, and the automatic incident threshold defaults to 5 minutes. Historical outages are not published retroactively. |
-| `0006_event_update_titles.sql`  | Adds nullable update titles, preserving historical descriptions, statuses, and associations. Old writes and automatic updates that omit the title store null. Apply the migration before deploying code; old code can still run.                                                                       |
-| `0007_performance_settings.sql` | Adds plan, concurrency, batch size, and time budget settings, defaulting to Free / 4 / 10 / 50 seconds, plus an index for due monitors. Preserves existing settings versions, tokens, services, history, and leases; old code can still run.                                                           |
+| Migration                       | Changes                                                                                                                                                                                                                       |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `0001_initial.sql`              | Monitor, check, daily aggregate, and scheduler lease tables; statistics triggers.                                                                                                                                             |
+| `0002_global_settings.sql`      | Global WAF settings, token, and version; legacy domain columns retained.                                                                                                                                                      |
+| `0003_flexible_intervals.sql`   | Integer intervals from 1–60; replaces the interval column and restores aggregate triggers.                                                                                                                                    |
+| `0004_page_refresh.sql`         | `page_refresh_seconds`: default 30, accepting 0 or integer seconds from 5–3600.                                                                                                                                               |
+| `0005_groups_events.sql`        | Groups, events, updates, monitor name snapshots, failure timers, and suppression intervals. Existing monitors start ungrouped; the automatic incident threshold defaults to 5 minutes, without publishing historical outages. |
+| `0006_event_update_titles.sql`  | Nullable update titles; omitted titles in old writes and automatic updates remain null.                                                                                                                                       |
+| `0007_performance_settings.sql` | Plan, concurrency, batch size, and time budget (Free / 4 / 10 / 50 seconds); due-monitor index.                                                                                                                               |
+| `0008_display_order.sql`        | Independent service ordering initialized by creation time and ID within each group.                                                                                                                                           |
+| `0009_ungrouped_order.sql`      | `__ungrouped__` system ordering record in `monitor_groups`, initially last with an empty internal name; monitor membership remains `group_id = NULL`.                                                                         |
 
-Migration tests prepare data with raw INSERT statements against the corresponding old schema, avoiding feature repositories that depend on the newest columns.
-
-`0008_display_order.sql` adds an independent service order column and index, initializing order within each group from the previous creation time and ID order. It preserves group order, monitor versions, status, statistics, and failure timing. Apply the migration before deploying ordering support. Old code can still run but will not use service ordering, and services created by old code will not follow the append-order convention.
-
-`0009_ungrouped_order.sql` adds a system ordering record named `__ungrouped__` to `monitor_groups`, with an empty internal name and an initial position after existing groups. Monitors continue to use `group_id = NULL`, and existing group and monitor data is unchanged. Apply the migration before deploying the corresponding code. New group ordering requests must include the system item; older pages that omit it receive an ordering conflict and must refresh before retrying. If an old read response lacks `ungrouped`, new pages display Ungrouped last. Rolling back to code that does not recognize the system item may expose it as a regular group; address this compatibility issue as part of the rollback.
+Migration tests use raw INSERT statements against the corresponding old schema rather than repositories that depend on the latest columns, and verify that existing data is preserved.
 
 <a id="兼容性说明"></a>
 
 ## Compatibility notes
 
-- Before upgrading performance settings, apply `0007_performance_settings.sql`, then deploy the code. Older settings PATCH requests that omit `performance` retain the current performance settings. The new admin list no longer returns `limit`, so update the admin client together with it. Rolling back to old code restores the previous creation and scheduling limits; avoid rolling back this feature on deployments with more than 10 services.
-
-- Event update reads support old free-form titles and untitled records. New writes use fixed stages, while untitled legacy `resolve` requests remain supported. See the [API reference](api.md#groups-and-events) for the complete rules.
-
-- Interval upgrades preserve existing values. After saving intervals such as 1, 2, or 7 minutes, any rollback code must also support 1–60 minute validation.
-- Older monitors without an individual `wafBypassEnabled` setting treat it as off. Legacy WAF domain columns remain but are no longer read or written, and domain lists no longer determine where credentials are sent. This change requires no new migration; see the [API reference](api.md#global-settings) for compatibility behavior.
-- When upgrading from an older GET/HEAD WAF rule template, update the target site's Cloudflare rule to permit the currently supported HTTP methods.
+- Rolling back performance support restores the old creation and scheduling limits; avoid this on deployments with more than 10 services. Legacy settings requests and removed fields are documented in the [API reference](api.md#global-settings) and [monitor configuration](api.md#monitor-configuration).
+- Event updates support legacy free-form titles and untitled `resolve` requests; see [event compatibility rules](api.md#groups-and-events).
+- After saving intervals such as 1, 2, or 7 minutes, rollback code must still support 1–60 minute validation.
+- Older monitors without `wafBypassEnabled` treat it as off. Legacy WAF domain columns remain unused; this change requires no migration. Update old GET/HEAD WAF rules to permit all supported HTTP methods.
+- Code predating `0008_display_order.sql` can run but ignores service ordering and does not append newly created services in the new order.
+- After `0009_ungrouped_order.sql`, old pages that omit the system item from group ordering requests must refresh after a conflict. New pages display Ungrouped last when old responses lack `ungrouped`. Rollback code that does not recognize the system item may expose it as a regular group and requires compatibility handling.
 
 <a id="界面语言"></a>
 
 ## Interface languages
 
-The interface uses React Context and the type-safe bilingual dictionary in `src/web/i18n/messages.ts`, with no additional runtime dependency. Add both Chinese and English for new copy. English messages containing counts may use `one` / `other`. Dynamic values use named parameters. Persistent notifications store `message(key, params)`, and errors are normalized with `errorMessage`, then resolved in the current language during rendering.
+The interface uses React Context and the type-safe dictionary in `src/web/i18n/messages.ts`. Add both Chinese and English for new copy, with named parameters for dynamic values and `one` / `other` for English plurals. Store persistent notifications as `message(key, params)` and normalize errors with `errorMessage` so they resolve in the current language during rendering.
 
-Language precedence is a valid `localStorage["uptimeworker.locale"]` value (`zh-CN` / `en`), the browser's preferred language, then English. Any `zh` language variant uses Simplified Chinese. Manual changes synchronize across tabs on the same origin; if storage is disabled, switching still works on the current page. Page times use the browser's time zone, while statistics remain aggregated in UTC.
+Shared validation and Worker errors use stable codes and parameters while retaining legacy Chinese descriptions. Translate event stages and recognized automatic-event templates for display; keep API values, monitor names, user content, and unknown historical text unchanged.
 
-Shared validation and Worker errors use stable error codes and parameters, retaining older Chinese error descriptions. Fixed event stages translate only their display names; API values stay unchanged. Automatic events recognize existing system templates only when displayed, preserving the service name from the original title. Manual content and unknown historical text retain their original wording. No database migration is required.
-
-Existing browser tests use `zh-CN`. `tests/e2e/platform/i18n.spec.ts` covers English, language persistence, switching across tabs, preserving edits, and mobile layouts in both languages. For new features, check labels, hints, errors, titles, and accessible names in both languages.
+Browser tests default to `zh-CN`; see [language tests](../tests/e2e/platform/i18n.spec.ts) for coverage. Check new labels, hints, errors, titles, and accessible names in both languages.
 
 ## Documentation maintenance
 
-English is the default entry point, using `README.md` at the repository root and `docs/*.md`. Simplified Chinese uses `README.zh-CN.md` at the root and `docs/zh-CN/*.md`, with matching filenames for each guide. When changing features, APIs, or operating instructions, update both languages in the same change and keep sections, examples, and technical parameters aligned.
+The default English docs use `README.md` and `docs/*.md`; Simplified Chinese uses `README.zh-CN.md` and matching files in `docs/zh-CN/`. Update both versions together, keeping sections, examples, and technical values aligned.
 
-Keep an `English | 简体中文` switch at the top of every page linking to the same document in each language. Document indexes, links back to the README, and cross-references should stay in the current language. Legacy Chinese heading anchors on English pages preserve historical links. Retain these explicit anchors when renaming headings and update affected section references. Chinese guides use `../../` to reach source, test, or configuration files relative to the repository root.
+Keep the README focused on capabilities and guides on tasks. Document API contracts in the API reference and implementation details in the development or architecture guide. Avoid exhaustive UI behavior descriptions.
 
-Translate prose, tables, example explanations, and directory tree comments using operation names from the corresponding interface language. Keep commands, API fields, enums, error codes, configuration values, and numeric limits accurate. Preserve Chinese error text in real API responses and explain its compatibility purpose in English. Keep the license in its original language.
+Language switches link to the corresponding document in each language; other cross-references stay in the selected language. Preserve historical heading anchors. Chinese guides use `../../` for repository files. Translate explanations and interface labels while preserving commands, API fields, enums, error codes, configuration values, Chinese error-response text, and the license.
 
-Before submitting, check that both versions cover the same content, language switches and relative links work, section anchors resolve, and JSON examples parse. Compare commands and technical parameters, then inspect tables, code blocks, and navigation in a Markdown preview. Run the documentation format check:
+Check relative links, anchors, JSON examples, and Markdown rendering, then run:
 
 ```sh
 npx prettier --check README.md README.zh-CN.md "docs/**/*.md"

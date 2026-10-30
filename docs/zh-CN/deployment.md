@@ -63,7 +63,7 @@ Worker / D1 名称以小写字母开头，只含小写字母、数字与连字�
 3. 生成生产配置并重新构建，应用数据库迁移。
 4. 发布 Worker 和静态资源，启用每分钟的 Cron。
 
-工作流仅手动触发，其他分支只执行验证。生产发布使用同一个并发组，最多允许一个任务运行、一个任务等待。新进入等待的任务会取消并替换原等待任务，不会因此取消正在运行的任务。详见 [GitHub 并发规则](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency)。
+工作流手动运行，仅 `main` 分支执行部署，其他分支只验证。生产发布逐个执行，排队行为见 [GitHub 并发规则](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency)。
 
 某次发布中的任一步骤失败会停止该次发布的后续步骤；已存在的数据库不会被删除或重建。配置生成过程见[开发指南](development.md#部署配置)。
 
@@ -75,7 +75,7 @@ Worker / D1 名称以小写字母开头，只含小写字母、数字与连字�
 
 在 GitHub Actions Variables 中将 `WORKERS_DEV` 设为 `false`，在 `main` 上重新运行工作流。每次部署都会应用该设置；只在 Cloudflare 控制台关闭默认域名会被后续部署覆盖。[Cloudflare 官方说明](https://developers.cloudflare.com/workers/configuration/routing/workers-dev/)
 
-`WORKERS_DEV` 未设置或仅含空白时默认 `true`；去除首尾空白后只接受 `true` / `false`，不区分大小写，其他值会在调用 Cloudflare API 前阻止部署。预览域名始终关闭。此变量用于 GitHub Actions 部署；直接使用 `wrangler.jsonc` 部署时，默认域名仍开启。
+`WORKERS_DEV` 接受 `true` / `false`，默认 `true`，无效值会阻止部署。预览域名始终关闭。此变量用于 GitHub Actions；直接使用 `wrangler.jsonc` 部署时，默认域名仍开启。
 
 ## 首次上线验收
 
