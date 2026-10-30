@@ -88,21 +88,13 @@ Code is divided into `web / worker / shared` layers, with monitors, groups, even
 
 ## Database migrations
 
-Use `migrations/NNNN_description.sql` for new database changes; do not edit migrations already applied in production. Prefer backward-compatible changes and migrate before deploying code. Run `npm run db:migrate` locally; the deployment workflow applies remote migrations. Review [compatibility notes](#compatibility-notes) before upgrades and [database recovery](deployment.md#rollback-and-database-recovery) before rollbacks.
+`0001_initial.sql` is the initial-release baseline for new databases. It creates the complete monitoring, grouping, event, settings, and scheduler schema, including indexes and triggers. It seeds global settings, the scheduler lease row, and the internal `__ungrouped__` ordering record at position `0`; ungrouped monitors retain `group_id = NULL`. All current fields are retained, including the unused legacy WAF domain column.
 
-| Migration                       | Changes                                                                                                                                                                                                                       |
-| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `0001_initial.sql`              | Monitor, check, daily aggregate, and scheduler lease tables; statistics triggers.                                                                                                                                             |
-| `0002_global_settings.sql`      | Global WAF settings, token, and version; legacy domain columns retained.                                                                                                                                                      |
-| `0003_flexible_intervals.sql`   | Integer intervals from 1–60; replaces the interval column and restores aggregate triggers.                                                                                                                                    |
-| `0004_page_refresh.sql`         | `page_refresh_seconds`: default 30, accepting 0 or integer seconds from 5–3600.                                                                                                                                               |
-| `0005_groups_events.sql`        | Groups, events, updates, monitor name snapshots, failure timers, and suppression intervals. Existing monitors start ungrouped; the automatic incident threshold defaults to 5 minutes, without publishing historical outages. |
-| `0006_event_update_titles.sql`  | Nullable update titles; omitted titles in old writes and automatic updates remain null.                                                                                                                                       |
-| `0007_performance_settings.sql` | Plan, concurrency, batch size, and time budget (Free / 4 / 10 / 50 seconds); due-monitor index.                                                                                                                               |
-| `0008_display_order.sql`        | Independent service ordering initialized by creation time and ID within each group.                                                                                                                                           |
-| `0009_ungrouped_order.sql`      | `__ungrouped__` system ordering record in `monitor_groups`, initially last with an empty internal name; monitor membership remains `group_id = NULL`.                                                                         |
+The baseline replaces the pre-release migration history and does not provide an upgrade path for databases created with those migrations. Use a fresh local database or a separate persistence directory to test initialization; existing local databases are not automatically reset.
 
-Migration tests use raw INSERT statements against the corresponding old schema rather than repositories that depend on the latest columns, and verify that existing data is preserved.
+Add subsequent database changes as `migrations/0002_description.sql`, then continue in numerical order. Do not edit migrations already applied in production. Prefer backward-compatible changes and migrate before deploying code. Run `npm run db:migrate` locally; the deployment workflow applies remote migrations. Review [compatibility notes](#compatibility-notes) before upgrades and [database recovery](deployment.md#rollback-and-database-recovery) before rollbacks.
+
+Migration tests initialize an empty D1 database, check defaults, constraints, indexes, and foreign keys, and verify check aggregation and cascading deletion. Feature tests cover automatic incident lifecycle and display ordering. Test fixtures apply all SQL migrations in numerical order.
 
 <a id="兼容性说明"></a>
 
@@ -112,8 +104,6 @@ Migration tests use raw INSERT statements against the corresponding old schema r
 - Event updates support legacy free-form titles and untitled `resolve` requests; see [event compatibility rules](api.md#groups-and-events).
 - After saving intervals such as 1, 2, or 7 minutes, rollback code must still support 1–60 minute validation.
 - Older monitors without `wafBypassEnabled` treat it as off. Legacy WAF domain columns remain unused; this change requires no migration. Update old GET/HEAD WAF rules to permit all supported HTTP methods.
-- Code predating `0008_display_order.sql` can run but ignores service ordering and does not append newly created services in the new order.
-- After `0009_ungrouped_order.sql`, old pages that omit the system item from group ordering requests must refresh after a conflict. New pages display Ungrouped last when old responses lack `ungrouped`. Rollback code that does not recognize the system item may expose it as a regular group and requires compatibility handling.
 
 <a id="界面语言"></a>
 
