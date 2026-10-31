@@ -73,7 +73,7 @@
   font-size: 12px;
 }
 .refresh-button:hover {
-  background: #e9ecf0;
+  background: var(--hover);
 }
 .refresh-button .spinner {
   width: 14px;
@@ -94,11 +94,11 @@
   transition: background 0.15s;
 }
 .primary {
-  color: white;
-  background: var(--text);
+  color: var(--primary-foreground);
+  background: var(--primary-background);
 }
 .primary:hover:not(:disabled) {
-  background: #363d48;
+  background: var(--primary-hover);
 }
 .secondary {
   color: var(--text);
@@ -114,8 +114,8 @@
   padding: 7px 10px;
 }
 .destructive {
-  background: var(--red);
-  color: white;
+  background: var(--destructive-background);
+  color: var(--destructive-foreground);
 }
 .icon-button {
   padding: 8px;
@@ -134,7 +134,7 @@
 }
 .icon-button.danger:hover {
   color: var(--red);
-  background: #fdf0f0;
+  background: var(--red-soft);
 }
 .text-button {
   font-size: 12px;
@@ -205,26 +205,26 @@
   align-items: center;
   gap: 10px;
   padding: 12px 14px;
-  background: #fdf0f0;
-  color: #a83236;
+  background: var(--red-soft);
+  color: var(--red-text);
   font-size: 13px;
   line-height: 1.6;
-  border: 1px solid #f2d6d7;
+  border: 1px solid var(--red-line);
   border-radius: 8px;
   margin: 12px 0;
 }
 .notice {
   background: var(--green-soft);
-  border-color: #d4eadd;
+  border-color: var(--green-line);
   color: var(--green);
 }
 .notice .icon-button {
   margin-left: auto;
 }
 .notice.error {
-  background: #fdf0f0;
-  color: #a83236;
-  border-color: #f2d6d7;
+  background: var(--red-soft);
+  color: var(--red-text);
+  border-color: var(--red-line);
 }
 .error-notice > span,
 .notice > span {
@@ -285,7 +285,7 @@
   color: var(--text);
   width: min(460px, calc(100vw - 32px));
   padding: 0;
-  box-shadow: 0 24px 80px #1c243329;
+  box-shadow: 0 24px 80px var(--modal-shadow);
   max-height: calc(100dvh - 40px);
   overflow: hidden;
 }
@@ -297,7 +297,7 @@
   width: min(600px, calc(100vw - 32px));
 }
 .modal::backdrop {
-  background: #20242c66;
+  background: var(--modal-backdrop);
   backdrop-filter: blur(3px);
 }
 .modal-heading {
@@ -343,7 +343,7 @@
 .field textarea,
 .request-header-row input {
   width: 100%;
-  border: 1px solid #d5dae2;
+  border: 1px solid var(--field-line);
   border-radius: 8px;
   padding: 9px 11px;
   min-height: 40px;
@@ -392,7 +392,7 @@
   line-height: 1.6;
   color: var(--amber);
   padding: 10px 12px;
-  background: #fff8eb;
+  background: var(--hint-background);
   border-radius: 8px;
   margin: 0 0 16px;
 }

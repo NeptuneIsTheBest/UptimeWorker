@@ -19,11 +19,11 @@
 }
 .status-hero.attention .status-symbol {
   color: var(--red);
-  background: #fdf0f0;
+  background: var(--red-soft);
 }
 .status-hero.maintenance .status-symbol {
   color: var(--amber);
-  background: #fff7e8;
+  background: var(--amber-soft);
 }
 .status-hero.waiting .status-symbol {
   color: var(--muted);
@@ -106,7 +106,7 @@
 }
 .count-badge {
   font-size: 12px;
-  background: #eaecf0;
+  background: var(--count-background);
   color: var(--muted);
   padding: 1px 7px;
   border-radius: 5px;

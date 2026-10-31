@@ -3,7 +3,28 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#f8faf9" />
+    <meta name="theme-color" content="#f6f7f9" />
+    <script>
+      // Apply the preference before styles or React load. Keep in sync with theme/core.ts.
+      (() => {
+        let preference = 'system';
+        try {
+          const saved = localStorage.getItem('uptimeworker.theme');
+          if (saved === 'light' || saved === 'dark') preference = saved;
+        } catch {}
+        let systemDark = false;
+        try {
+          systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        } catch {}
+        const theme = preference === 'system' ? (systemDark ? 'dark' : 'light') : preference;
+        const color = theme === 'dark' ? '#111318' : '#f6f7f9';
+        const root = document.documentElement;
+        root.dataset.theme = theme;
+        root.style.colorScheme = theme;
+        root.style.backgroundColor = color;
+        document.querySelector('meta[name="theme-color"]').setAttribute('content', color);
+      })();
+    </script>
     <meta
       name="description"
       content="服务运行状态、可用率与响应时间。由 Cloudflare Workers 驱动的轻量服务监控。"

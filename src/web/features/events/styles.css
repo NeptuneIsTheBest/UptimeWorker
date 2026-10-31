@@ -38,22 +38,22 @@
 .event-status {
   border-radius: 5px;
   padding: 4px 8px;
-  background: #f3f4f6;
-  color: #626c76;
+  background: var(--subtle);
+  color: var(--event-neutral-text);
   font-size: 12px;
   font-weight: 600;
 }
 .event-status.incident {
-  background: #fff0ed;
-  color: #b74431;
+  background: var(--event-incident-background);
+  color: var(--event-incident-text);
 }
 .event-status.maintenance {
-  background: #fff5df;
-  color: #90650c;
+  background: var(--event-maintenance-background);
+  color: var(--event-maintenance-text);
 }
 .event-status.resolved {
-  background: #e9f5ef;
-  color: #23764e;
+  background: var(--event-resolved-background);
+  color: var(--event-resolved-text);
 }
 .event-updated,
 .event-window {

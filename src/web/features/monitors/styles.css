@@ -104,11 +104,11 @@
 }
 .status-badge.down {
   color: var(--red);
-  background: #fdf0f0;
+  background: var(--red-soft);
 }
 .status-badge.stale {
   color: var(--amber);
-  background: #fff7e8;
+  background: var(--amber-soft);
 }
 .status-badge.unknown,
 .status-badge.paused {
@@ -133,15 +133,15 @@
 }
 .up.history-bar,
 .up.legend-dot {
-  background: #48a584;
+  background: var(--history-up);
 }
 .down.history-bar,
 .down.legend-dot {
-  background: #d65c62;
+  background: var(--history-down);
 }
 .partial.history-bar,
 .partial.legend-dot {
-  background: #d7a441;
+  background: var(--history-partial);
 }
 .empty.history-bar,
 .empty.legend-dot {
