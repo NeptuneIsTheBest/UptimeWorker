@@ -17,7 +17,7 @@ Choose the hostname before configuring Access:
 | Custom domain only | An active domain in the same Cloudflare account and a hostname such as `status.example.com` | Set to **`false` before the first deployment** |
 | Default hostname   | The account subdomain shown in Workers & Pages, such as `my-team.workers.dev`               | Leave unset or use `true`                      |
 
-The Worker name defaults to `uptimeworker`. Choose `WORKER_NAME` first if changing it, for example to `team-status`. The default URL combines the Worker name and account subdomain: `https://uptimeworker.my-team.workers.dev`. Find the account subdomain under **Workers & Pages → Your subdomain**; it is separate from the Zero Trust team domain. A custom-domain-only deployment does not require enabling or visiting the Worker's default URL.
+Set the Worker name with `WORKER_NAME`; it defaults to `uptimeworker`. The default URL combines the Worker name and account subdomain, for example `https://uptimeworker.my-team.workers.dev`. Find the account subdomain under **Workers & Pages → Your subdomain**; it is separate from the Zero Trust team domain.
 
 You do not need to create a Worker or D1 database beforehand, supply a database ID, or edit `wrangler.jsonc`. To update an existing installation, rerun the workflow. See [redeployment and a fresh installation](#redeployment-and-a-fresh-installation) for resetting data.
 
@@ -25,11 +25,11 @@ You do not need to create a Worker or D1 database beforehand, supply a database 
 
 ### Account ID
 
-Select the target account and open **Compute → Workers & Pages → Account Details → Account ID**, then copy it. Alternatively, search for `Copy account ID` using `Cmd/Ctrl + K`. Put this 32-character hexadecimal value in `CLOUDFLARE_ACCOUNT_ID`. A Zone ID or D1 Database ID is a different identifier. See [finding your account ID](https://developers.cloudflare.com/fundamentals/account/find-account-and-zone-ids/).
+Copy the target account's 32-character hexadecimal ID from **Workers & Pages → Account Details → Account ID** into `CLOUDFLARE_ACCOUNT_ID`. Keep it distinct from a Zone ID or D1 Database ID; see [finding your account ID](https://developers.cloudflare.com/fundamentals/account/find-account-and-zone-ids/).
 
 ### API Token
 
-Open the profile menu, then **My Profile → API Tokens → Create Token → Create Custom Token**. Give it a name such as `UptimeWorker deploy` and add:
+Create a custom Token under **My Profile → API Tokens** with these permissions:
 
 | Scope   | Permission       | Level |
 | ------- | ---------------- | ----- |
@@ -37,15 +37,13 @@ Open the profile menu, then **My Profile → API Tokens → Create Token → Cre
 | Account | D1               | Edit  |
 | Account | Account Settings | Read  |
 
-Under **Account Resources**, select **Include → Specific account → your target account**, matching the account ID above. Review the summary, create the Token, and copy the full secret shown on the result page into `CLOUDFLARE_API_TOKEN`. It is shown only once; copy the Token itself, not its name, ID, or a whole example command. Reuse an existing valid Token for subsequent deployments. See [creating an API Token](https://developers.cloudflare.com/fundamentals/api/get-started/create-token/).
+Set **Account Resources** to **Include → Specific account → your target account**, matching the account ID above. After creation, save the full Token in `CLOUDFLARE_API_TOKEN`. It is shown only once and can be reused for later deployments. See [creating an API Token](https://developers.cloudflare.com/fundamentals/api/get-started/create-token/).
 
 The permissions above are sufficient when managing Access and custom domains through the dashboard as described here.
 
-## 3. Configure Access and copy the team domain and AUD
+## 3. Configure Cloudflare Access
 
-### Protect the admin paths
-
-Open **Zero Trust → Access controls (Access in some layouts) → Applications → Create new application (or Add an application) → Self-hosted**. Create an application such as `UptimeWorker Admin`.
+Under **Zero Trust → Access controls → Applications**, create a **Self-hosted** application such as `UptimeWorker Admin`.
 
 Add two **Public hostname** entries to the same application. For `status.example.com`:
 
@@ -54,22 +52,20 @@ Add two **Public hostname** entries to the same application. For `status.example
 | `status`  | `example.com` | `admin`     |
 | `status`  | `example.com` | `api/admin` |
 
-When the Path field already has a `/` prefix, enter `admin` and `api/admin`; the resulting paths are `/admin` and `/api/admin`. If the form uses a single hostname field, enter `status.example.com` in both entries and keep the paths separate. Omit `https://` and paths from hostname fields. For the default hostname, use `<WORKER_NAME>.<account-subdomain>.workers.dev`.
+The resulting paths are `/admin` and `/api/admin`; use the table's values when the Path field includes a `/` prefix. Enter hostnames without a scheme or path. For the default hostname, use `<WORKER_NAME>.<account-subdomain>.workers.dev`.
 
-Protect both paths and their subpaths. Keep `/`, `/monitors/*`, `/events/*`, `/api/status`, `/api/monitors/*/history`, and `/api/events/*` public. Avoid requiring sign-in for the entire status hostname; also check any account-wide Worker protection. See [Access path matching](https://developers.cloudflare.com/cloudflare-one/access-controls/policies/app-paths/) and [Workers Access](https://developers.cloudflare.com/workers/configuration/cloudflare-access/).
+Protect both paths and their subpaths, keeping `/`, `/monitors/*`, `/events/*`, `/api/status`, `/api/monitors/*/history`, and `/api/events/*` public. Check whether whole-hostname or account-wide Worker protection affects public access; see [Access path matching](https://developers.cloudflare.com/cloudflare-one/access-controls/policies/app-paths/) and [Workers Access](https://developers.cloudflare.com/workers/configuration/cloudflare-access/).
 
-Add an **Allow** policy using **Include → Emails** with your administrator email, or a designated user group. Use an existing identity provider or email one-time PIN, then save the application. Both paths must use this application's AUD.
+Add an **Allow** policy using **Include → Emails** with your administrator email, or a designated user group. Use an existing identity provider or email one-time PIN. Both paths use the same application's AUD. After saving, record these settings:
 
-### Where to find each value
+| GitHub setting       | Location                                                                              | Value                                                                |
+| -------------------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `ACCESS_TEAM_DOMAIN` | **Zero Trust → Settings → Team domain**                                               | Full team domain, such as `your-team.cloudflareaccess.com`           |
+| `ACCESS_AUD`         | **Access controls → Applications → Configure your application → Additional settings** | **Application Audience (AUD) Tag**, a 64-character hexadecimal value |
 
-| GitHub setting       | Cloudflare location                                                                                                                   | Value to copy                                                                               |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `ACCESS_TEAM_DOMAIN` | **Zero Trust → Settings → Team domain → Full domain**, then Copy; older layouts may call the section Team name and domain             | Full `your-team.cloudflareaccess.com` hostname, not the application name or status hostname |
-| `ACCESS_AUD`         | **Access controls → Applications → application name (or Configure) → Additional settings → AUD tag → Application Audience (AUD) Tag** | 64-character hexadecimal string, not the application ID, policy ID, or API Token            |
+For help locating these settings, see [team domain](https://developers.cloudflare.com/cloudflare-one/faq/getting-started-faq/) and [application AUD](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/validating-json/#get-your-aud-tag).
 
-References: [team domain](https://developers.cloudflare.com/cloudflare-one/faq/getting-started-faq/), [finding the AUD](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/validating-json/#get-your-aud-tag). Dashboard layouts can change; look for these field names.
-
-**Reuse an existing Access application** if its hostname matches and it protects both admin paths. Recreating the Worker does not require recreating Access. Deleting and recreating the Access application changes its AUD. The workflow passes these two values to the Worker; it does not create or modify Access applications.
+Reuse an existing Access application if its hostname and protected paths match, including when recreating the Worker. Update the AUD after deleting and recreating the Access application. The workflow passes these settings to the Worker; manage the Access application in the dashboard.
 
 ## 4. Enter GitHub Secrets / Variables
 
@@ -93,36 +89,37 @@ Switch to **Variables → New repository variable**, and add:
 | `D1_DATABASE_NAME`   | Your chosen name; defaults to `<WORKER_NAME>-db`, such as `uptimeworker-db`         | No                            |
 | `SITE_NAME`          | Display name for the status page; defaults to `UptimeWorker`                        | No                            |
 
-`ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` can also be Repository Secrets; existing settings need not be moved. A Variable takes precedence over a Secret with the same name, so avoid conflicting values. Do not add quotes or keep angle-bracket placeholders.
+`ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` can also be Repository Secrets. A Variable takes precedence over a Secret with the same name. Enter actual values without quotes or angle-bracket placeholders.
 
 Worker and database names start with a lowercase letter and contain lowercase letters, digits, and hyphens. Give each instance distinct names; an existing database with the same name is reused. See [deployment configuration](development.md#deployment-configuration) for length limits.
 
 ## 5. Run deployment and check the result
 
-1. Open **Actions**, then select **Verify and deploy** in the left sidebar.
-2. Click **Run workflow**, select **main**, and click **Run workflow** in the expanded panel. Enable Actions first if prompted after forking.
-3. Open the new run and wait for both `verify` and `deploy` to succeed. Other branches run verification without deploying.
-4. Check these steps in the `deploy` logs:
+1. Open **Actions → Verify and deploy**. Enable Actions first if prompted after forking.
+2. Use **Run workflow** to select and run the **main** branch.
+3. Wait for both `verify` and `deploy` to succeed. Other branches run verification without deploying.
+
+Check these steps in the `deploy` logs:
 
 | Workflow step                                | Expected result                                                                                  |
 | -------------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | Create or reuse D1 and prepare configuration | `Created D1 database: ...` for a new database, or `Reusing D1 database: ...` for an existing one |
 | Build with production bindings               | Successful production build                                                                      |
-| Apply database migrations                    | Migrations applied to a new database; already applied migrations are skipped                     |
+| Apply database migrations                    | Pending migrations applied; previously applied migrations are skipped                            |
 | Publish Worker and static assets             | Worker and assets published, with the `* * * * *` Cron trigger                                   |
 
-If Run workflow is missing, select the specific workflow rather than All workflows, check repository write access, and check that the workflow is on the default branch. See [manually running a GitHub workflow](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow).
+If Run workflow is missing, confirm that you have selected the specific workflow, have repository write access, and that the workflow exists on the default branch. See [manually running a GitHub workflow](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow).
 
 For default-hostname deployments, visit `https://<WORKER_NAME>.<account-subdomain>.workers.dev`. For custom-domain-only deployments, continue below; having no reachable site before binding the domain is expected.
 
 ## Using only a custom domain
 
-**First deployment order: configure Access → set `WORKERS_DEV=false` → run the workflow to create the Worker → bind the custom domain.** The default hostname can stay disabled throughout.
+First deployment order: configure Access → set `WORKERS_DEV=false` → run the workflow to create the Worker → bind the custom domain.
 
-1. Under Cloudflare **Compute → Workers & Pages**, select the Worker and open **Domains → Add Domain**. Older layouts use **Settings → Domains & Routes → Add → Custom Domain**.
-2. In the current **Connect domain** dialog, search for and select the root domain `example.com`. Enter `status` in **Subdomain**, keep **Enable for → Production**, and click **Add domain**. In older single-field forms, enter the full `status.example.com` hostname. Omit `https://`, paths, and `/*`. Wait for activation; Cloudflare manages the DNS record and certificate. See [Custom Domains](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/).
+1. In Cloudflare **Workers & Pages**, select the Worker and use **Domains → Add Domain** to add a custom domain.
+2. Set the production hostname to `status.example.com`. If the form separates domain and subdomain, enter `example.com` and `status`, and select **Production** under **Enable for**. Enter the hostname without a scheme or path. Cloudflare manages the DNS record and certificate; wait for activation before continuing. See [Custom Domains](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/).
 3. Check that Access protects this hostname's `/admin` and `/api/admin` paths, then visit `https://status.example.com`.
-4. In **Domains**, confirm both **Production** and **Preview** Worker URL switches are off. Older layouts list these under Domains & Routes. Deployment sets `workers_dev=false` and `preview_urls=false`; keep `WORKERS_DEV=false` in GitHub so later deployments retain this behavior.
+4. Confirm that the `workers.dev` URL's **Production** and **Preview** switches are off. Keep `WORKERS_DEV=false` in GitHub so later deployments retain this behavior.
 
 Updating an existing Worker preserves dashboard domain bindings. **After deleting and recreating a Worker, check and rebind its domain.** An Access application does not create the Worker domain binding. If a DNS record conflicts, check its purpose before changing it.
 
@@ -131,8 +128,8 @@ Updating an existing Worker preserves dashboard domain bindings. **After deletin
 1. In a signed-out browser session, open `/` and `/api/status`: both should be public. `/admin` and `/api/admin/monitors` should require Access sign-in.
 2. Sign in with an allowed email and check that the monitor list loads. An empty list is expected with a new D1 database.
 3. Add reachable public HTTP and TCP monitors and run **Test connection**. Immediate tests verify connectivity without updating status or history.
-4. Wait for scheduled checks, then confirm last-check times, latency, and history. New or changed Cron settings may take up to 15 minutes to propagate; use Test connection to check connectivity while waiting. Check **Settings → Trigger events → Cron triggers** for `* * * * *`. See [Cron Triggers](https://developers.cloudflare.com/workers/configuration/cron-triggers/).
-5. Verify public and admin access on the custom domain and confirm default and preview URLs remain disabled. For targets protected by WAF, follow [monitor configuration](configuration.md#cloudflare-waf-bypass).
+4. Wait for scheduled checks to update last-check times, latency, and history. Check **Settings → Trigger events → Cron triggers** for `* * * * *`; new or changed Cron settings may take up to 15 minutes to propagate. See [Cron Triggers](https://developers.cloudflare.com/workers/configuration/cron-triggers/).
+5. For custom-domain-only access, confirm that `workers.dev` production and preview URLs remain disabled. For targets protected by WAF, follow [monitor configuration](configuration.md#cloudflare-waf-bypass).
 
 ## Troubleshooting
 

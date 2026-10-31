@@ -17,7 +17,7 @@
 | 仅使用自定义域名 | 同一 Cloudflare 账户下已生效的域名，以及准备用作状态页的主机名，例如 `status.example.com` | **首次部署前就设为 `false`** |
 | 使用默认域名     | Workers & Pages 中的账户子域名，例如 `my-team.workers.dev`                                | 留空或 `true`                |
 
-Worker 名称默认 `uptimeworker`；如需修改，先确定 `WORKER_NAME`，例如 `team-status`。默认地址由 Worker 名称和账户子域名拼接：`https://uptimeworker.my-team.workers.dev`。账户子域名在 **Workers & Pages → Your subdomain** 查看，不是 Zero Trust 团队域名。仅使用自定义域名时，无需先开启或访问 Worker 的默认地址。
+Worker 名称由 `WORKER_NAME` 设置，默认 `uptimeworker`。默认地址由 Worker 名称和账户子域名拼接，例如 `https://uptimeworker.my-team.workers.dev`。账户子域名在 **Workers & Pages → Your subdomain** 查看，与 Zero Trust 团队域名不同。
 
 首次部署无需提前创建 Worker、D1 或填写数据库 ID，也无需手改 `wrangler.jsonc`。已有部署更新代码时直接重新运行工作流；清空重建见[重新部署与清空重建](#重新部署与清空重建)。
 
@@ -25,27 +25,25 @@ Worker 名称默认 `uptimeworker`；如需修改，先确定 `WORKER_NAME`，�
 
 ### 账户 ID
 
-选择目标账户，进入 **Compute → Workers & Pages → Account Details → Account ID**，点击复制。也可在控制台搜索框（`Cmd/Ctrl + K`）搜索 `Copy account ID`。这是 32 位十六进制值，填入 `CLOUDFLARE_ACCOUNT_ID`；不要使用网站的 Zone ID 或 D1 的 Database ID。参见[查找账户 ID](https://developers.cloudflare.com/fundamentals/account/find-account-and-zone-ids/)。
+在目标账户的 **Workers & Pages → Account Details → Account ID** 复制 32 位十六进制账户 ID，填入 `CLOUDFLARE_ACCOUNT_ID`。注意区分网站的 Zone ID 和 D1 的 Database ID；参见[查找账户 ID](https://developers.cloudflare.com/fundamentals/account/find-account-and-zone-ids/)。
 
 ### API Token
 
-打开右上角头像的 **My Profile → API Tokens → Create Token → Create Custom Token**，例如命名为 `UptimeWorker deploy`，添加以下三项权限：
+在 **My Profile → API Tokens** 创建自定义 Token，添加以下权限：
 
-| 第一列：范围 | 第二列：权限     | 第三列：级别 |
-| ------------ | ---------------- | ------------ |
-| Account      | Workers Scripts  | Edit         |
-| Account      | D1               | Edit         |
-| Account      | Account Settings | Read         |
+| 范围    | 权限             | 级别 |
+| ------- | ---------------- | ---- |
+| Account | Workers Scripts  | Edit |
+| Account | D1               | Edit |
+| Account | Account Settings | Read |
 
-在 **Account Resources** 中选择 **Include → Specific account → 目标账户**，须与上面的账户 ID 属于同一账户。检查摘要后创建 Token，复制结果页显示的完整令牌，填入 `CLOUDFLARE_API_TOKEN`。令牌只显示一次；不要复制 Token 的名称、ID 或示例命令整行。后续部署可复用已保存且有效的 Token。参见[创建 API Token](https://developers.cloudflare.com/fundamentals/api/get-started/create-token/)。
+将 **Account Resources** 设为 **Include → Specific account → 目标账户**，与上述账户 ID 保持一致。创建后，将仅显示一次的完整令牌保存到 `CLOUDFLARE_API_TOKEN`，后续部署可复用。参见[创建 API Token](https://developers.cloudflare.com/fundamentals/api/get-started/create-token/)。
 
 本指南通过控制台管理 Access 和自定义域名，部署 Token 使用上表权限即可。
 
-## 3. 配置 Access，复制团队域名和 AUD
+## 3. 配置 Cloudflare Access
 
-### 保护后台路径
-
-进入 **Zero Trust → Access controls（部分界面为 Access）→ Applications → Create new application（或 Add an application）→ Self-hosted**，创建应用，例如 `UptimeWorker Admin`。
+进入 **Zero Trust → Access controls → Applications**，创建 **Self-hosted** 应用，例如 `UptimeWorker Admin`。
 
 在同一个应用中添加两个 **Public hostname**。以 `status.example.com` 为例：
 
@@ -54,22 +52,20 @@ Worker 名称默认 `uptimeworker`；如需修改，先确定 `WORKER_NAME`，�
 | `status`  | `example.com` | `admin`     |
 | `status`  | `example.com` | `api/admin` |
 
-Path 输入框前已显示 `/` 时，分别填写 `admin` 和 `api/admin`；最终地址是 `/admin` 和 `/api/admin`。若界面将主机名合并为一个字段，两行均填写 `status.example.com`，路径仍分别填写。主机名栏不填写 `https://` 或路径。使用默认域名时，主机名换成 `<WORKER_NAME>.<账户子域名>.workers.dev`。
+两条路径分别为 `/admin` 和 `/api/admin`；Path 输入框自带 `/` 时按表格填写。主机名不带协议或路径，使用默认域名时改为 `<WORKER_NAME>.<账户子域名>.workers.dev`。
 
-保护这两条路径及其子路径。保持首页 `/`、监控详情 `/monitors/*`、事件详情 `/events/*`，以及 `/api/status`、`/api/monitors/*/history`、`/api/events/*` 公开。不要把整个状态页域名设为必须登录；如已启用账户级 Worker 保护，也需检查其对公开页的影响。参见 [Access 路径匹配](https://developers.cloudflare.com/cloudflare-one/access-controls/policies/app-paths/) 和 [Workers Access](https://developers.cloudflare.com/workers/configuration/cloudflare-access/)。
+保护这两条路径及其子路径，保持 `/`、`/monitors/*`、`/events/*`、`/api/status`、`/api/monitors/*/history` 和 `/api/events/*` 公开。检查整站或账户级 Worker 保护是否影响公开访问；参见 [Access 路径匹配](https://developers.cloudflare.com/cloudflare-one/access-controls/policies/app-paths/)和 [Workers Access](https://developers.cloudflare.com/workers/configuration/cloudflare-access/)。
 
-添加 **Allow** 策略，使用 **Include → Emails** 填写管理员邮箱，或选择指定用户组；使用现有身份提供商或邮件一次性验证码登录。保存应用。两条路径放在同一个应用中，使用同一个 AUD。
+添加 **Allow** 策略，通过 **Include → Emails** 指定管理员邮箱，或选择指定用户组；使用现有身份提供商或邮件一次性验证码登录。两条路径使用同一应用的 AUD。保存后记录以下配置：
 
-### 两个值在哪里找
+| GitHub 配置名        | 配置位置                                                                      | 配置值                                              |
+| -------------------- | ----------------------------------------------------------------------------- | --------------------------------------------------- |
+| `ACCESS_TEAM_DOMAIN` | **Zero Trust → Settings → Team domain**                                       | 完整团队域名，例如 `your-team.cloudflareaccess.com` |
+| `ACCESS_AUD`         | **Access controls → Applications → 该应用的 Configure → Additional settings** | **Application Audience (AUD) Tag**，64 位十六进制值 |
 
-| GitHub 配置名        | Cloudflare 中的来源                                                                                                               | 应复制的值                                                        |
-| -------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| `ACCESS_TEAM_DOMAIN` | **Zero Trust → Settings → Team domain → Full domain**，点击旁边的 Copy；旧版可能标为 Team name and domain                         | 完整的 `your-team.cloudflareaccess.com`，不是应用名称或状态页域名 |
-| `ACCESS_AUD`         | **Access controls → Applications → 点击应用名称（或 Configure）→ Additional settings → AUD tag → Application Audience (AUD) Tag** | 64 位十六进制字符串，不是应用 ID、策略 ID 或 API Token            |
+查找配置时可参见[团队域名](https://developers.cloudflare.com/cloudflare-one/faq/getting-started-faq/)和[应用 AUD](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/validating-json/#get-your-aud-tag)。
 
-来源：[团队域名](https://developers.cloudflare.com/cloudflare-one/faq/getting-started-faq/)、[获取 AUD](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/validating-json/#get-your-aud-tag)。控制台布局可能调整，按字段名称查找。
-
-**已有 Access 应用可以复用。** 检查主机名与计划访问的域名一致、两条后台路径均受保护，再复制该应用的配置。重建 Worker 不要求重建 Access；删除并重建 Access 应用才会改变 AUD。工作流只把这两个值写入 Worker，不会创建或修改 Access 应用。
+已有 Access 应用的域名和受保护路径匹配时可以复用，重建 Worker 也可沿用原配置；删除并重建 Access 应用后需更新 AUD。工作流将上述配置写入 Worker，Access 应用仍由控制台管理。
 
 ## 4. 填写 GitHub Secrets / Variables
 
@@ -93,36 +89,37 @@ Path 输入框前已显示 `/` 时，分别填写 `admin` 和 `api/admin`；最�
 | `D1_DATABASE_NAME`   | 自行命名，默认 `<WORKER_NAME>-db`，如 `uptimeworker-db`                | 否                 |
 | `SITE_NAME`          | 状态页显示的名称，默认 `UptimeWorker`                                  | 否                 |
 
-`ACCESS_TEAM_DOMAIN` 和 `ACCESS_AUD` 也可保存在 Repository Secrets，已有配置不用搬动。同名 Variable 优先于 Secret，避免两处保存了不同值。值不加引号，也不要保留尖括号占位符。
+`ACCESS_TEAM_DOMAIN` 和 `ACCESS_AUD` 也可保存在 Repository Secrets，同名 Variable 优先于 Secret。填写实际值，不加引号，也不保留尖括号占位符。
 
 Worker 和 D1 名称使用小写字母开头的小写字母、数字及连字符。每个实例使用独立名称；同名数据库会复用。完整长度限制见[部署配置](development.md#部署配置)。
 
 ## 5. 运行部署并检查结果
 
-1. 打开仓库 **Actions**，在左侧选择 **Verify and deploy**。
-2. 点击 **Run workflow**，分支选择 **main**，再点击弹出面板中的 **Run workflow**。Fork 后若提示启用 Actions，先启用工作流。
-3. 打开新出现的运行记录，等待 `verify` 和 `deploy` 两个任务均成功。其他分支只运行验证，不发布。
-4. 在 `deploy` 日志中检查以下步骤：
+1. 打开仓库 **Actions → Verify and deploy**。Fork 后若提示启用 Actions，先启用工作流。
+2. 通过 **Run workflow** 选择 **main** 分支并运行。
+3. 等待 `verify` 和 `deploy` 两个任务成功。其他分支只运行验证，不发布。
+
+在 `deploy` 日志中检查以下步骤：
 
 | 工作流步骤                                   | 应看到的结果                                                                   |
 | -------------------------------------------- | ------------------------------------------------------------------------------ |
 | Create or reuse D1 and prepare configuration | 新库显示 `Created D1 database: ...`；已有同名库显示 `Reusing D1 database: ...` |
 | Build with production bindings               | 生产构建成功                                                                   |
-| Apply database migrations                    | 新库成功应用迁移；已初始化的库无需重复应用                                     |
+| Apply database migrations                    | 应用尚未执行的迁移，已应用的迁移不会重复执行                                   |
 | Publish Worker and static assets             | Worker 和静态资源发布成功，Cron 为 `* * * * *`                                 |
 
-没有 Run workflow 按钮时，检查是否已进入具体工作流（不是 All workflows 列表）、是否有仓库写权限，以及默认分支是否包含该工作流。参考 [GitHub 手动运行工作流](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow)。
+若未显示 Run workflow 按钮，确认已选择具体工作流、具有仓库写权限，且默认分支包含该工作流。参见 [GitHub 手动运行工作流](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow)。
 
 使用默认域名时，现在可访问 `https://<WORKER_NAME>.<账户子域名>.workers.dev`。仅用自定义域名时继续下一节；首次发布后、绑定域名前没有可访问的站点地址是正常的。
 
 ## 仅使用自定义域名
 
-**首次发布顺序：配置 Access → 设置 `WORKERS_DEV=false` → 运行工作流创建 Worker → 绑定自定义域名。** 无需临时开启默认域名。
+首次发布顺序：配置 Access → 设置 `WORKERS_DEV=false` → 运行工作流创建 Worker → 绑定自定义域名。
 
-1. 在 Cloudflare **Compute → Workers & Pages** 选择 Worker，进入 **Domains → Add Domain**。旧版布局入口为 **Settings → Domains & Routes → Add → Custom Domain**。
-2. 新版 **Connect domain** 对话框先搜索并选择根域名 `example.com`，再在 **Subdomain** 填 `status`，**Enable for** 保持 **Production**，点击 **Add domain**。如果旧版表单只有一个域名输入框，则填写完整的 `status.example.com`。不要填写 `https://`、路径或 `/*`。等待域名和证书生效；Cloudflare 管理对应 DNS 记录与证书，参见[自定义域名](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/)。
+1. 在 Cloudflare **Workers & Pages** 选择 Worker，通过 **Domains → Add Domain** 添加自定义域名。
+2. 将生产域名设为 `status.example.com`。若表单分列域名和子域名，分别填写 `example.com` 与 `status`，**Enable for** 选择 **Production**。主机名不带协议或路径。Cloudflare 自动管理 DNS 记录和证书，等待生效后继续；参见[自定义域名](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/)。
 3. 核对 Access 应用保护的是这个域名的 `/admin` 和 `/api/admin`，从 `https://status.example.com` 访问。
-4. 在 **Domains** 确认 Worker URL 的 **Production** 和 **Preview** 开关均关闭；旧版布局在 Domains & Routes 中显示。本项目部署时设置 `workers_dev=false`、`preview_urls=false`。GitHub 中保留 `WORKERS_DEV=false`，后续发布才会继续应用。
+4. 确认 `workers.dev` 地址的 **Production** 和 **Preview** 开关均关闭，并在 GitHub 中保留 `WORKERS_DEV=false`，使后续部署继续应用。
 
 更新现有 Worker 会保留控制台配置的域名绑定；**删除 Worker 后重新创建，必须重新检查并绑定域名**。Access 应用不能代替域名绑定。如果已有 DNS 记录冲突，先确认该记录的用途再处理。
 
@@ -131,8 +128,8 @@ Worker 和 D1 名称使用小写字母开头的小写字母、数字及连字符
 1. 使用未登录的浏览器会话打开首页和 `/api/status`，应可公开访问；`/admin` 和 `/api/admin/monitors` 应要求 Access 登录。
 2. 用允许的邮箱登录，确认监控列表可加载；全新 D1 显示空列表属于正常现象。
 3. 添加你可访问的公网 HTTP 和 TCP 监控，分别执行「测试连接」。即时测试验证连通性，不写入状态或历史。
-4. 等待定时检测，确认「最近检测」、响应时间和历史出现。新建或修改 Cron 最多可能需要 15 分钟传播，期间先用「测试连接」确认连通性；检查 Worker 的 **Settings → Trigger Events → Cron Triggers** 中是否有 `* * * * *`。参见 [Cron Triggers](https://developers.cloudflare.com/workers/configuration/cron-triggers/)。
-5. 自定义域名的公开页和后台登录均正常后，确认默认及预览地址仍禁用。目标受 WAF 保护时，继续按[监控配置](configuration.md#cloudflare-waf-放行)配置放行。
+4. 等待定时检测更新「最近检测」、响应时间和历史。检查 Worker 的 **Settings → Trigger Events → Cron Triggers** 中是否有 `* * * * *`；新建或修改 Cron 最多可能需要 15 分钟传播，参见 [Cron Triggers](https://developers.cloudflare.com/workers/configuration/cron-triggers/)。
+5. 仅使用自定义域名时，确认 `workers.dev` 生产及预览地址仍禁用。目标受 WAF 保护时，按[监控配置](configuration.md#cloudflare-waf-放行)配置放行。
 
 ## 常见问题
 

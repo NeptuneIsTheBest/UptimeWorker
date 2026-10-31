@@ -113,7 +113,7 @@ Cron 每分钟运行。候选批次按到期时间顺序，在并发、HTTP 请�
 | D1 读取行数                  | 500 万/日    | 每月包含 250 亿   |
 | D1 写入行数                  | 10 万/日     | 每月包含 5,000 万 |
 
-Cron 墙钟时长上限为 15 分钟，每个 isolate 内存上限为 128 MB，同时等待连接建立或响应头的出站连接最多六个。网络等待计入墙钟时间，不计为 CPU 时间。来源：[Workers 限制](https://developers.cloudflare.com/workers/platform/limits/)、[D1 限制](https://developers.cloudflare.com/d1/platform/limits/)及 [D1 计费](https://developers.cloudflare.com/d1/platform/pricing/)。Paid 超出包含用量后另行计费，账户总用量包含其他应用。
+Cron 墙钟时长上限为 15 分钟，每个 isolate 内存上限为 128 MB，同时等待连接建立或响应头的出站连接最多六个。网络等待计入墙钟时间，不计为 CPU 时间。Paid 超出包含用量后另行计费，账户总用量包含其他应用。平台限制与计费规则参见 [Workers 限制](https://developers.cloudflare.com/workers/platform/limits/)、[D1 限制](https://developers.cloudflare.com/d1/platform/limits/)及 [D1 计费](https://developers.cloudflare.com/d1/platform/pricing/)。
 
 `PLATFORM_LIMITS` 仅保存实际参与应用计算的子请求和 D1 写入预算。CPU、内存和查询上限由平台执行，测量方法见[运行观测](development.md#运行观测)。调度默认值与可设置范围见[监控配置](configuration.md#性能设置与容量估算)。
 

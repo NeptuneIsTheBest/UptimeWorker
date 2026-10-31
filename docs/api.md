@@ -28,7 +28,7 @@
 
 ## Access and errors
 
-Admin endpoints authenticate through [Cloudflare Access](deployment.md#2-create-an-access-application). Write requests must include a same-origin `Origin` and `Content-Type: application/json`. Monitor deletion and connection tests may send `{}`; group or event deletion requires `version`.
+Admin endpoints authenticate through [Cloudflare Access](deployment.md#3-configure-cloudflare-access). Write requests must include a same-origin `Origin` and `Content-Type: application/json`. Monitor deletion and connection tests may send `{}`; group or event deletion requires `version`.
 
 Errors use `{ "code": "stable_error_code", "params": {} }`. `code` is language-independent; `params` is omitted when empty. The interface translates known codes into the selected language and shows a generic request error for unknown codes. For example, an invalid check interval returns `{ "code": "monitor_interval_invalid", "params": { "min": 1, "max": 60 } }`. Text-length errors identify `field` as `event_title`, `event_body`, `progress_title`, `progress_body`, or `group_name`. See [error code definitions](../src/shared/error-messages.ts). Unknown endpoints return JSON `404`; public endpoints omit target addresses, monitor configurations, JWTs, and raw exceptions.
 

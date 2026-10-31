@@ -28,7 +28,7 @@
 
 ## 访问与错误
 
-管理接口通过 [Cloudflare Access](deployment.md#2-创建-access-应用) 鉴权。写请求须携带同源 `Origin` 和 `Content-Type: application/json`；删除监控、测试连接可发送 `{}`，删除分组或事件须携带 `version`。
+管理接口通过 [Cloudflare Access](deployment.md#3-配置-cloudflare-access) 鉴权。写请求须携带同源 `Origin` 和 `Content-Type: application/json`；删除监控、测试连接可发送 `{}`，删除分组或事件须携带 `version`。
 
 错误格式为 `{ "code": "稳定错误码", "params": {} }`。`code` 与语言无关，`params` 为空时省略；界面按当前语言翻译已知错误码，未知错误码显示通用请求失败提示。例如无效检测间隔返回 `{ "code": "monitor_interval_invalid", "params": { "min": 1, "max": 60 } }`。文本长度错误的 `field` 为 `event_title`、`event_body`、`progress_title`、`progress_body` 或 `group_name`，详见[错误码定义](../../src/shared/error-messages.ts)。未知接口返回 JSON `404`；公开接口不返回目标地址、监控配置、JWT 或原始异常。
 
