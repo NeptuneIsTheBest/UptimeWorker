@@ -14,7 +14,7 @@ export function ErrorNotice({ message, retry }: { message: DisplayMessage; retry
       <Icon name="info" />
       <span>{displayMessage(message, locale)}</span>
       {retry && (
-        <button className="text-button" onClick={retry}>
+        <button type="button" className="text-button" onClick={retry}>
           {t('common.retry')}
         </button>
       )}
