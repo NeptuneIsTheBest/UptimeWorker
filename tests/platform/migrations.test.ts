@@ -111,6 +111,38 @@ it.each([
   expect(JSON.stringify(plan.results)).toContain(index);
 });
 
+it('stores checks by their natural key and retains indexed history and bounded cleanup', async () => {
+  const db = fixture.db;
+  const table = await db
+    .prepare("SELECT sql FROM sqlite_schema WHERE type = 'table' AND name = 'check_results'")
+    .first<string>('sql');
+  expect(table).toContain('WITHOUT ROWID');
+  const columns = (await db.prepare('PRAGMA table_info(check_results)').all()).results;
+  expect(columns.some((column) => column.name === 'id')).toBe(false);
+  expect(columns.filter((column) => column.pk).map((column) => column.name)).toEqual([
+    'monitor_id',
+    'scheduled_at',
+  ]);
+  expect(await db.prepare("SELECT name FROM sqlite_schema WHERE name = 'monitors_group'").first()).toBeNull();
+  for (const [index, query] of [
+    [
+      'checks_monitor_time',
+      "SELECT checked_at FROM check_results WHERE monitor_id = 'm' AND checked_at >= 0 ORDER BY checked_at DESC",
+    ],
+    [
+      'checks_retention',
+      'SELECT monitor_id, scheduled_at FROM check_results WHERE checked_at < 100 ORDER BY checked_at LIMIT 500',
+    ],
+    ['events_open_recent', "SELECT * FROM events WHERE status = 'open' ORDER BY updated_at DESC, id DESC"],
+    [
+      'events_closed_recent',
+      "SELECT * FROM events WHERE status != 'open' ORDER BY updated_at DESC, id DESC LIMIT 20",
+    ],
+  ]) {
+    expect(JSON.stringify((await db.prepare(`EXPLAIN QUERY PLAN ${query}`).all()).results)).toContain(index);
+  }
+});
+
 it('requires fixed progress titles and reserves Stopped for automatic records', async () => {
   const db = fixture.db;
   await db

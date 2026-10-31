@@ -16,12 +16,14 @@ import {
   PROGRESS_LABELS,
 } from './presentation';
 import { RefreshStatus } from '../../components/RefreshStatus';
+import { useMemo } from 'react';
 
 export function EventDetailPage({ id }: { id: string }) {
   const { t, locale } = useI18n();
   const remote = useRemote<EventDetailResponse>(`/api/events/${encodeURIComponent(id)}`);
   const { data, error, loading, refresh } = remote;
   const event = data?.event;
+  const timeline = useMemo(() => (event ? eventTimeline(event) : []), [event]);
   const now = useNow();
   return (
     <Layout siteName={data?.siteName}>
@@ -109,7 +111,7 @@ export function EventDetailPage({ id }: { id: string }) {
                 <h2 id="timeline-heading">{t('event.timeline')}</h2>
               </div>
               <ol>
-                {eventTimeline(event).map((entry, index) => (
+                {timeline.map((entry, index) => (
                   <li
                     key={entry.id}
                     className={index === 0 ? 'event-timeline-entry latest' : 'event-timeline-entry'}

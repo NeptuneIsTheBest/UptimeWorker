@@ -3,7 +3,7 @@ import { formatError } from '../../../src/shared/error-messages';
 import { ValidationError } from '../../../src/shared/errors';
 import { parseGroup } from '../../../src/shared/groups/validation';
 import { api } from '../../../src/web/lib/api';
-import { elapsedTime, latency, percent } from '../../../src/web/lib/format';
+import { elapsedTime, formatTime, latency, number, percent } from '../../../src/web/lib/format';
 import {
   displayMessage,
   errorMessage,
@@ -69,6 +69,17 @@ describe('language selection and presentation', () => {
     expect(latency(12345, 'en')).toBe('12,345 ms');
     expect(percent(99.5, 'en')).toBe('99.50%');
     expect(percent(null, 'en')).toBe('—');
+  });
+  it('keeps cached number precision, percent styles and date formats separate across languages', () => {
+    for (const locale of ['en', 'zh-CN', 'en'] as const) {
+      expect(number(12.3456, locale, 2)).toBe('12.35');
+      expect(percent(12.3456, locale)).toBe('12.35%');
+      expect(number(12.3456, locale)).toBe('12.346');
+      expect(number(12.3456, locale, 4)).toBe('12.3456');
+      const time = Date.UTC(2026, 9, 29, 12, 34, 56);
+      expect(formatTime(time, true, locale)).not.toBe(formatTime(time, false, locale));
+      expect(formatTime(time, false, locale)).toMatch(/^\d{2}:\d{2}:\d{2}$/);
+    }
   });
   it('translates only recognized automatic content and preserves the original title name', () => {
     const event = { source: 'automatic' as const, title: '旧名称 服务异常', monitors: [{ name: '新名称' }] };

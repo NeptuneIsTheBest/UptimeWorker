@@ -1,8 +1,9 @@
 import { useI18n } from '../i18n/I18nProvider';
 import { intlLocale } from '../../shared/locale';
-import { useEffect, useState } from 'react';
+import { useMemo } from 'react';
 import { formatTime, elapsedTime } from '../lib/format';
 import { Icon } from './Icon';
+import { useNow } from '../hooks/useNow';
 
 export function RefreshStatus({
   lastRefreshedAt,
@@ -16,18 +17,18 @@ export function RefreshStatus({
   refresh: () => void;
 }) {
   const { t, locale } = useI18n();
-  const [now, setNow] = useState(Date.now);
-  useEffect(() => {
-    if (lastRefreshedAt === null) return;
-    setNow(Date.now());
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    const update = () => setNow(Date.now());
-    document.addEventListener('visibilitychange', update);
-    return () => {
-      clearInterval(timer);
-      document.removeEventListener('visibilitychange', update);
-    };
-  }, [lastRefreshedAt]);
+  const now = useNow(1000, lastRefreshedAt !== null);
+  const refreshedTime = useMemo(
+    () =>
+      lastRefreshedAt === null
+        ? null
+        : {
+            iso: new Date(lastRefreshedAt).toISOString(),
+            title: new Date(lastRefreshedAt).toLocaleString(intlLocale(locale), { hour12: false }),
+            label: formatTime(lastRefreshedAt, false, locale),
+          },
+    [lastRefreshedAt, locale],
+  );
 
   return (
     <div className="refresh-status" aria-label={t('refresh.label')}>
@@ -35,15 +36,11 @@ export function RefreshStatus({
         <summary className="refresh-time">
           <Icon name="clock" size={14} />
           <span>{t('refresh.last')}</span>
-          {lastRefreshedAt === null ? (
+          {refreshedTime === null ? (
             <span className="refresh-pending">{t('refresh.pending')}</span>
           ) : (
-            <time
-              className="tabular"
-              dateTime={new Date(lastRefreshedAt).toISOString()}
-              title={new Date(lastRefreshedAt).toLocaleString(intlLocale(locale), { hour12: false })}
-            >
-              {formatTime(lastRefreshedAt, false, locale)}
+            <time className="tabular" dateTime={refreshedTime.iso} title={refreshedTime.title}>
+              {refreshedTime.label}
             </time>
           )}
           <Icon name="chevron" size={12} />

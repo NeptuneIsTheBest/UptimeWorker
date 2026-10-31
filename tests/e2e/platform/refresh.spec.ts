@@ -241,7 +241,9 @@ test('slow requests do not overlap and manual refresh discards the superseded re
   expect(calls).toBe(initialCalls + 3);
 });
 
-test('pauses polling in the background and refreshes immediately on return', async ({ page }) => {
+test('pauses polling and display clocks in the background and refreshes immediately on return', async ({
+  page,
+}) => {
   const data = statusData();
   let calls = 0;
   await page.route('**/api/status', (route) => {
@@ -255,13 +257,51 @@ test('pauses polling in the background and refreshes immediately on return', asy
   await visibility(page, 'hidden');
   await page.clock.runFor(90_000);
   expect(calls).toBe(initialCalls);
-  await expect(page.locator('.refresh-elapsed')).toHaveText('已过去 1 分 40 秒');
+  await expect(page.locator('.refresh-elapsed')).toHaveText('已过去 10 秒');
   await visibility(page, 'visible');
   await expect.poll(() => calls).toBe(initialCalls + 1);
   await refreshed(page);
   await expect(page.locator('.refresh-elapsed')).toHaveText('已过去 0 秒');
   await page.clock.runFor(30_000);
   await expect.poll(() => calls).toBe(initialCalls + 2);
+});
+
+test('corrects stale status and elapsed time on return even when automatic refresh is disabled', async ({
+  page,
+}) => {
+  const data = statusData();
+  data.pageRefreshSeconds = 0;
+  data.monitors = [
+    {
+      id: 'clock-monitor',
+      name: '时钟监控',
+      groupId: null,
+      type: 'http',
+      status: 'up',
+      intervalMinutes: 1,
+      lastCheckedAt: Date.UTC(2026, 9, 28, 2, 0, 1),
+      latencyMs: 42,
+      uptime30d: 100,
+      days: [],
+    },
+  ];
+  let calls = 0;
+  await page.route('**/api/status', (route) => {
+    calls++;
+    return route.fulfill({ json: data });
+  });
+  await page.goto('/');
+  await refreshed(page);
+  const initialCalls = calls;
+  await expect(page.locator('.monitor-card .status-badge')).toHaveClass(/up/);
+  await visibility(page, 'hidden');
+  await page.clock.runFor(130_000);
+  await expect(page.locator('.monitor-card .status-badge')).toHaveClass(/up/);
+  await expect(page.locator('.refresh-elapsed')).toHaveText('已过去 0 秒');
+  await visibility(page, 'visible');
+  await expect(page.locator('.monitor-card .status-badge')).toHaveClass(/stale/);
+  await expect(page.locator('.refresh-elapsed')).toHaveText('已过去 2 分 10 秒');
+  expect(calls).toBe(initialCalls);
 });
 
 test('settings persist, apply immediately and polling preserves monitor and settings drafts', async ({

@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import type { AdminMonitor } from '../../../shared/monitors/types';
 import type { GlobalSettings, PerformanceSettings } from '../../../shared/settings/types';
 import {
@@ -67,7 +67,7 @@ export function PerformancePanel({
   }
   const estimate = performance && monitors ? estimatePerformance(monitors, performance) : null;
   const limits = PLATFORM_LIMITS[draft.workersPlan];
-  const number = (value: number) => new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(value);
+  const number = useMemo(() => new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format, [locale]);
   const dirty = settings && JSON.stringify(draft) !== JSON.stringify(settings.performance);
   function change(field: keyof Draft, value: number | '' | PerformanceSettings['workersPlan']) {
     setDraft((current) => ({ ...current, [field]: value }));

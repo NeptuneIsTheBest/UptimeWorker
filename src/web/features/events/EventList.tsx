@@ -1,5 +1,5 @@
 import { useI18n } from '../../i18n/I18nProvider';
-import type { ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import type { StatusEvent } from '../../../shared/events/types';
 import { eventLabel } from './labels';
 import { Icon } from '../../components/Icon';
@@ -42,8 +42,13 @@ export function EventList<T extends StatusEvent>({
 }) {
   const { t, locale } = useI18n();
   const now = useNow();
-  const visibleEvents = events.filter(
-    (event) => variant === 'all' || (variant === 'open' ? event.status === 'open' : event.status !== 'open'),
+  const visibleEvents = useMemo(
+    () =>
+      events.filter(
+        (event) =>
+          variant === 'all' || (variant === 'open' ? event.status === 'open' : event.status !== 'open'),
+      ),
+    [events, variant],
   );
   if (variant === 'open' && !visibleEvents.length) return null;
   const heading =

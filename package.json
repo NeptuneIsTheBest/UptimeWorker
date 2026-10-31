@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:performance": "vitest run tests/performance",
     "test:e2e": "playwright test",
     "db:migrate": "wrangler d1 migrations apply DB --local",
     "deploy:prepare": "node scripts/prepare-deploy.mjs",

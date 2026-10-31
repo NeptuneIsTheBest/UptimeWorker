@@ -1,19 +1,14 @@
-import type { DailyStat, PublicMonitor } from '../../../shared/monitors/types';
 import type { HistoryResponse, StatusResponse } from '../../../shared/status/types';
 import type { Env } from '../../types';
-import type { MonitorRow } from '../monitors/types';
 import { getPageRefreshSeconds } from '../settings/repository';
 import { listGroupOrder } from '../groups/repository';
 import { listPublicEvents } from '../events/repository';
-import { currentStatus, findMonitor, orderedMonitorsQuery } from '../monitors/repository';
+import { monitorsInDisplayOrder } from '../monitors/repository';
 import { DAY, dayStart, utcDay } from '../../lib/time';
+import { publicMonitors, type DailyRow, type PublicMonitorRow } from './aggregation';
 
-interface DailyRow {
-  monitor_id: string;
-  day: string;
-  total: number;
-  successful: number;
-}
+const PUBLIC_MONITOR_COLUMNS = `m.id, m.name, m.group_id, m.type, m.enabled,
+  m.interval_minutes, m.last_checked_at, m.last_ok, m.last_latency_ms`;
 interface CheckRow {
   checked_at: number;
   ok: number;
@@ -21,41 +16,10 @@ interface CheckRow {
   http_status: number | null;
   error_code: HistoryResponse['checks'][number]['errorCode'];
 }
-function publicMonitor(row: MonitorRow, daily: DailyRow[], now: number): PublicMonitor {
-  const indexed = new Map(daily.map((stat) => [stat.day, stat]));
-  const days: DailyStat[] = Array.from({ length: 90 }, (_, index) => {
-    const day = utcDay(dayStart(now) - (89 - index) * DAY);
-    const stat = indexed.get(day);
-    return {
-      day,
-      total: stat?.total ?? 0,
-      successful: stat?.successful ?? 0,
-      uptime: stat?.total ? (stat.successful / stat.total) * 100 : null,
-    };
-  });
-  const totals = days
-    .slice(-30)
-    .reduce((acc, day) => ({ total: acc.total + day.total, successful: acc.successful + day.successful }), {
-      total: 0,
-      successful: 0,
-    });
-  return {
-    id: row.id,
-    name: row.name,
-    groupId: row.group_id,
-    type: row.type,
-    status: currentStatus(row, now),
-    intervalMinutes: row.interval_minutes,
-    lastCheckedAt: row.last_checked_at,
-    latencyMs: row.last_latency_ms,
-    uptime30d: totals.total ? (totals.successful / totals.total) * 100 : null,
-    days,
-  };
-}
 export async function getStatus(env: Env, now = Date.now()): Promise<StatusResponse> {
   const [[monitors, stats], pageRefreshSeconds, { groups, ungrouped }, events] = await Promise.all([
     env.DB.batch([
-      env.DB.prepare(orderedMonitorsQuery),
+      env.DB.prepare(`SELECT ${PUBLIC_MONITOR_COLUMNS} ${monitorsInDisplayOrder}`),
       env.DB.prepare('SELECT * FROM daily_stats WHERE day >= ? ORDER BY day').bind(
         utcDay(dayStart(now) - 89 * DAY),
       ),
@@ -72,13 +36,7 @@ export async function getStatus(env: Env, now = Date.now()): Promise<StatusRespo
     siteName: env.SITE_NAME || 'UptimeWorker',
     pageRefreshSeconds,
     generatedAt: now,
-    monitors: (monitors.results as unknown as MonitorRow[]).map((row) =>
-      publicMonitor(
-        row,
-        daily.filter((stat) => stat.monitor_id === row.id),
-        now,
-      ),
-    ),
+    monitors: publicMonitors(monitors.results as unknown as PublicMonitorRow[], daily, now),
   };
 }
 export async function getHistory(
@@ -86,7 +44,10 @@ export async function getHistory(
   id: string,
   now = Date.now(),
 ): Promise<HistoryResponse | null> {
-  const row = await findMonitor(db, id);
+  const row = await db
+    .prepare(`SELECT ${PUBLIC_MONITOR_COLUMNS} FROM monitors m WHERE m.id = ?`)
+    .bind(id)
+    .first<PublicMonitorRow>();
   if (!row) return null;
   const [[daily, checks], pageRefreshSeconds, events] = await Promise.all([
     db.batch([
@@ -105,7 +66,7 @@ export async function getHistory(
   ]);
   return {
     events,
-    monitor: publicMonitor(row, daily.results as unknown as DailyRow[], now),
+    monitor: publicMonitors([row], daily.results as unknown as DailyRow[], now)[0],
     pageRefreshSeconds,
     generatedAt: now,
     checks: (checks.results as unknown as CheckRow[]).reverse().map((check) => ({

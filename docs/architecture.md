@@ -37,6 +37,7 @@ src/
 tests/
   features/               Unit and D1 integration tests organized by feature
   platform/               Authentication, API boundary, migration, and deployment tests
+  performance/            Repeatable aggregation timings and D1 row-usage checks
   support/                D1 fixtures, test data, and the API client
   e2e/                    Browser tests organized by feature, with shared fixtures
 ```
@@ -64,11 +65,13 @@ tests/
 
 HTTP requests pass through security headers, request-size limits, and Access authentication before reaching feature routes. Only explicitly listed public GET endpoints use caching; admin endpoints and error responses are not cached. Admin pages return SPA assets through the same authentication entry point while preserving the original navigation URL.
 
+Public monitor queries select display fields without loading probe configuration. Status aggregation groups daily rows by monitor once and shares one 90-day UTC date sequence across all monitors. Public events combine all open events with the latest 20 closed events through partial indexes; monitor-specific queries start with indexed associations. Parents, associations, and full progress are read in one transactional batch and grouped once for assembly.
+
 The scheduler acquires a D1 lease and reads settings and enabled, due monitors in one `DB.batch`. The query uses `monitors_due`, orders by `next_check_at, id`, and applies the configured batch limit. Immediate tests reuse snapshot reading and probes for one monitor. Failed reads do not run checks or generate samples.
 
 The shared performance module supplies validation, platform baselines, and budget rules to both the scheduler and frontend estimates. Deferred checks retain their due times; internal errors schedule a retry for the next minute without changing status or history. Neither produces a failed sample. A 240-second lease prevents overlapping runs. Defaults and budget calculations are documented under [performance settings](configuration.md#performance-settings-and-capacity-estimates).
 
-Result writes recheck monitor versions, enabled state, and the lease; unique keys prevent duplicate counting. Triggers update statistics and automatic incidents in the sample-write transaction using current rules. Event writes use version checks and private write tokens to keep status, associations, updates, and suppression intervals consistent across concurrent changes.
+Result writes recheck monitor versions, enabled state, and the lease. Detailed checks use a `(monitor_id, scheduled_at)` primary key in a `WITHOUT ROWID` table, avoiding a separate unique index while preventing duplicate counting. Time indexes support history reads and bounded cleanup by the same composite key. Triggers update statistics and automatic incidents in the sample-write transaction using current rules. Event writes use version checks and private write tokens to keep status, associations, updates, and suppression intervals consistent across concurrent changes.
 
 `worker/features/ordering` validates the complete member set and original versions and positions in a materialized snapshot, then commits the requested order with one atomic UPDATE. Service order is independent of the monitor configuration version, preserving in-flight results. The frontend shares `useReorder` and `SortControls`; `useRemote.suspend` cancels old reads and pauses refreshes during reordering, then merges the saved response and resumes.
 
@@ -76,7 +79,9 @@ Ungrouped's position is stored in the `__ungrouped__` system record in `monitor_
 
 Each run cleans up at most 500 expired detailed checks, 100 expired daily aggregates, and 100 expired suppression records. See [monitor configuration and operating policies](configuration.md) for check frequency, statistical definitions, event rules, and retention periods.
 
-Event association validation uses one JSON parameter with `json_each` to stay within D1's limit of 100 bound parameters. Scheduling normally makes 5 D1 calls across snapshot, result, and cleanup batches; each `DB.batch` counts as one call regardless of its statement count. Capacity planning must also account for CPU, D1 row usage, and cleanup backlog.
+Event association validation uses one JSON parameter with `json_each` to stay within D1's limit of 100 bound parameters. A successful scheduler run with results normally makes 4 D1 calls: lease acquisition, snapshot, results, and cleanup/completion. Completion releases the lease; only unfinished runs need the fallback release. Each `DB.batch` counts as one call regardless of its statement count. Call counts do not measure D1 row usage: capacity planning must also account for indexes, triggers, CPU, and cleanup backlog.
+
+The frontend reuses locale-specific formatters, memoizes monitor history and data-only summaries, and indexes monitor groups for display. Mounted components share clocks at the existing one-second and 15-second cadences. Hidden pages stop those timers and correct the display immediately when visible again; API refresh intervals and cache lifetimes remain unchanged.
 
 ## Frontend styles and adding features
 

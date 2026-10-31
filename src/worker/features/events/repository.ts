@@ -2,6 +2,7 @@ import type { AdminEvent, EventConfig, EventUpdateConfig, StatusEvent } from '..
 import { resolveEventUpdateConfig } from '../../../shared/events/progress';
 import { ValidationError } from '../../../shared/errors';
 import { ConflictError } from '../../errors';
+import { groupBy } from '../../../shared/collections';
 
 interface EventRow {
   id: string;
@@ -49,6 +50,14 @@ async function readEvents(
       .bind(...values),
   ]);
   const rows = parents.results as unknown as EventRow[];
+  const monitorsByEvent = groupBy(
+    monitors.results as unknown as (AdminEvent['monitors'][number] & { event_id: string })[],
+    (item) => item.event_id,
+  );
+  const updatesByEvent = groupBy(
+    updates.results as unknown as (AdminEvent['updates'][number] & { event_id: string })[],
+    (item) => item.event_id,
+  );
   return rows.map((row) => ({
     id: row.id,
     title: row.title,
@@ -63,33 +72,27 @@ async function readEvents(
     endedAt: row.ended_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    monitors: (monitors.results as unknown as (AdminEvent['monitors'][number] & { event_id: string })[])
-      .filter((item) => item.event_id === row.id)
-      .map(({ id, name }) => ({ id, name })),
-    updates: (updates.results as unknown as (AdminEvent['updates'][number] & { event_id: string })[])
-      .filter((item) => item.event_id === row.id)
-      .map(({ event_id: _eventId, ...item }) => item),
+    monitors: (monitorsByEvent.get(row.id) ?? []).map(({ id, name }) => ({ id, name })),
+    updates: (updatesByEvent.get(row.id) ?? []).map(({ event_id: _eventId, ...item }) => item),
   }));
 }
 export async function getEvent(db: D1Database, id: string) {
   return (await readEvents(db, 'SELECT e.* FROM events e WHERE e.id = ?', [id]))[0] ?? null;
 }
 export async function listPublicEvents(db: D1Database, monitorId?: string): Promise<StatusEvent[]> {
+  const scope = monitorId ? 'e.id IN (SELECT event_id FROM event_monitors WHERE monitor_id = ?) AND' : '';
   const rows = await readEvents(
     db,
-    `WITH scoped AS (
-      SELECT e.* FROM events e ${
-        monitorId
-          ? 'WHERE EXISTS (SELECT 1 FROM event_monitors em WHERE em.event_id = e.id AND em.monitor_id = ?)'
-          : ''
-      }
-    )
-    SELECT * FROM scoped
-    WHERE status = 'open' OR id IN (
-      SELECT id FROM scoped WHERE status != 'open' ORDER BY updated_at DESC, id DESC LIMIT 20
+    `SELECT * FROM (
+      SELECT e.* FROM events e WHERE ${scope} e.status = 'open'
+      UNION ALL
+      SELECT * FROM (
+        SELECT e.* FROM events e WHERE ${scope} e.status != 'open'
+        ORDER BY e.updated_at DESC, e.id DESC LIMIT 20
+      )
     )
     ORDER BY updated_at DESC, id DESC`,
-    monitorId ? [monitorId] : [],
+    monitorId ? [monitorId, monitorId] : [],
   );
   return rows.map(publicEvent);
 }

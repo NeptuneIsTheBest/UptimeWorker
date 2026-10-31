@@ -14,6 +14,19 @@ export const message = (key: MessageKey, params?: MessageValues): Message => ({ 
 export const LOCALE_STORAGE_KEY = 'uptimeworker.locale';
 export const isLocale = (value: unknown): value is Locale => value === 'zh-CN' || value === 'en';
 
+const formatsByLocale = new Map<Locale, { number: Intl.NumberFormat; plural: Intl.PluralRules }>();
+function localeFormats(locale: Locale) {
+  let formats = formatsByLocale.get(locale);
+  if (!formats) {
+    formats = {
+      number: new Intl.NumberFormat(intlLocale(locale)),
+      plural: new Intl.PluralRules(intlLocale(locale)),
+    };
+    formatsByLocale.set(locale, formats);
+  }
+  return formats;
+}
+
 export function resolveLocale(saved: unknown, languages: readonly string[]): Locale {
   if (isLocale(saved)) return saved;
   return /^zh(?:-|$)/i.test(languages[0] ?? '') ? 'zh-CN' : 'en';
@@ -35,20 +48,21 @@ export function readLocale(): Locale {
 }
 export function translate(locale: Locale, key: MessageKey, values: MessageValues = {}): string {
   const entry: Translation = locale === 'en' ? en[key] : zh[key];
+  const formats = localeFormats(locale);
   const params = Object.fromEntries(
     Object.entries(values).map(([name, value]) => [
       name,
       typeof value === 'object'
         ? translate(locale, value.key, value.params)
         : typeof value === 'number'
-          ? new Intl.NumberFormat(intlLocale(locale)).format(value)
+          ? formats.number.format(value)
           : value,
     ]),
   );
   const template =
     typeof entry === 'string'
       ? entry
-      : new Intl.PluralRules(intlLocale(locale)).select(Number(values.count)) === 'one'
+      : formats.plural.select(Number(values.count)) === 'one'
         ? entry.one
         : entry.other;
   return interpolate(template, params);

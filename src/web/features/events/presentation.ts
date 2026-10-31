@@ -2,21 +2,34 @@ import { intlLocale, type Locale } from '../../../shared/locale';
 import { translate, type MessageKey } from '../../i18n/core';
 import type { EventUpdate, StatusEvent } from '../../../shared/events/types';
 
-export const eventTime = (time: number, locale: Locale = 'zh-CN') =>
-  new Intl.DateTimeFormat(intlLocale(locale), {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-    timeZoneName: 'short',
-  }).format(time);
+const dateFormats = new Map<Locale, Intl.DateTimeFormat>();
+const relativeFormats = new Map<Locale, Intl.RelativeTimeFormat>();
+
+export function eventTime(time: number, locale: Locale = 'zh-CN') {
+  let formatter = dateFormats.get(locale);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(intlLocale(locale), {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+      timeZoneName: 'short',
+    });
+    dateFormats.set(locale, formatter);
+  }
+  return formatter.format(time);
+}
 
 export function relativeEventTime(time: number, now: number, locale: Locale = 'zh-CN') {
-  const relativeTime = new Intl.RelativeTimeFormat(intlLocale(locale), { numeric: 'always' });
   const elapsed = Math.max(0, now - time);
   if (elapsed < 60_000) return translate(locale, 'time.justNow');
+  let relativeTime = relativeFormats.get(locale);
+  if (!relativeTime) {
+    relativeTime = new Intl.RelativeTimeFormat(intlLocale(locale), { numeric: 'always' });
+    relativeFormats.set(locale, relativeTime);
+  }
   for (const [duration, unit] of [
     [604_800_000, 'week'],
     [86_400_000, 'day'],

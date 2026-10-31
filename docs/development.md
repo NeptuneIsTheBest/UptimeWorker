@@ -32,19 +32,26 @@ npm run test:e2e
 
 Run individual checks as needed:
 
-| Command                                                     | Purpose                                    |
-| ----------------------------------------------------------- | ------------------------------------------ |
-| `npm run typecheck`                                         | TypeScript type checks                     |
-| `npm test`                                                  | Unit and D1 integration tests              |
-| `npm run test:watch`                                        | Vitest in watch mode                       |
-| `npm run build`                                             | Production build and output checks         |
-| `npm test -- tests/platform/api.test.ts`                    | API boundary checks only                   |
-| `npm run test:e2e -- tests/e2e/monitors/management.spec.ts` | Run one browser test file independently    |
-| `npm run format`                                            | Format the entire repository with Prettier |
+| Command                                                     | Purpose                                     |
+| ----------------------------------------------------------- | ------------------------------------------- |
+| `npm run typecheck`                                         | TypeScript type checks                      |
+| `npm test`                                                  | Unit and D1 integration tests               |
+| `npm run test:watch`                                        | Vitest in watch mode                        |
+| `npm run test:performance`                                  | Aggregation timings and D1 row-usage checks |
+| `npm run build`                                             | Production build and output checks          |
+| `npm test -- tests/platform/api.test.ts`                    | API boundary checks only                    |
+| `npm run test:e2e -- tests/e2e/monitors/management.spec.ts` | Run one browser test file independently     |
+| `npm run format`                                            | Format the entire repository with Prettier  |
 
 For selected files, use `npx prettier --write <file-path>`; replace `--write` with `--check` to check without changing files.
 
 To use a locally installed Chromium, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` to its executable path.
+
+### Performance benchmarks
+
+`npm run test:performance` uses disposable local D1 data: 10, 100, and 500 monitors with 90 daily rows each, plus 10,000 events with five still open. It compares aggregation output with the original algorithm and reports median local execution times. `snapshotRowsRead` covers the monitor/statistics batch; event metrics distinguish parent selection from the full event batch. Timings are informational, while correctness and D1 row budgets are asserted. The benchmarks are also part of `npm test`.
+
+An ordinary same-day successful check writes 6 rows in the local D1 fixture, compared with 7 before the composite-key change; replay writes none. The first sample of a day and incident transitions have additional writes. Public event parent selection must read fewer than 100 rows in the event fixture. These are isolated measurements, not total account usage or production CPU guarantees; use Worker CPU metrics and `scheduled_run` row counters after deployment.
 
 ## Test responsibilities and isolation
 
@@ -56,6 +63,7 @@ To use a locally installed Chromium, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` to its
 | [settings](../tests/features/settings/)                                       | Settings validation, tokens, and concurrent saves                             |
 | [status](../tests/features/status/)                                           | Overall status, maintenance boundaries, and data errors                       |
 | [platform](../tests/platform/)                                                | API contracts, authentication, caching, migrations, and deployment            |
+| [performance](../tests/performance/)                                          | Aggregation equivalence, timings, and D1 row budgets                          |
 | [Browser tests](../tests/e2e/)                                                | Page interactions, refreshes, forms, ordering, and responsive layouts         |
 
 Unit tests use HTTP / socket test doubles and local RSA keys for JWTs. D1 integration tests run migrations, SQL, and triggers in local workerd. D1 and browser tests require loopback port access.
@@ -76,7 +84,9 @@ Code is divided into `web / worker / shared` layers, with monitors, groups, even
 
 `0001_initial.sql` is the initial-release baseline for new databases. It creates the complete monitoring, grouping, event, settings, and scheduler schema, including indexes and triggers. It seeds global settings, the scheduler lease row, and the internal `__ungrouped__` ordering record at position `0`; ungrouped monitors retain `group_id = NULL`.
 
-Use a fresh local database or a separate persistence directory to test initialization; existing local databases are not automatically reset.
+The baseline stores check results in a `WITHOUT ROWID` table keyed by `(monitor_id, scheduled_at)`, with indexes for time-based history and retention. Open and closed event partial indexes bound public event selection; the group-order index also serves monitor group lookups.
+
+Use a fresh local database or a separate persistence directory to test initialization; existing local databases are not automatically reset. Databases initialized with an earlier development baseline are not upgraded by reapplying `0001_initial.sql`. Preserve any needed data before choosing a fresh directory or explicitly rebuilding disposable development data.
 
 Add subsequent database changes as `migrations/0002_description.sql`, then continue in numerical order. Do not edit migrations already applied in production. Apply migrations before deploying code. Run `npm run db:migrate` locally; the deployment workflow applies remote migrations. Review [database recovery](deployment.md#rollback-and-database-recovery) before rollbacks.
 

@@ -14,9 +14,13 @@ import { effectiveStatus } from '../monitors/status';
 import { useNow } from '../../hooks/useNow';
 import { MonitorCard } from '../monitors/MonitorCard';
 import { UNGROUPED_ID } from '../../../shared/groups/types';
-import { monitorGroupKey, orderedGroups } from '../../../shared/groups/ordering';
+import { orderedGroups } from '../../../shared/groups/ordering';
 import { GroupHeading } from '../groups/GroupHeading';
 import { useCollapsedGroups } from '../groups/useCollapsedGroups';
+import { groupBy } from '../../../shared/collections';
+import type { PublicMonitor } from '../../../shared/monitors/types';
+
+const EMPTY_MONITORS: PublicMonitor[] = [];
 
 export function StatusPage() {
   const { t, locale } = useI18n();
@@ -28,34 +32,46 @@ export function StatusPage() {
   const [groupFilter, setGroupFilter] = useState('all');
   const collapsedGroups = useCollapsedGroups('public');
   const filtering = search !== '' || filter !== 'all' || groupFilter !== 'all';
-  const displayGroups = data
-    ? orderedGroups(data.groups, { ...data.ungrouped, name: t('groups.ungrouped') })
-    : [];
-  const monitors = data?.monitors ?? [];
-  const statuses = monitors.map((m) => effectiveStatus(m, now));
+  const displayGroups = useMemo(
+    () => (data ? orderedGroups(data.groups, { ...data.ungrouped, name: t('groups.ungrouped') }) : []),
+    [data?.groups, data?.ungrouped, t],
+  );
+  const knownGroups = useMemo(() => new Set(data?.groups.map((group) => group.id)), [data?.groups]);
+  const monitors = data?.monitors ?? EMPTY_MONITORS;
+  const statusById = useMemo(
+    () => new Map(monitors.map((monitor) => [monitor.id, effectiveStatus(monitor, now)])),
+    [monitors, now],
+  );
+  const statuses = [...statusById.values()];
   const up = statuses.filter((s) => s === 'up').length;
   const active = statuses.filter((s) => s !== 'paused').length;
   const summary = getStatusSummary(statuses, data ? data.events : [], now, Boolean(error), locale);
-  const totals = monitors
-    .flatMap((m) => m.days.slice(-30))
-    .reduce((a, d) => ({ success: a.success + d.successful, total: a.total + d.total }), {
-      success: 0,
-      total: 0,
-    });
+  const totals = useMemo(() => {
+    let success = 0;
+    let total = 0;
+    for (const monitor of monitors) {
+      for (let index = Math.max(0, monitor.days.length - 30); index < monitor.days.length; index++) {
+        success += monitor.days[index].successful;
+        total += monitor.days[index].total;
+      }
+    }
+    return { success, total };
+  }, [monitors]);
   const latencies = monitors
-    .filter((m) => effectiveStatus(m, now) === 'up' && m.latencyMs !== null)
+    .filter((m) => statusById.get(m.id) === 'up' && m.latencyMs !== null)
     .map((m) => m.latencyMs!);
-  const visible = useMemo(
-    () =>
-      monitors.filter(
-        (m) =>
-          m.name.toLowerCase().includes(search.toLowerCase()) &&
-          (filter === 'all' || effectiveStatus(m, now) === filter) &&
-          (groupFilter === 'all' ||
-            monitorGroupKey(m.groupId, data ? data.groups : []) === (groupFilter || UNGROUPED_ID)),
-      ),
-    [monitors, search, filter, groupFilter, now, data?.groups],
-  );
+  const { visible, membersByGroup } = useMemo(() => {
+    const query = search.toLowerCase();
+    const groupOf = (monitor: PublicMonitor) =>
+      monitor.groupId !== null && knownGroups.has(monitor.groupId) ? monitor.groupId : UNGROUPED_ID;
+    const visible = monitors.filter(
+      (monitor) =>
+        monitor.name.toLowerCase().includes(query) &&
+        (filter === 'all' || statusById.get(monitor.id) === filter) &&
+        (groupFilter === 'all' || groupOf(monitor) === (groupFilter || UNGROUPED_ID)),
+    );
+    return { visible, membersByGroup: groupBy(visible, groupOf) };
+  }, [monitors, search, filter, groupFilter, statusById, knownGroups]);
   return (
     <Layout siteName={data?.siteName}>
       <section className={`status-hero ${summary.tone}`}>
@@ -183,9 +199,7 @@ export function StatusPage() {
             </Empty>
           ) : (
             displayGroups.map((group) => {
-              const members = visible.filter(
-                (monitor) => monitorGroupKey(monitor.groupId, data ? data.groups : []) === group.id,
-              );
+              const members = membersByGroup.get(group.id) ?? [];
               const collapsed = !filtering && collapsedGroups.isCollapsed(group.id);
               const controls = `public-group-${group.id}`;
               return (
@@ -202,7 +216,11 @@ export function StatusPage() {
                     />
                     <div className="monitor-group-list" id={controls} hidden={collapsed}>
                       {members.map((monitor) => (
-                        <MonitorCard key={monitor.id} monitor={monitor} now={now} />
+                        <MonitorCard
+                          key={monitor.id}
+                          monitor={monitor}
+                          status={statusById.get(monitor.id)!}
+                        />
                       ))}
                     </div>
                   </section>

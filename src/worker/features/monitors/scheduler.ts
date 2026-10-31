@@ -66,6 +66,7 @@ export async function runScheduled(
   count([lease]);
   if (!lease.results.length) return metrics;
   metrics.claimed = true;
+  let released = false;
   try {
     const { monitors, options, performance, reads } = await getProbeSnapshot(env.DB, { slot });
     count(reads);
@@ -126,8 +127,8 @@ export async function runScheduled(
         (SELECT id FROM event_suppressions WHERE ends_at < ? ORDER BY ends_at LIMIT 100)`,
       ).bind(now() - 7 * DAY),
       env.DB.prepare(
-        `DELETE FROM check_results WHERE id IN
-        (SELECT id FROM check_results WHERE checked_at < ? ORDER BY checked_at LIMIT 500)`,
+        `DELETE FROM check_results WHERE (monitor_id, scheduled_at) IN
+        (SELECT monitor_id, scheduled_at FROM check_results WHERE checked_at < ? ORDER BY checked_at LIMIT 500)`,
       ).bind(now() - 7 * DAY),
       env.DB.prepare(
         `DELETE FROM daily_stats WHERE (monitor_id, day) IN
@@ -139,14 +140,17 @@ export async function runScheduled(
       ).bind(slot, owner, now()),
     ]);
     count(housekeeping);
+    released = housekeeping[3].meta.changes > 0;
     return metrics;
   } finally {
-    const released = await env.DB.prepare(
-      'UPDATE scheduler_state SET lease_until = 0, lease_owner = NULL WHERE id = 1 AND lease_owner = ?',
-    )
-      .bind(owner)
-      .run();
-    count([released]);
+    if (!released) {
+      const release = await env.DB.prepare(
+        'UPDATE scheduler_state SET lease_until = 0, lease_owner = NULL WHERE id = 1 AND lease_owner = ?',
+      )
+        .bind(owner)
+        .run();
+      count([release]);
+    }
     metrics.elapsedMs = Math.max(0, now() - started);
     console.info(JSON.stringify({ event: 'scheduled_run', ...metrics }));
   }

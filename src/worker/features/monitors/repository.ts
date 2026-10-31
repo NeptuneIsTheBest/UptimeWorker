@@ -15,7 +15,10 @@ export function monitorConfig(row: MonitorRow): MonitorConfig {
     enabled: row.enabled === 1,
   });
 }
-export function currentStatus(row: MonitorRow, now: number): MonitorStatus {
+export function currentStatus(
+  row: Pick<MonitorRow, 'enabled' | 'last_checked_at' | 'interval_minutes' | 'last_ok'>,
+  now: number,
+): MonitorStatus {
   if (!row.enabled) return 'paused';
   if (row.last_checked_at === null) return 'unknown';
   if (now - row.last_checked_at > row.interval_minutes * 120_000) return 'stale';
@@ -39,10 +42,11 @@ export async function findMonitor(db: D1Database, id: string) {
 export async function listMonitors(db: D1Database) {
   return (await db.prepare(orderedMonitorsQuery).all<MonitorRow>()).results;
 }
-export const orderedMonitorsQuery = `SELECT m.* FROM monitors m
+export const monitorsInDisplayOrder = `FROM monitors m
   LEFT JOIN monitor_groups g ON g.id = COALESCE(m.group_id, '${UNGROUPED_ID}')
   ORDER BY g.id IS NULL, g.sort_order, g.id = '${UNGROUPED_ID}', g.created_at, g.id,
     m.sort_order, m.created_at, m.id`;
+export const orderedMonitorsQuery = `SELECT m.* ${monitorsInDisplayOrder}`;
 export async function createMonitor(
   db: D1Database,
   config: MonitorConfig,

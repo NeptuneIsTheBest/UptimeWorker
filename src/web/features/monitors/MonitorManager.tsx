@@ -1,6 +1,6 @@
 import { message, errorMessage, displayMessage, NoticeError, type DisplayMessage } from '../../i18n/core';
 import { useI18n } from '../../i18n/I18nProvider';
-import { useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { ERROR_LABELS } from './labels';
 import type { AdminMonitor, MonitorConfig, ProbeResult } from '../../../shared/monitors/types';
 import { api } from '../../lib/api';
@@ -17,9 +17,12 @@ import { SortControls } from '../../components/SortControls';
 import { useReorder } from '../../hooks/useReorder';
 import { orderItems } from '../../../shared/ordering';
 import { UNGROUPED_ID } from '../../../shared/groups/types';
-import { monitorGroupKey, orderedGroups } from '../../../shared/groups/ordering';
+import { orderedGroups } from '../../../shared/groups/ordering';
 import { GroupHeading } from '../groups/GroupHeading';
 import { useCollapsedGroups } from '../groups/useCollapsedGroups';
+import { groupBy } from '../../../shared/collections';
+
+const EMPTY_MONITORS: AdminMonitor[] = [];
 
 export function MonitorManager({
   remote,
@@ -44,12 +47,18 @@ export function MonitorManager({
   const [busy, setBusy] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<DisplayMessage | null>(null);
   const collapsedGroups = useCollapsedGroups('admin');
-  const displayGroups = data
-    ? orderedGroups(data.groups, { ...data.ungrouped, name: t('groups.ungrouped') })
-    : [];
-  const groupOf = (monitor: AdminMonitor) => monitorGroupKey(monitor.groupId, data ? data.groups : []);
+  const displayGroups = useMemo(
+    () => (data ? orderedGroups(data.groups, { ...data.ungrouped, name: t('groups.ungrouped') }) : []),
+    [data?.groups, data?.ungrouped, t],
+  );
+  const groupsById = useMemo(() => new Map(data?.groups.map((group) => [group.id, group])), [data?.groups]);
+  const groupOf = useCallback(
+    (monitor: AdminMonitor) =>
+      monitor.groupId !== null && groupsById.has(monitor.groupId) ? monitor.groupId : UNGROUPED_ID,
+    [groupsById],
+  );
   const ordering = useReorder({
-    items: data?.monitors ?? [],
+    items: data?.monitors ?? EMPTY_MONITORS,
     disabled: orderingDisabled || !!busy || !!editor || !!deleting || remote.locked,
     suspend: remote.suspend,
     scope: groupOf,
@@ -74,6 +83,7 @@ export function MonitorManager({
       });
     },
   });
+  const membersByGroup = useMemo(() => groupBy(ordering.items, groupOf), [ordering.items, groupOf]);
   async function action(id: string, work: () => Promise<DisplayMessage>) {
     setBusy(id);
     setNotice(null);
@@ -169,7 +179,7 @@ export function MonitorManager({
                 </Empty>
               ) : (
                 displayGroups.map((group) => {
-                  const members = ordering.items.filter((monitor) => groupOf(monitor) === group.id);
+                  const members = membersByGroup.get(group.id) ?? [];
                   const collapsed = collapsedGroups.isCollapsed(group.id);
                   const controls = `admin-group-${group.id}`;
                   return (
@@ -207,8 +217,7 @@ export function MonitorManager({
                                   <div className="monitor-meta">
                                     <span className="protocol">{monitor.type.toUpperCase()}</span>
                                     <span>
-                                      {data.groups.find((group) => group.id === monitor.groupId)?.name ??
-                                        t('groups.ungrouped')}
+                                      {groupsById.get(monitor.groupId ?? '')?.name ?? t('groups.ungrouped')}
                                     </span>
                                     <span>{t('monitor.interval', { count: monitor.intervalMinutes })}</span>
                                     <span>{t('monitor.timeout', { count: monitor.timeoutSeconds })}</span>

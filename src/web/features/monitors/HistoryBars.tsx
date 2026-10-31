@@ -1,8 +1,9 @@
 import { useI18n } from '../../i18n/I18nProvider';
 import type { DailyStat } from '../../../shared/monitors/types';
 import { percent } from '../../lib/format';
+import { memo } from 'react';
 
-export function HistoryBars({ days }: { days: DailyStat[] }) {
+export const HistoryBars = memo(function HistoryBars({ days }: { days: DailyStat[] }) {
   const { t, locale } = useI18n();
   return (
     <div className="history">
@@ -21,7 +22,7 @@ export function HistoryBars({ days }: { days: DailyStat[] }) {
       </div>
     </div>
   );
-}
+});
 export function Legend() {
   const { t } = useI18n();
   return (

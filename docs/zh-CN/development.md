@@ -37,6 +37,7 @@ npm run test:e2e
 | `npm run typecheck`                                         | TypeScript 类型检查          |
 | `npm test`                                                  | 单元与 D1 集成测试           |
 | `npm run test:watch`                                        | 监听模式运行 Vitest          |
+| `npm run test:performance`                                  | 聚合耗时与 D1 行用量验证     |
 | `npm run build`                                             | 生产构建及产物检查           |
 | `npm test -- tests/platform/api.test.ts`                    | 只验证 API 边界              |
 | `npm run test:e2e -- tests/e2e/monitors/management.spec.ts` | 独立运行一个浏览器测试文件   |
@@ -45,6 +46,12 @@ npm run test:e2e
 局部格式化使用 `npx prettier --write <文件路径>`，仅检查时改用 `--check`。
 
 使用本机 Chromium 时，将 `PLAYWRIGHT_CHROMIUM_EXECUTABLE` 设为可执行文件路径。
+
+### 性能基准
+
+`npm run test:performance` 使用可丢弃的本地 D1 数据：10、100、500 个监控，每个 90 条日统计，以及含 5 条未结束事件的 1 万条事件。测试对照原聚合算法验证输出一致，并报告本地执行耗时的中位数；`snapshotRowsRead` 对应监控与日统计批次，事件指标区分事件筛选与完整事件批次。耗时仅供比较，正确性与 D1 行用量预算执行断言。这些基准也包含在 `npm test` 中。
+
+本地 D1 夹具中，普通同日成功检测写入 6 行，复合主键调整前为 7 行；重复样本不产生写入。每天首条样本和事件状态转换会增加写入。事件夹具要求公开事件筛选读取少于 100 行。这些是隔离测量，不代表账户总用量或生产 CPU 保证；部署后结合 Worker CPU 指标与 `scheduled_run` 行计数验证。
 
 ## 测试职责与隔离
 
@@ -56,6 +63,7 @@ npm run test:e2e
 | [settings](../../tests/features/settings/)                                          | 设置校验、密钥与并发保存               |
 | [status](../../tests/features/status/)                                              | 总状态、维护时间边界与数据错误         |
 | [platform](../../tests/platform/)                                                   | API 契约、鉴权、缓存、迁移与部署       |
+| [performance](../../tests/performance/)                                             | 聚合结果一致性、耗时与 D1 行预算       |
 | [浏览器测试](../../tests/e2e/)                                                      | 页面交互、刷新、表单、排序与响应式布局 |
 
 单元测试使用 HTTP / socket 替身，JWT 使用本地 RSA 密钥；D1 集成测试在本地 workerd 中运行迁移、SQL 和触发器。D1 和浏览器测试需要监听回环端口。
@@ -76,7 +84,9 @@ npm run test:e2e
 
 `0001_initial.sql` 是面向全新数据库的首次发布基线，直接创建完整的监控、分组、事件、设置与调度结构，包括索引和触发器。它初始化全局设置、调度租约行，以及排序值为 `0` 的内部 `__ungrouped__` 记录；未分组节点仍使用 `group_id = NULL`。
 
-验证初始化时使用全新的本地数据库或独立持久化目录；现有本地数据库不会自动重置。
+基线中的检测明细采用 `(monitor_id, scheduled_at)` 复合主键的 `WITHOUT ROWID` 表，保留历史与清理时间索引。未结束、已结束事件的部分索引限制公开事件筛选范围；分组排序索引同时支持监控的分组查询。
+
+验证初始化时使用全新的本地数据库或独立持久化目录；现有本地数据库不会自动重置。此前开发基线创建的数据库不会因再次应用 `0001_initial.sql` 而升级。先保留需要的数据，再选择新目录或明确重建可丢弃的开发数据。
 
 后续数据库变更从 `migrations/0002_description.sql` 开始，按编号递增，不修改已应用到生产的迁移。先迁移再部署代码；本地执行 `npm run db:migrate`，远端由部署工作流应用。回滚前查看[数据库恢复](deployment.md#回滚与数据库恢复)。
 

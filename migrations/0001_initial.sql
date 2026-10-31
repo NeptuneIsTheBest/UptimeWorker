@@ -32,12 +32,10 @@ CREATE TABLE monitors (
   sort_order INTEGER NOT NULL DEFAULT 0
     CHECK (typeof(sort_order) = 'integer' AND sort_order >= 0)
 );
-CREATE INDEX monitors_group ON monitors(group_id);
 CREATE INDEX monitors_due ON monitors(enabled, next_check_at, id);
 CREATE INDEX monitors_display_order ON monitors(group_id, sort_order, created_at, id);
 
 CREATE TABLE check_results (
-  id INTEGER PRIMARY KEY,
   monitor_id TEXT NOT NULL REFERENCES monitors(id) ON DELETE CASCADE,
   monitor_version INTEGER NOT NULL,
   scheduled_at INTEGER NOT NULL,
@@ -46,8 +44,8 @@ CREATE TABLE check_results (
   latency_ms INTEGER NOT NULL CHECK (latency_ms >= 0),
   http_status INTEGER,
   error_code TEXT,
-  UNIQUE (monitor_id, scheduled_at)
-);
+  PRIMARY KEY (monitor_id, scheduled_at)
+) WITHOUT ROWID;
 CREATE INDEX checks_monitor_time ON check_results(monitor_id, checked_at);
 CREATE INDEX checks_retention ON check_results(checked_at);
 
@@ -108,6 +106,8 @@ CREATE TABLE events (
     (type = 'maintenance' AND starts_at IS NOT NULL AND ends_at > starts_at))
 );
 CREATE INDEX events_recent ON events(updated_at DESC, id DESC);
+CREATE INDEX events_open_recent ON events(updated_at DESC, id DESC) WHERE status = 'open';
+CREATE INDEX events_closed_recent ON events(updated_at DESC, id DESC) WHERE status != 'open';
 CREATE INDEX events_monitor_status ON events(auto_monitor_id, status);
 CREATE UNIQUE INDEX events_one_open_auto ON events(auto_monitor_id)
   WHERE source = 'automatic' AND status = 'open';

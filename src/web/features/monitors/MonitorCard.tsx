@@ -1,11 +1,18 @@
 import { useI18n } from '../../i18n/I18nProvider';
-import type { PublicMonitor } from '../../../shared/monitors/types';
+import type { MonitorStatus, PublicMonitor } from '../../../shared/monitors/types';
+import { memo } from 'react';
 import { HistoryBars } from './HistoryBars';
 import { Icon } from '../../components/Icon';
-import { StatusBadge, effectiveStatus } from './status';
+import { StatusBadge } from './status';
 import { latency, percent } from '../../lib/format';
 
-export function MonitorCard({ monitor, now }: { monitor: PublicMonitor; now: number }) {
+export const MonitorCard = memo(function MonitorCard({
+  monitor,
+  status,
+}: {
+  monitor: PublicMonitor;
+  status: MonitorStatus;
+}) {
   const { t, locale } = useI18n();
   return (
     <article className="monitor-card">
@@ -33,10 +40,10 @@ export function MonitorCard({ monitor, now }: { monitor: PublicMonitor; now: num
             <strong>{percent(monitor.uptime30d, locale)}</strong>
             <span>{t('monitor.uptime')}</span>
           </div>
-          <StatusBadge status={effectiveStatus(monitor, now)} />
+          <StatusBadge status={status} />
         </div>
       </div>
       <HistoryBars days={monitor.days} />
     </article>
   );
-}
+});

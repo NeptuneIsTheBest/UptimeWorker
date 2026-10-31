@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { createMonitor, findMonitor, updateMonitor } from '../../../src/worker/features/monitors/repository';
 import { getHistory, getStatus } from '../../../src/worker/features/status/queries';
 import { runScheduled } from '../../../src/worker/features/monitors/scheduler';
+import { wrapDatabase } from '../../support/database';
 import {
   databaseFixture,
   environment,
@@ -59,6 +60,54 @@ describe('D1 scheduling and aggregation', () => {
     await runScheduled({ DB: fixture.db }, timestamp, probe, () => timestamp);
     expect(await count('check_results')).toBe(1);
     expect(await fixture.db.prepare('SELECT total FROM daily_stats').first('total')).toBe(1);
+  });
+  it('releases a completed lease only once and still releases it after a housekeeping failure', async () => {
+    await createMonitor(fixture.db, { ...httpConfig, intervalMinutes: 1 }, timestamp);
+    const queries: string[] = [];
+    const observed = wrapDatabase(fixture.db, {
+      prepare: (sql) => {
+        queries.push(sql);
+        return fixture.db.prepare(sql);
+      },
+    });
+    await runScheduled(
+      { DB: observed },
+      timestamp,
+      async () => success(),
+      () => timestamp,
+    );
+    expect(queries.filter((sql) => sql.startsWith('UPDATE scheduler_state SET lease_until'))).toHaveLength(0);
+    const failCleanup = wrapDatabase(fixture.db, {
+      batch: async <T>(statements: D1PreparedStatement[]) => {
+        if (statements.length === 4) throw new Error('cleanup unavailable');
+        return fixture.db.batch<T>(statements);
+      },
+    });
+    const next = timestamp + 60_000;
+    await expect(
+      runScheduled(
+        { DB: failCleanup },
+        next,
+        async () => success(next),
+        () => next,
+      ),
+    ).rejects.toThrow('cleanup unavailable');
+    expect(
+      await fixture.db
+        .prepare('SELECT lease_owner, lease_until, last_completed_slot FROM scheduler_state')
+        .first(),
+    ).toEqual({ lease_owner: null, lease_until: 0, last_completed_slot: timestamp });
+    expect(await count('check_results')).toBe(2);
+    expect(
+      (
+        await runScheduled(
+          { DB: fixture.db },
+          next,
+          async () => success(next),
+          () => next,
+        )
+      ).claimed,
+    ).toBe(true);
   });
   it('leases prevent overlapping invocations across minutes and skip missed rounds', async () => {
     await createMonitor(fixture.db, { ...httpConfig, intervalMinutes: 1 }, timestamp);
@@ -259,6 +308,40 @@ describe('D1 scheduling and aggregation', () => {
       () => oldestExpired,
     );
     expect(await count('daily_stats')).toBe(2);
+  });
+  it('bounds composite-key cleanup and preserves samples exactly at the retention boundary', async () => {
+    const row = (await createMonitor(fixture.db, { ...httpConfig, enabled: false }, timestamp))!;
+    const cutoff = timestamp - 7 * 86_400_000;
+    await fixture.db
+      .prepare(
+        `WITH RECURSIVE n(x) AS (
+      VALUES(0) UNION ALL SELECT x + 1 FROM n WHERE x < 500
+    ) INSERT INTO check_results(monitor_id, monitor_version, scheduled_at, checked_at, ok, latency_ms)
+      SELECT ?, 1, ? - x, ? - 1, 1, 42 FROM n`,
+      )
+      .bind(row.id, cutoff - 1, cutoff)
+      .run();
+    await fixture.db
+      .prepare(
+        `INSERT INTO check_results(monitor_id, monitor_version, scheduled_at, checked_at, ok, latency_ms)
+      VALUES (?, 1, ?, ?, 1, 42)`,
+      )
+      .bind(row.id, cutoff, cutoff)
+      .run();
+    const probe = vi.fn(async () => success());
+    await runScheduled({ DB: fixture.db }, timestamp, probe, () => timestamp);
+    expect(probe).not.toHaveBeenCalled();
+    expect(await count('check_results')).toBe(2);
+    expect(
+      await fixture.db
+        .prepare('SELECT COUNT(*) AS n FROM check_results WHERE checked_at = ?')
+        .bind(cutoff)
+        .first('n'),
+    ).toBe(1);
+    expect(await fixture.db.prepare('SELECT total FROM daily_stats').first('total')).toBe(502);
+    await runScheduled({ DB: fixture.db }, timestamp + 60_000, probe, () => timestamp + 60_000);
+    expect(await count('check_results')).toBe(0);
+    expect(await fixture.db.prepare('SELECT total FROM daily_stats').first('total')).toBe(502);
   });
   it('returns every minute in the last 24 hours even after switching to a longer interval', async () => {
     const row = (await createMonitor(fixture.db, { ...httpConfig, intervalMinutes: 1 }, timestamp))!;
