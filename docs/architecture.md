@@ -105,8 +105,6 @@ The peak simulation makes all enabled monitors due at time zero, orders equal du
 
 ### Platform reference
 
-Reference values checked on 2026-10-31:
-
 | Resource                                 | Workers Free  | Workers Paid              |
 | ---------------------------------------- | ------------- | ------------------------- |
 | HTTP subrequests per invocation, default | 50            | 10,000                    |
