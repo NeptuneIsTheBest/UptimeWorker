@@ -1,6 +1,4 @@
 import { isPageRefreshSeconds, parseGlobalSettingsPatch } from '../../../shared/settings/validation';
-import { DEFAULT_PAGE_REFRESH_SECONDS } from '../../../shared/settings/constants';
-import { DEFAULT_PERFORMANCE } from '../../../shared/settings/performance';
 import type { GlobalSettings } from '../../../shared/settings/types';
 import type { SettingsRow, StoredSettings } from './types';
 
@@ -10,28 +8,22 @@ const SETTINGS_QUERY = `SELECT ${SETTINGS_COLUMNS} FROM global_settings WHERE id
 export function storedSettings(row: SettingsRow | undefined): StoredSettings {
   if (!row) throw new Error('Global settings are unavailable');
   try {
+    const current: GlobalSettings = {
+      version: row.version,
+      performance: {
+        workersPlan: row.workers_plan,
+        concurrency: row.probe_concurrency,
+        maxChecksPerRun: row.max_checks_per_run,
+        timeBudgetSeconds: row.time_budget_seconds,
+      },
+      pageRefreshSeconds: row.page_refresh_seconds,
+      autoIncidentAfterMinutes: row.auto_incident_after_minutes,
+      wafBypassEnabled: row.waf_bypass_enabled === 1,
+      wafBypassTokenConfigured: Boolean(row.waf_bypass_token),
+    };
     const parsed = parseGlobalSettingsPatch(
-      {
-        version: row.version,
-        performance: {
-          workersPlan: row.workers_plan,
-          concurrency: row.probe_concurrency,
-          maxChecksPerRun: row.max_checks_per_run,
-          timeBudgetSeconds: row.time_budget_seconds,
-        },
-        pageRefreshSeconds: row.page_refresh_seconds,
-        autoIncidentAfterMinutes: row.auto_incident_after_minutes,
-        wafBypassEnabled: row.waf_bypass_enabled === 1,
-        wafBypassToken: row.waf_bypass_token ?? '',
-      },
-      {
-        version: row.version,
-        pageRefreshSeconds: DEFAULT_PAGE_REFRESH_SECONDS,
-        performance: DEFAULT_PERFORMANCE,
-        autoIncidentAfterMinutes: 5,
-        wafBypassEnabled: false,
-        wafBypassTokenConfigured: false,
-      },
+      { ...current, wafBypassToken: row.waf_bypass_token ?? '' },
+      current,
     );
     return {
       version: parsed.version,

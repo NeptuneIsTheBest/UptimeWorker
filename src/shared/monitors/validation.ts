@@ -90,7 +90,6 @@ const reservedHeaders = new Set([
   'upgrade',
 ]);
 export function parseRequestHeaders(value: unknown): Record<string, string> {
-  if (value === undefined) return {};
   if (!value || typeof value !== 'object' || Array.isArray(value))
     throw new ValidationError('headers_object_required');
   const entries: [string, string][] = [];
@@ -115,9 +114,9 @@ export function parseRequestHeaders(value: unknown): Record<string, string> {
 }
 
 function parseRequestBody(value: unknown, method: HttpMethod): RequestBody | null {
-  if (value === undefined || value === null) return null;
+  if (value === null) return null;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new ValidationError('body_invalid');
   if (method === 'GET' || method === 'HEAD') throw new ValidationError('body_method_unsupported');
-  if (typeof value !== 'object' || Array.isArray(value)) throw new ValidationError('body_invalid');
   const body = value as Record<string, unknown>;
   if ((body.format !== 'text' && body.format !== 'json') || typeof body.content !== 'string')
     throw new ValidationError('body_content_required');
@@ -144,8 +143,9 @@ function parseKeywords(value: unknown): string[] {
 }
 
 function parseResponseCheck(value: unknown, method: HttpMethod): ResponseCheck | null {
-  if (value === undefined || value === null) return null;
-  if (typeof value !== 'object' || Array.isArray(value)) throw new ValidationError('response_check_invalid');
+  if (value === null) return null;
+  if (!value || typeof value !== 'object' || Array.isArray(value))
+    throw new ValidationError('response_check_invalid');
   const check = value as Record<string, unknown>;
   if (typeof check.ignoreCase !== 'boolean') throw new ValidationError('ignore_case_invalid');
   const includes = parseKeywords(check.includes);
@@ -188,9 +188,9 @@ export function parseMonitorConfig(value: unknown): MonitorConfig {
   if (v.type === 'http') {
     if (typeof v.url !== 'string' || v.url.length > 2048) throw new ValidationError('url_too_long');
     const url = parseHttpUrl(v.url).toString();
-    const method = v.method === undefined ? 'GET' : (v.method as HttpMethod);
+    const method = v.method as HttpMethod;
     if (!HTTP_METHODS.includes(method)) throw new ValidationError('http_method_invalid');
-    const wafBypassEnabled = v.wafBypassEnabled === undefined ? false : v.wafBypassEnabled;
+    const wafBypassEnabled = v.wafBypassEnabled;
     if (typeof wafBypassEnabled !== 'boolean') throw new ValidationError('waf_enabled_invalid');
     if (wafBypassEnabled && !wafMonitorDomain(url)) throw new ValidationError('waf_domain_required');
     if (

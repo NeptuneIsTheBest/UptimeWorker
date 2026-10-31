@@ -6,6 +6,9 @@ test('public overview is responsive, filterable and makes stale results explicit
   const monitors = Array.from({ length: 4 }, (_, i) => sampleMonitor(i));
   const data: StatusResponse = {
     siteName: 'UptimeWorker',
+    groups: [],
+    ungrouped: { id: '__ungrouped__', sortOrder: 0 },
+    events: [],
     pageRefreshSeconds: 30,
     generatedAt: Date.now(),
     monitors,
@@ -33,10 +36,10 @@ test('public overview is responsive, filterable and makes stale results explicit
 test('public API errors offer recovery', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.route('**/api/status', (route) =>
-    route.fulfill({ status: 503, json: { error: '暂时无法连接数据库' } }),
+    route.fulfill({ status: 503, json: { code: 'service_unavailable' } }),
   );
   await page.goto('/');
-  await expect(page.getByRole('alert')).toContainText('暂时无法连接数据库');
+  await expect(page.getByRole('alert')).toContainText('服务暂时不可用，请稍后重试。');
   await expect(page.getByRole('heading', { name: '状态暂时不可用' })).toBeVisible();
   await expect(page.getByRole('button', { name: '重试' })).toBeVisible();
 });

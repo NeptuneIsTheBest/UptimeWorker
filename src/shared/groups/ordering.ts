@@ -9,6 +9,6 @@ export function orderedGroups<T extends { sortOrder: number }>(groups: readonly 
   return result;
 }
 
-export function monitorGroupKey(groupId: string | null | undefined, groups: readonly { id: string }[]) {
+export function monitorGroupKey(groupId: string | null, groups: readonly { id: string }[]) {
   return groups.some((group) => group.id === groupId) ? groupId! : UNGROUPED_ID;
 }

@@ -30,20 +30,20 @@ const detail = (event: StatusEvent, seconds = 30) => ({
   pageRefreshSeconds: seconds,
 });
 
-test('opens a shareable timeline with latest-only cards, legacy text and full local timestamps', async ({
+test('opens a shareable timeline with latest-only cards, escaped bodies and full local timestamps', async ({
   page,
 }, testInfo) => {
   await page.clock.install({ time: now });
   await page.clock.pauseAt(now);
   const latestBody =
     '维护正在进行，我们会持续同步进展。\n'.repeat(5) + '连接说明：' + 'very-long-hostname-'.repeat(24);
-  const legacyTitle = '<img src=x onerror=alert("legacy")> 维护准备完成';
+  const firstBody = '<img src=x onerror=alert("body")> 维护准备完成';
   const event = makeEvent({
     updates: [
       {
         id: 'a',
-        title: legacyTitle,
-        body: '已确认所有备用线路可用。',
+        title: 'Updated',
+        body: firstBody,
         status: null,
         source: 'manual',
         createdAt: now - 3_600_000,
@@ -63,6 +63,8 @@ test('opens a shareable timeline with latest-only cards, legacy text and full lo
       json: {
         siteName: '区域服务状态',
         monitors: [],
+        groups: [],
+        ungrouped: { id: '__ungrouped__', sortOrder: 0 },
         events: [event],
         generatedAt: now,
         pageRefreshSeconds: 30,
@@ -74,7 +76,7 @@ test('opens a shareable timeline with latest-only cards, legacy text and full lo
   const card = page.locator('.event-card');
   await expect(card.locator('.event-latest h4')).toHaveText('维护进行中');
   await expect(card).not.toContainText(event.body);
-  await expect(card).not.toContainText(legacyTitle);
+  await expect(card).not.toContainText(firstBody);
   await expect(card.locator('details')).toHaveCount(0);
   expect(await card.locator('.event-excerpt').evaluate((el) => getComputedStyle(el).webkitLineClamp)).toBe(
     '2',
@@ -86,7 +88,7 @@ test('opens a shareable timeline with latest-only cards, legacy text and full lo
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(event.title);
   await expect(page.locator('.event-last-updated time')).toHaveText('2分钟前');
   await expect(page.locator('.event-timeline h3')).toHaveText(['维护进行中', '进展更新', '计划维护']);
-  await expect(page.locator('.event-timeline .event-legacy-title')).toHaveText(legacyTitle);
+  await expect(page.locator('.event-timeline .event-body').nth(1)).toHaveText(firstBody);
   await expect(page.locator('.event-timeline img')).toHaveCount(0);
   await expect(page.locator('.event-timeline .event-body').first()).toHaveText(latestBody);
   await expect(page.locator('.event-timeline .event-body').last()).toHaveText(event.body);
@@ -126,11 +128,11 @@ test('refreshes event progress, keeps data on failure and derives maintenance bo
   await page.route(`**/api/events/${event.id}`, (route) => {
     calls++;
     return route.fulfill(
-      fail ? { status: 503, json: { error: '事件暂时无法读取' } } : { json: detail(event, seconds) },
+      fail ? { status: 503, json: { code: 'service_unavailable' } } : { json: detail(event, seconds) },
     );
   });
   await page.goto(`/events/${event.id}`);
-  await expect(page.getByRole('alert')).toContainText('事件暂时无法读取');
+  await expect(page.getByRole('alert')).toContainText('服务暂时不可用，请稍后重试。');
   await expect(page.locator('.event-detail')).toHaveCount(0);
   fail = false;
   await page.getByRole('button', { name: '重试', exact: true }).click();
@@ -166,7 +168,7 @@ test('refreshes event progress, keeps data on failure and derives maintenance bo
   };
   fail = true;
   await poll();
-  await expect(page.getByRole('alert')).toContainText('事件暂时无法读取');
+  await expect(page.getByRole('alert')).toContainText('服务暂时不可用，请稍后重试。');
   await expect(page.locator('.event-status')).toHaveText('已过计划时间');
   await expect(page.locator('.refresh-status time')).toHaveAttribute('datetime', lastRefreshed!);
   fail = false;
@@ -209,7 +211,7 @@ for (const status of ['open', 'resolved', 'stopped'] as const) {
           : [
               {
                 id: 'automatic-end',
-                title: null,
+                title: status === 'resolved' ? 'Resolved' : 'Stopped',
                 body: '检测结果说明。',
                 status,
                 source: 'automatic',

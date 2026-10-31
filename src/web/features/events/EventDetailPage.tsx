@@ -128,7 +128,6 @@ export function EventDetailPage({ id }: { id: string }) {
                         · {entry.source === 'automatic' ? t('event.automatic') : t('event.manual')}
                       </span>
                     </p>
-                    {entry.legacyTitle && <p className="event-legacy-title">{entry.legacyTitle}</p>}
                     <p className="event-body">{localizedEntryBody(entry, locale)}</p>
                   </li>
                 ))}

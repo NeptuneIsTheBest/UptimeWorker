@@ -134,8 +134,8 @@ for (const kind of ['groups', 'monitors'] as const) {
     await expect(rows).toHaveText(withUngrouped(['第二项', '第一项']));
     await expect(page.getByRole('button', { name: '下移 第二项', exact: true })).toBeDisabled();
     await expect.poll(() => Boolean(held)).toBe(true);
-    await held.fulfill({ status: 503, json: { error: '暂时无法保存' } });
-    await expect(page.getByRole('alert')).toContainText('暂时无法保存');
+    await held.fulfill({ status: 503, json: { code: 'service_unavailable' } });
+    await expect(page.getByRole('alert')).toContainText('服务暂时不可用，请稍后重试。');
     await expect(rows).toHaveText(withUngrouped(['第一项', '第二项']));
     await page.unroute(endpoint);
 
@@ -143,7 +143,7 @@ for (const kind of ['groups', 'monitors'] as const) {
     const latest = (await response.json()) as AdminResponse;
     const items = orderItems(
       kind === 'groups'
-        ? [...latest.groups!].reverse().concat({ ...latest.ungrouped!, name: '' })
+        ? [...latest.groups].reverse().concat({ ...latest.ungrouped, name: '' })
         : [...latest.monitors].reverse(),
     );
     expect(

@@ -1,7 +1,7 @@
 import type { EventConfig, EventUpdateConfig } from './types';
 import { ValidationError } from '../errors';
 import { object, parseText } from '../validation';
-import { isEventProgressTitle, completesEvent } from './progress';
+import { isEventProgressTitle } from './progress';
 
 export function parseEventConfig(value: unknown, allowEmptyMonitors = false): EventConfig {
   const v = object(value);
@@ -28,15 +28,8 @@ export function parseEventConfig(value: unknown, allowEmptyMonitors = false): Ev
 }
 export function parseEventUpdateConfig(value: unknown): EventUpdateConfig {
   const v = object(value);
-  const title =
-    v.title == null || (typeof v.title === 'string' && !v.title.trim())
-      ? null
-      : parseText(v.title, 'progress_title', 120);
+  const title = parseText(v.title, 'progress_title', 120);
   const body = parseText(v.body, 'progress_body', 4000);
-  if (title !== null && !isEventProgressTitle(title)) throw new ValidationError('event_progress_invalid');
-  if (v.resolve !== undefined && typeof v.resolve !== 'boolean')
-    throw new ValidationError('event_resolve_invalid');
-  if (title !== null && v.resolve !== undefined && v.resolve !== completesEvent(title))
-    throw new ValidationError('event_progress_conflict');
-  return { title, body, ...(v.resolve !== undefined ? { resolve: v.resolve } : {}) };
+  if (!isEventProgressTitle(title)) throw new ValidationError('event_progress_invalid');
+  return { title, body };
 }

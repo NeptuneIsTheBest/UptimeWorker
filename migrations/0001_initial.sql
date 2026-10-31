@@ -72,7 +72,6 @@ CREATE TABLE global_settings (
   id INTEGER PRIMARY KEY CHECK (id = 1),
   waf_bypass_enabled INTEGER NOT NULL DEFAULT 0 CHECK (waf_bypass_enabled IN (0, 1)),
   waf_bypass_token TEXT,
-  waf_bypass_domains_json TEXT NOT NULL DEFAULT '[]',
   version INTEGER NOT NULL DEFAULT 1 CHECK (version >= 1),
   page_refresh_seconds INTEGER NOT NULL DEFAULT 30
     CHECK (typeof(page_refresh_seconds) = 'integer' AND
@@ -129,7 +128,10 @@ CREATE TABLE event_updates (
   status TEXT CHECK (status IN ('open', 'resolved', 'stopped')),
   source TEXT NOT NULL CHECK (source IN ('manual', 'automatic')),
   created_at INTEGER NOT NULL,
-  title TEXT
+  title TEXT NOT NULL CHECK (title IN (
+    'Scheduled', 'Updated', 'In Progress', 'Completed',
+    'Investigating', 'Identified', 'Monitoring', 'Resolved', 'Stopped'
+  ) AND (title != 'Stopped' OR source = 'automatic'))
 );
 CREATE INDEX event_updates_event ON event_updates(event_id, created_at, id);
 
@@ -169,8 +171,8 @@ END;
 CREATE TRIGGER stop_deleted_monitor_events BEFORE DELETE ON monitors
 BEGIN
   UPDATE event_monitors SET monitor_name = OLD.name WHERE monitor_id = OLD.id;
-  INSERT INTO event_updates (id, event_id, body, status, source, created_at)
-    SELECT 'stop-' || id, id, '节点已删除，已停止跟踪。', 'stopped', 'automatic',
+  INSERT INTO event_updates (id, event_id, title, body, status, source, created_at)
+    SELECT 'stop-' || id, id, 'Stopped', '节点已删除，已停止跟踪。', 'stopped', 'automatic',
       CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)
     FROM events WHERE auto_monitor_id = OLD.id AND status = 'open';
   UPDATE events SET status = 'stopped', version = version + 1,
@@ -191,8 +193,8 @@ BEGIN
   ON CONFLICT (monitor_id, day) DO UPDATE SET
     total = total + 1, successful = successful + NEW.ok;
 
-  INSERT INTO event_updates(id, event_id, body, status, source, created_at)
-    SELECT 'recovery-' || e.id, e.id, '检测已恢复正常。', 'resolved', 'automatic', NEW.checked_at
+  INSERT INTO event_updates(id, event_id, title, body, status, source, created_at)
+    SELECT 'recovery-' || e.id, e.id, 'Resolved', '检测已恢复正常。', 'resolved', 'automatic', NEW.checked_at
     FROM events e JOIN monitors m ON m.id = e.auto_monitor_id
     WHERE m.id = NEW.monitor_id AND m.version = NEW.monitor_version AND m.enabled = 1
       AND (m.last_checked_at IS NULL OR m.last_checked_at <= NEW.checked_at)

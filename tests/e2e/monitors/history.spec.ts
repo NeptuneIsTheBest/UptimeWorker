@@ -17,6 +17,7 @@ test('service details render a full day of minute history on desktop and mobile'
         pageRefreshSeconds: 30,
         generatedAt: now,
         checks,
+        events: [],
       },
     }),
   );

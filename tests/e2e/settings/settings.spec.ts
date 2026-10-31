@@ -38,8 +38,6 @@ test('global settings persist, redact tokens and work on desktop and mobile', as
   );
   await dialog.getByRole('button', { name: '保存设置' }).click();
   const saved = await response;
-  expect(saved.request().postDataJSON()).not.toHaveProperty('wafBypassDomains');
-  expect(saved.request().postDataJSON()).not.toHaveProperty('wafBypassAutoDomains');
   expect(await saved.text()).not.toContain(firstToken);
   await expect(dialog).toHaveCount(0);
   await page.reload();
@@ -75,17 +73,17 @@ test('settings validate input and preserve drafts while retrying load and save f
   let failSave = true;
   await page.route('**/api/admin/settings', async (route) => {
     if (route.request().method() === 'GET' && failLoad)
-      return route.fulfill({ status: 503, json: { error: '暂时无法读取全局设置' } });
+      return route.fulfill({ status: 503, json: { code: 'service_unavailable' } });
     if (route.request().method() === 'PATCH' && failSave) {
       failSave = false;
-      return route.fulfill({ status: 503, json: { error: '暂时无法保存全局设置' } });
+      return route.fulfill({ status: 503, json: { code: 'service_unavailable' } });
     }
     return route.continue();
   });
   await page.goto('/admin');
   await page.getByRole('button', { name: '全局设置', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '全局设置' });
-  await expect(dialog.getByRole('alert')).toContainText('暂时无法读取全局设置');
+  await expect(dialog.getByRole('alert')).toContainText('服务暂时不可用，请稍后重试。');
   failLoad = false;
   await dialog.getByRole('button', { name: '重试', exact: true }).click();
   await dialog.getByLabel('启用 Cloudflare WAF 放行').check();
@@ -95,7 +93,7 @@ test('settings validate input and preserve drafts while retrying load and save f
   await dialog.getByRole('button', { name: '生成随机密钥' }).click();
   const draft = await dialog.getByLabel('放行密钥', { exact: false }).inputValue();
   await dialog.getByRole('button', { name: '保存设置' }).click();
-  await expect(dialog.getByRole('alert')).toContainText('暂时无法保存全局设置');
+  await expect(dialog.getByRole('alert')).toContainText('服务暂时不可用，请稍后重试。');
   await expect(dialog.getByLabel('放行密钥', { exact: false })).toHaveValue(draft);
   await dialog.getByRole('button', { name: '保存设置' }).click();
   await expect(dialog).toHaveCount(0);

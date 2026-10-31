@@ -25,10 +25,14 @@ async function visibility(page: Page, value: 'hidden' | 'visible') {
 function statusData(monitors: AdminMonitor[] = []): StatusResponse {
   return {
     siteName: 'UptimeWorker',
+    groups: [],
+    ungrouped: { id: '__ungrouped__', sortOrder: 0 },
+    events: [],
     pageRefreshSeconds: 30,
     generatedAt: Date.UTC(2001, 0, 1),
     monitors: monitors.map((monitor) => ({
       id: monitor.id,
+      groupId: monitor.groupId,
       name: monitor.name,
       type: monitor.type,
       status: monitor.status,
@@ -67,6 +71,7 @@ for (const view of ['overview', 'detail', 'admin'] as const) {
           ? {
               monitor: status.monitors[0],
               checks: [],
+              events: [],
               generatedAt: status.generatedAt,
               pageRefreshSeconds: 30,
             }
@@ -163,10 +168,10 @@ test('keeps the last successful time and data on errors and recovers on the next
   const data = statusData([monitor]);
   let fail = true;
   await page.route('**/api/status', (route) =>
-    route.fulfill(fail ? { status: 503, json: { error: '刷新暂时失败' } } : { json: data }),
+    route.fulfill(fail ? { status: 503, json: { code: 'service_unavailable' } } : { json: data }),
   );
   await page.goto('/');
-  await expect(page.getByRole('alert')).toContainText('刷新暂时失败');
+  await expect(page.getByRole('alert')).toContainText('服务暂时不可用，请稍后重试。');
   await expect(page.getByText('尚未成功刷新', { exact: true })).toBeVisible();
   await expect(page.locator('.refresh-elapsed')).toHaveCount(0);
   fail = false;
@@ -175,7 +180,7 @@ test('keeps the last successful time and data on errors and recovers on the next
   const initialTime = await page.locator('.refresh-status time').getAttribute('datetime');
   fail = true;
   await page.clock.runFor(30_000);
-  await expect(page.getByRole('alert')).toContainText('刷新暂时失败');
+  await expect(page.getByRole('alert')).toContainText('服务暂时不可用，请稍后重试。');
   await expect(page.locator('.refresh-status time')).toHaveAttribute('datetime', initialTime!);
   await expect(page.locator('.refresh-elapsed')).toHaveText('已过去 30 秒');
   await expect(page.locator('.monitor-card')).toContainText('保留的数据');

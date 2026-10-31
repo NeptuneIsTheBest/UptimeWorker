@@ -88,4 +88,4 @@ Worker / D1 名称以小写字母开头，只含小写字母、数字与连字�
 
 ## 回滚与数据库恢复
 
-代码回滚和数据库恢复分别处理：在 Cloudflare 回退 Worker 版本，数据库按需通过 D1 Time Travel 恢复并评估数据影响。发布失败不会撤销已完成的迁移；回滚前检查[数据库迁移](development.md#数据库迁移)和[兼容性说明](development.md#兼容性说明)。
+代码回滚和数据库恢复分别处理：在 Cloudflare 回退 Worker 版本，数据库按需通过 D1 Time Travel 恢复并评估数据影响。发布失败不会撤销已完成的迁移；回滚前检查[数据库迁移](development.md#数据库迁移)。

@@ -82,7 +82,7 @@
 
 ### 密钥与规则维护
 
-保存后页面和接口只显示密钥是否已配置，不回传原值，也不写入日志或检测历史。密钥留空或关闭总开关均保留密钥，关闭总开关也保留单站设置。更换密钥或调整监控域名时，需同步更新目标站点规则；重新加载设置后，规则模板中的密钥显示为占位符。旧版升级见[兼容性说明](development.md#兼容性说明)。
+保存后页面和接口只显示密钥是否已配置，不回传原值，也不写入日志或检测历史。密钥留空或关闭总开关均保留密钥，关闭总开关也保留单站设置。更换密钥或调整监控域名时，需同步更新目标站点规则；重新加载设置后，规则模板中的密钥显示为占位符。
 
 收到 `cf-mitigated: challenge` 时，检测返回 `cloudflare_challenge`，需检查放行规则。[挑战响应识别](https://developers.cloudflare.com/cloudflare-challenges/challenge-types/challenge-pages/detect-response/)
 

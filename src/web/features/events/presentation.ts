@@ -1,7 +1,6 @@
 import { intlLocale, type Locale } from '../../../shared/locale';
 import { translate, type MessageKey } from '../../i18n/core';
-import { isEventProgressTitle } from '../../../shared/events/progress';
-import type { EventProgressTitle, EventUpdate, StatusEvent } from '../../../shared/events/types';
+import type { EventUpdate, StatusEvent } from '../../../shared/events/types';
 
 export const eventTime = (time: number, locale: Locale = 'zh-CN') =>
   new Intl.DateTimeFormat(intlLocale(locale), {
@@ -29,34 +28,11 @@ export function relativeEventTime(time: number, now: number, locale: Locale = 'z
   return translate(locale, 'time.justNow');
 }
 
-interface EventEntry {
-  id: string;
-  title: EventProgressTitle | 'Stopped';
-  legacyTitle: string | null;
-  body: string;
-  createdAt: number;
-  source: StatusEvent['source'];
-}
-function progressEntry(event: StatusEvent, update: EventUpdate): EventEntry {
-  const fixedTitle = update.title && isEventProgressTitle(update.title) ? update.title : null;
-  return {
-    ...update,
-    title:
-      update.status === 'stopped'
-        ? 'Stopped'
-        : update.status === 'resolved'
-          ? event.type === 'maintenance'
-            ? 'Completed'
-            : 'Resolved'
-          : (fixedTitle ?? 'Updated'),
-    legacyTitle: fixedTitle ? null : update.title || null,
-  };
-}
+type EventEntry = Omit<EventUpdate, 'status'>;
 function initialEntry(event: StatusEvent): EventEntry {
   return {
     id: `initial-${event.id}`,
     title: event.type === 'maintenance' ? 'Scheduled' : 'Investigating',
-    legacyTitle: null,
     body: event.body,
     createdAt: event.createdAt,
     source: event.source,
@@ -64,17 +40,14 @@ function initialEntry(event: StatusEvent): EventEntry {
 }
 // The API orders updates by createdAt, then id, ascending. Preserve that tie-break.
 export function latestEventEntry(event: StatusEvent): EventEntry {
-  const update = event.updates.at(-1);
-  return update ? progressEntry(event, update) : initialEntry(event);
+  return event.updates.at(-1) ?? initialEntry(event);
 }
 export function eventTimeline(event: StatusEvent): EventEntry[] {
-  return [...event.updates]
-    .reverse()
-    .map((update) => progressEntry(event, update))
-    .concat(initialEntry(event));
+  const updates = [...event.updates].reverse();
+  return [...updates, initialEntry(event)];
 }
 
-export const PROGRESS_LABELS: Record<EventProgressTitle | 'Stopped', MessageKey> = {
+export const PROGRESS_LABELS: Record<EventUpdate['title'], MessageKey> = {
   Scheduled: 'progress.Scheduled',
   Updated: 'progress.Updated',
   'In Progress': 'progress.InProgress',
@@ -85,7 +58,7 @@ export const PROGRESS_LABELS: Record<EventProgressTitle | 'Stopped', MessageKey>
   Resolved: 'progress.Resolved',
   Stopped: 'progress.Stopped',
 };
-// Recognize only our persisted templates. Manual content and unfamiliar legacy text stay untouched.
+// Translate persisted automatic templates while preserving user-authored content.
 export function localizedEventTitle(event: Pick<StatusEvent, 'source' | 'title'>, locale: Locale) {
   const suffix = ' 服务异常';
   return event.source === 'automatic' && event.title.endsWith(suffix)

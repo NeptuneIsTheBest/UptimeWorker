@@ -44,7 +44,7 @@ test('homepage reflects incidents while probe metrics and filtered nodes remain 
   await page.route('**/api/status', (route) =>
     route.fulfill(
       fail
-        ? { status: 503, json: { error: '状态刷新失败' } }
+        ? { status: 503, json: { code: 'service_unavailable' } }
         : {
             json: {
               siteName: 'UptimeWorker',
@@ -52,6 +52,7 @@ test('homepage reflects incidents while probe metrics and filtered nodes remain 
               pageRefreshSeconds: 0,
               monitors,
               events,
+              ungrouped: { id: '__ungrouped__', sortOrder: monitors.length },
               groups: monitors.map((monitor, index) => ({
                 id: monitor.id,
                 name: monitor.id,
@@ -109,7 +110,7 @@ test('homepage reflects incidents while probe metrics and filtered nodes remain 
   fail = true;
   await refresh();
   await expect(hero.getByRole('heading')).toHaveText('状态暂时不可用');
-  await expect(page.getByRole('alert')).toContainText('状态刷新失败');
+  await expect(page.getByRole('alert')).toContainText('服务暂时不可用，请稍后重试。');
   fail = false;
   monitors[0].status = 'up';
   await refresh();
@@ -131,6 +132,8 @@ test('homepage advances maintenance by the page clock and waits for explicit com
         generatedAt: now,
         pageRefreshSeconds: 0,
         monitors: [monitor('节点一')],
+        groups: [{ id: '节点一', name: '节点一', sortOrder: 0 }],
+        ungrouped: { id: '__ungrouped__', sortOrder: 1 },
         events,
       },
     });

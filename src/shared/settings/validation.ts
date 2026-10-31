@@ -22,9 +22,7 @@ export function parseGlobalSettingsPatch(value: unknown, current: GlobalSettings
   if (!Number.isSafeInteger(v.version) || Number(v.version) < 1)
     throw new ValidationError('settings_version_invalid');
   const autoIncidentAfterMinutes =
-    v.autoIncidentAfterMinutes === undefined
-      ? (current.autoIncidentAfterMinutes ?? 5)
-      : v.autoIncidentAfterMinutes;
+    v.autoIncidentAfterMinutes === undefined ? current.autoIncidentAfterMinutes : v.autoIncidentAfterMinutes;
   if (
     typeof autoIncidentAfterMinutes !== 'number' ||
     !Number.isInteger(autoIncidentAfterMinutes) ||

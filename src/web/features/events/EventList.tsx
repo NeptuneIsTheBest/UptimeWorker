@@ -120,15 +120,7 @@ export function EventList<T extends StatusEvent>({
                       {eventTime(latest.createdAt, locale)}
                     </time>
                   </div>
-                  <p className="event-body event-excerpt">
-                    {latest.legacyTitle && (
-                      <>
-                        {latest.legacyTitle}
-                        {'\n'}
-                      </>
-                    )}
-                    {localizedEntryBody(latest, locale)}
-                  </p>
+                  <p className="event-body event-excerpt">{localizedEntryBody(latest, locale)}</p>
                   <a className="event-timeline-link" href={href}>
                     {t('event.viewTimeline')}
                     <Icon name="arrow" size={14} />

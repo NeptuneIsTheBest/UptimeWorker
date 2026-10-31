@@ -88,7 +88,15 @@ async function mockPublicPages(page: Page) {
   };
   const settings = { siteName: 'UptimeWorker', pageRefreshSeconds: 0, generatedAt: now };
   await page.route('**/api/status', (route) =>
-    route.fulfill({ json: { ...settings, monitors, events: [event] } }),
+    route.fulfill({
+      json: {
+        ...settings,
+        monitors,
+        groups: [],
+        ungrouped: { id: '__ungrouped__', sortOrder: 0 },
+        events: [event],
+      },
+    }),
   );
   await page.route('**/api/events/' + event.id, (route) => route.fulfill({ json: { ...settings, event } }));
   await page.route('**/api/monitors/' + monitors[0].id + '/history', (route) =>

@@ -28,16 +28,14 @@ export function StatusPage() {
   const [groupFilter, setGroupFilter] = useState('all');
   const collapsedGroups = useCollapsedGroups('public');
   const filtering = search !== '' || filter !== 'all' || groupFilter !== 'all';
-  const displayGroups = orderedGroups(data?.groups ?? [], {
-    id: UNGROUPED_ID,
-    name: t('groups.ungrouped'),
-    sortOrder: data?.ungrouped?.sortOrder ?? Infinity,
-  });
+  const displayGroups = data
+    ? orderedGroups(data.groups, { ...data.ungrouped, name: t('groups.ungrouped') })
+    : [];
   const monitors = data?.monitors ?? [];
   const statuses = monitors.map((m) => effectiveStatus(m, now));
   const up = statuses.filter((s) => s === 'up').length;
   const active = statuses.filter((s) => s !== 'paused').length;
-  const summary = getStatusSummary(statuses, data?.events ?? [], now, Boolean(error), locale);
+  const summary = getStatusSummary(statuses, data ? data.events : [], now, Boolean(error), locale);
   const totals = monitors
     .flatMap((m) => m.days.slice(-30))
     .reduce((a, d) => ({ success: a.success + d.successful, total: a.total + d.total }), {
@@ -54,7 +52,7 @@ export function StatusPage() {
           m.name.toLowerCase().includes(search.toLowerCase()) &&
           (filter === 'all' || effectiveStatus(m, now) === filter) &&
           (groupFilter === 'all' ||
-            monitorGroupKey(m.groupId, data?.groups ?? []) === (groupFilter || UNGROUPED_ID)),
+            monitorGroupKey(m.groupId, data ? data.groups : []) === (groupFilter || UNGROUPED_ID)),
       ),
     [monitors, search, filter, groupFilter, now, data?.groups],
   );
@@ -71,7 +69,7 @@ export function StatusPage() {
       </section>
       {error && <ErrorNotice message={error} retry={refresh} />}
       <RefreshStatus {...remote} />
-      <EventList events={data?.events ?? []} variant="open" />
+      <EventList events={data ? data.events : []} variant="open" />
       <section className="stats-grid" aria-label={t('status.overview')}>
         <div className="stat-card">
           <span className="stat-label">
@@ -186,7 +184,7 @@ export function StatusPage() {
           ) : (
             displayGroups.map((group) => {
               const members = visible.filter(
-                (monitor) => monitorGroupKey(monitor.groupId, data?.groups ?? []) === group.id,
+                (monitor) => monitorGroupKey(monitor.groupId, data ? data.groups : []) === group.id,
               );
               const collapsed = !filtering && collapsedGroups.isCollapsed(group.id);
               const controls = `public-group-${group.id}`;
@@ -223,7 +221,7 @@ export function StatusPage() {
           </details>
         </div>
       </section>
-      <EventList events={data?.events ?? []} variant="history" />
+      <EventList events={data ? data.events : []} variant="history" />
     </Layout>
   );
 }

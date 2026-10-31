@@ -21,20 +21,15 @@ export function GroupManager({
   close: () => void;
 }) {
   const { t, locale } = useI18n();
-  const { refresh: changed } = remote;
+  const { refresh: changed, data } = remote;
   const [editing, setEditing] = useState<MonitorGroup | null>(null);
   const [name, setName] = useState('');
   const [deleting, setDeleting] = useState<MonitorGroup | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<DisplayMessage | null>(null);
   const ordering = useReorder({
-    items: orderedGroups(remote.data?.groups ?? [], {
-      id: UNGROUPED_ID,
-      name: t('groups.ungrouped'),
-      sortOrder: remote.data?.ungrouped?.sortOrder ?? Infinity,
-      version: remote.data?.ungrouped?.version ?? 0,
-    }),
-    disabled: busy || !!editing || !!deleting || remote.locked || !remote.data?.ungrouped,
+    items: data ? orderedGroups(data.groups, { ...data.ungrouped, name: t('groups.ungrouped') }) : [],
+    disabled: busy || !!editing || !!deleting || remote.locked || !data,
     suspend: remote.suspend,
     save: async (items) => {
       const result = await api<GroupListing>('/api/admin/groups/order', {

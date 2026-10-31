@@ -1,12 +1,8 @@
-<a id="监控配置与运行策略"></a>
-
 # Monitor configuration and operating policies
 
 [English](configuration.md) | [简体中文](zh-CN/configuration.md)
 
 [Back to README](../README.md)
-
-<a id="基本配置"></a>
 
 ## Basic configuration
 
@@ -16,15 +12,11 @@
 - The admin console supports creating, editing, deleting, pausing, resuming, and immediately testing monitors. Immediate tests use the saved configuration and do not change history or current status.
 - There is no fixed limit on the total number of services. Actual check capacity depends on performance settings and platform resource limits. See the [API reference](api.md#monitor-configuration) for configuration fields and request examples.
 
-<a id="页面自动刷新"></a>
-
 ## Automatic page refresh
 
 Set the interval under **Monitor management → Global settings → Automatic page refresh**. It applies to all public and admin pages for all visitors. The default is 30 seconds; choose off, 15 / 30 / 60 seconds, or a custom integer from 5–3600 seconds.
 
 Page refreshes preserve filters and unsaved input and do not change monitor check intervals. When automatic refresh is off, use **Refresh now** to update the page. Other pages receive changed settings on their next data fetch; public changes also depend on [cache expiration](api.md#global-settings). **Updated** shows the last successful page refresh; **Last checked** shows the actual monitor check time.
-
-<a id="服务器分组与事件"></a>
 
 ## Server groups and events
 
@@ -53,8 +45,6 @@ Set the threshold under **Global settings → Automatic outage incidents**. It d
 
 Events are retained indefinitely. Deleting a monitor preserves events and the monitor's saved name; open automatic incidents stop tracking and receive an explanatory update.
 
-<a id="http-高级配置"></a>
-
 ## Advanced HTTP configuration
 
 When creating or editing a monitor, expand **Advanced settings**:
@@ -68,8 +58,6 @@ Up to three redirects are followed, with public-address validation at each hop. 
 
 All methods run repeatedly at the monitor's configured interval, without automatic retries on failure.
 
-<a id="cloudflare-waf-放行"></a>
-
 ## Cloudflare WAF bypass
 
 This feature requires permission to manage Cloudflare WAF on the target site. Configure the shared token and master switch under **Monitor management → Global settings**, then turn on **Enable WAF bypass** for each HTTP monitor; it is off by default. Checks carry the credentials only when both the global and individual switches are on and a token is configured. Saving does not require redeployment.
@@ -77,8 +65,6 @@ This feature requires permission to manage Cloudflare WAF on the target site. Co
 The rule template collects, normalizes, and deduplicates domains from monitors with WAF bypass enabled, including paused monitors. Its domain list is used only to configure Cloudflare rules; each monitor's own configuration determines where its credentials may be sent.
 
 The `X-UptimeWorker-WAF-Bypass` header is sent only to **HTTPS URLs whose full hostname matches the current monitor's hostname**, with the condition checked again at each redirect. The token is not sent across domains or when downgrading to HTTP; it may be sent again after redirecting back to HTTPS on the original hostname. An HTTP target carries the token only after redirecting to HTTPS on the same hostname. Matching ignores case, removes a trailing dot, and normalizes internationalized domain names. It does not restrict ports and does not match wildcards or subdomains. TCP monitors and IP addresses do not support this feature. For cross-domain targets, configure the final check URL directly.
-
-<a id="配置步骤"></a>
 
 ### Setup steps
 
@@ -94,15 +80,11 @@ The `X-UptimeWorker-WAF-Bypass` header is sent only to **HTTPS URLs whose full h
 3. Under **Security rules** for each target site in Cloudflare, create a custom rule, enter the expression, choose **Skip**, and place it before the relevant blocking rules. Depending on what blocks the request, choose to skip the remaining custom rules, Managed Rules, Rate Limiting, Super Bot Fight Mode, or other supported features. Keep match logging enabled for verification. Standard **Bot Fight Mode cannot be bypassed with Skip**; products such as Browser Integrity Check require selecting their own Skip options. See the [official setup steps](https://developers.cloudflare.com/waf/custom-rules/skip/) and [features that can be skipped](https://developers.cloudflare.com/waf/custom-rules/skip/options/).
 4. Save the target site's rule, enable the global master switch, and save settings. Run **Test connection**, then wait for the next scheduled check. Use Cloudflare Security Events to confirm that requests match the bypass rule.
 
-<a id="密钥与规则维护"></a>
-
 ### Token and rule maintenance
 
-After saving, the interface and API show only whether a token is configured. They never return its raw value or write it to logs or check history. Leaving the token blank or disabling the master switch retains the saved token; disabling the master switch also preserves individual monitor settings. When changing the token or monitor domains, update the target site's rules as well. After reloading settings, the rule template displays a placeholder for the token. For upgrades from older versions, see [compatibility notes](development.md#compatibility-notes).
+After saving, the interface and API show only whether a token is configured. They never return its raw value or write it to logs or check history. Leaving the token blank or disabling the master switch retains the saved token; disabling the master switch also preserves individual monitor settings. When changing the token or monitor domains, update the target site's rules as well. After reloading settings, the rule template displays a placeholder for the token.
 
 A response with `cf-mitigated: challenge` causes the check to return `cloudflare_challenge`; review the bypass rules. See [challenge response detection](https://developers.cloudflare.com/cloudflare-challenges/challenge-types/challenge-pages/detect-response/).
-
-<a id="检测统计与保留策略"></a>
 
 ## Checks, statistics, and retention
 
@@ -116,8 +98,6 @@ A response with `cf-mitigated: challenge` causes the check to return `cloudflare
 - Data timestamps use UTC milliseconds. Daily status bars are aggregated by UTC day, while check times are displayed in the browser's time zone.
 - Detailed checks are retained for the last 7 days, and daily aggregates for 90 UTC days including today. Detail pages show all samples from the last 24 hours. Expired data is cleaned in batches; cleanup after a long shutdown may take several runs.
 - Editing a monitor preserves history. Changing check parameters resets the current status until the next check; changing only the name or group preserves status. Deleting a monitor deletes its detailed checks and daily aggregates.
-
-<a id="性能设置与容量估算"></a>
 
 ## Performance settings and capacity estimates
 
@@ -142,8 +122,6 @@ The peak simulation assumes all enabled services are due simultaneously, each ta
 The lower bound for base D1 writes counts three writes per check sample: the detailed check, daily aggregate, and service status. It excludes indexes, automatic incidents, cleanup, and other requests. Free uses a daily account quota; Paid uses a monthly included allowance with overage charges. The panel projects Paid write warnings over 30 days. This lower bound is not actual billable usage.
 
 Estimates use a platform baseline verified on 2026-10-29. For the per-minute Cron schedule, Free/Paid CPU limits are 10 milliseconds/30 seconds; the wall-clock limit is 15 minutes, and memory is limited to 128 MB per isolate. Measure actual CPU, memory, D1 usage, and account totals: other applications, traffic, billing periods, and custom deployment limits also affect capacity. See [Workers limits](https://developers.cloudflare.com/workers/platform/limits/), [D1 limits](https://developers.cloudflare.com/d1/platform/limits/), and [D1 pricing](https://developers.cloudflare.com/d1/platform/pricing/).
-
-<a id="资源用量与运行观测"></a>
 
 ## Resource usage and operational monitoring
 

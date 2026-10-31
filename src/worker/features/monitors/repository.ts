@@ -8,7 +8,7 @@ export function monitorConfig(row: MonitorRow): MonitorConfig {
   return parseMonitorConfig({
     ...JSON.parse(row.config_json),
     name: row.name,
-    groupId: row.group_id ?? null,
+    groupId: row.group_id,
     type: row.type,
     intervalMinutes: row.interval_minutes,
     timeoutSeconds: row.timeout_seconds,
@@ -68,10 +68,10 @@ export async function createMonitor(
       Number(config.enabled),
       now,
       now,
-      config.groupId ?? null,
-      config.groupId ?? null,
-      config.groupId ?? null,
-      config.groupId ?? null,
+      config.groupId,
+      config.groupId,
+      config.groupId,
+      config.groupId,
     )
     .run();
   if (!result.meta.changes) await assertGroup(db, config.groupId);
@@ -114,14 +114,14 @@ export async function updateMonitor(
       config.timeoutSeconds,
       Number(config.enabled),
       now,
-      config.groupId ?? null,
-      config.groupId ?? null,
-      config.groupId ?? null,
+      config.groupId,
+      config.groupId,
+      config.groupId,
       ...Array(5).fill(Number(reset)),
       id,
       version,
-      config.groupId ?? null,
-      config.groupId ?? null,
+      config.groupId,
+      config.groupId,
     )
     .run();
   if (!result.meta.changes) await assertGroup(db, config.groupId);

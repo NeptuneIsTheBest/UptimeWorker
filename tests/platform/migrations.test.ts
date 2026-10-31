@@ -28,7 +28,6 @@ it('initializes settings, scheduler state and Ungrouped on an empty database', a
       id: 1,
       waf_bypass_enabled: 0,
       waf_bypass_token: null,
-      waf_bypass_domains_json: '[]',
       version: 1,
       page_refresh_seconds: 30,
       auto_incident_after_minutes: 5,
@@ -112,7 +111,7 @@ it.each([
   expect(JSON.stringify(plan.results)).toContain(index);
 });
 
-it('accepts event updates with an omitted or explicit title', async () => {
+it('requires fixed progress titles and reserves Stopped for automatic records', async () => {
   const db = fixture.db;
   await db
     .prepare(
@@ -121,24 +120,34 @@ it('accepts event updates with an omitted or explicit title', async () => {
     )
     .bind(timestamp, timestamp, timestamp)
     .run();
-  await db.batch([
+  const insert = db.prepare(
+    `INSERT INTO event_updates(id, event_id, title, body, source, created_at)
+    VALUES (?, 'incident', ?, 'Update', ?, ?)`,
+  );
+  for (const title of [
+    'Scheduled',
+    'Updated',
+    'In Progress',
+    'Completed',
+    'Investigating',
+    'Identified',
+    'Monitoring',
+    'Resolved',
+  ])
+    await insert.bind(title, title, 'manual', timestamp).run();
+  for (const title of [null, '', 'Free-form title', 'Stopped'])
+    await expect(insert.bind(crypto.randomUUID(), title, 'manual', timestamp).run()).rejects.toThrow();
+  await expect(
     db
       .prepare(
         `INSERT INTO event_updates(id, event_id, body, source, created_at)
-        VALUES ('untitled', 'incident', 'Update', 'manual', ?)`,
+    VALUES ('untitled', 'incident', 'Update', 'manual', ?)`,
       )
-      .bind(timestamp),
-    db
-      .prepare(
-        `INSERT INTO event_updates(id, event_id, title, body, source, created_at)
-        VALUES ('titled', 'incident', 'Identified', 'Update', 'manual', ?)`,
-      )
-      .bind(timestamp),
-  ]);
-  expect((await db.prepare('SELECT id, title FROM event_updates ORDER BY id').all()).results).toEqual([
-    { id: 'titled', title: 'Identified' },
-    { id: 'untitled', title: null },
-  ]);
+      .bind(timestamp)
+      .run(),
+  ).rejects.toThrow();
+  await insert.bind('stopped', 'Stopped', 'automatic', timestamp).run();
+  expect(await db.prepare('SELECT COUNT(*) AS n FROM event_updates').first('n')).toBe(9);
 });
 
 it('aggregates each check once and cascades only the deleted monitor history', async () => {

@@ -22,14 +22,13 @@ export type EventProgressTitle =
   | 'Resolved';
 
 export interface EventUpdateConfig {
-  title: EventProgressTitle | null;
+  title: EventProgressTitle;
   body: string;
-  resolve?: boolean;
 }
 
 export interface EventUpdate {
   id: string;
-  title: string | null;
+  title: EventProgressTitle | 'Stopped';
   body: string;
   status: EventStatus | null;
   source: 'manual' | 'automatic';

@@ -11,10 +11,9 @@ export class ApplicationError extends Error {
 }
 export class ValidationError extends ApplicationError {}
 export interface ApiErrorResponse {
-  error: string;
   code: AppErrorCode;
   params?: MessageParams;
 }
 export function errorResponse(code: AppErrorCode, params: MessageParams = {}): ApiErrorResponse {
-  return { error: formatError(code, params), code, ...(Object.keys(params).length ? { params } : {}) };
+  return { code, ...(Object.keys(params).length ? { params } : {}) };
 }

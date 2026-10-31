@@ -7,14 +7,14 @@ export interface StatusResponse extends PageRefreshSettings {
   siteName: string;
   generatedAt: number;
   monitors: PublicMonitor[];
-  groups?: Omit<MonitorGroup, 'version'>[];
-  ungrouped?: Omit<UngroupedOrder, 'version'>;
-  events?: StatusEvent[];
+  groups: Omit<MonitorGroup, 'version'>[];
+  ungrouped: Omit<UngroupedOrder, 'version'>;
+  events: StatusEvent[];
 }
 
 export interface HistoryResponse extends PageRefreshSettings {
   monitor: PublicMonitor;
   checks: ProbeResult[];
   generatedAt: number;
-  events?: StatusEvent[];
+  events: StatusEvent[];
 }

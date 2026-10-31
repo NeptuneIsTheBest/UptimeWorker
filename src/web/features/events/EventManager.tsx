@@ -79,7 +79,7 @@ export function EventManager({
         <Loading />
       ) : (
         <EventList
-          events={remote.data?.events ?? []}
+          events={remote.data ? remote.data.events : []}
           actions={(event) => (
             <>
               <button className="button small secondary" onClick={() => setProgress(event)}>

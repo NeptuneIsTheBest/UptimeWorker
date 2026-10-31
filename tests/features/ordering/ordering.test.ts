@@ -57,8 +57,8 @@ const groupItems = async (groups: MonitorGroup[]) =>
 
 it('persists group and member ordering consistently in admin and public lists', async () => {
   const { request } = apiClient(fixture.db);
-  const first = await saveGroup(fixture.db, { name: 'First', sortOrder: 10 });
-  const second = await saveGroup(fixture.db, { name: 'Second', sortOrder: 20 });
+  const first = await saveGroup(fixture.db, { name: 'First' });
+  const second = await saveGroup(fixture.db, { name: 'Second' });
   await monitor('Ungrouped');
   await monitor('B1', second.id);
   const a1 = await monitor('A1', first.id);
@@ -275,13 +275,11 @@ it.each([0, 1, 2])('appends new groups while respecting Ungrouped at position %s
   expect((await listGroupOrder(fixture.db)).ungrouped).toEqual(order.ungrouped);
 });
 
-it('keeps SQL ordering and displayed sections consistent for tied numeric positions', async () => {
+it('keeps SQL ordering and displayed sections consistent after moving Ungrouped first', async () => {
   const a = await saveGroup(fixture.db, { name: 'A' });
   const b = await saveGroup(fixture.db, { name: 'B' });
   const { ungrouped } = await listGroupOrder(fixture.db);
-  await saveOrder(fixture.db, 'monitor_groups', orderItems([ungrouped, a, b]));
-  const updated = (await listGroups(fixture.db)).find((group) => group.id === b.id)!;
-  await saveGroup(fixture.db, { name: 'B', sortOrder: 0 }, b.id, updated.version);
+  await saveOrder(fixture.db, 'monitor_groups', orderItems([ungrouped, b, a]));
   for (const id of [a.id, b.id, null]) await monitor(id ?? UNGROUPED_ID, id);
   const order = await listGroupOrder(fixture.db);
   expect((await current()).map((row) => row.name)).toEqual(
@@ -289,11 +287,11 @@ it('keeps SQL ordering and displayed sections consistent for tied numeric positi
   );
 });
 
-it('appends new groups, preserves omitted orders on edits, and supports legacy numeric positions', async () => {
+it('appends groups and keeps their positions when renaming, ignoring extra fields', async () => {
   const { request } = apiClient(fixture.db);
-  const a = await saveGroup(fixture.db, { name: 'A', sortOrder: 50 });
-  const b = await saveGroup(fixture.db, { name: 'B', sortOrder: 1_000_000 });
-  const result = await request('admin/groups', 'POST', { name: 'C' });
+  const a = await saveGroup(fixture.db, { name: 'A' });
+  const b = await saveGroup(fixture.db, { name: 'B' });
+  const result = await request('admin/groups', 'POST', { name: 'C', sortOrder: 1000000 });
   expect(result.status).toBe(201);
   const c = (await result.json()) as MonitorGroup;
   expect((await listGroups(fixture.db)).map((group) => [group.name, group.sortOrder])).toEqual([
@@ -302,17 +300,12 @@ it('appends new groups, preserves omitted orders on edits, and supports legacy n
     ['C', 2],
   ]);
   expect(
-    (await request(`admin/groups/${c.id}`, 'PATCH', { name: 'Renamed', version: c.version })).status,
+    (await request(`admin/groups/${c.id}`, 'PATCH', { name: 'Renamed', version: c.version, sortOrder: 0 }))
+      .status,
   ).toBe(200);
   const groups = await listGroups(fixture.db);
   expect(groups[2]).toMatchObject({ name: 'Renamed', sortOrder: 2 });
-  expect(groups.slice(0, 2).map((group) => [group.id, group.version])).toEqual([
-    [a.id, 2],
-    [b.id, 2],
-  ]);
-  expect(
-    (await request(`admin/groups/${b.id}`, 'PATCH', { name: 'B', version: 2, sortOrder: 0 })).status,
-  ).toBe(200);
+  expect(groups.slice(0, 2)).toEqual([a, b]);
 });
 
 it('appends new and reassigned services, and appends a deleted group in its saved order', async () => {

@@ -6,7 +6,6 @@ import type { GlobalSettings } from '../../../src/shared/settings/types';
 import { createMonitor } from '../../../src/worker/features/monitors/repository';
 import { runScheduled } from '../../../src/worker/features/monitors/scheduler';
 import { getGlobalSettings } from '../../../src/worker/features/settings/repository';
-import { getProbeSnapshot } from '../../../src/worker/features/monitors/snapshot';
 import type { Probe } from '../../../src/worker/features/monitors/types';
 import { apiClient } from '../../support/api-client';
 import {
@@ -75,17 +74,6 @@ describe('global settings validation', () => {
     ).toEqual(['example.com', 'paused.example.com', 'xn--fsqu00a.xn--0zwm56d']);
     expect(wafRuleDomains([httpConfig, tcpConfig])).toEqual([]);
   });
-  it.each([{ domains: ['redirect.example.com'] }, { domains: null }, { domains: ['*.example.com', 5] }])(
-    'ignores retired domain fields in updates: %j',
-    ({ domains }) => {
-      expect(
-        parseGlobalSettingsPatch(
-          { ...config, wafBypassDomains: domains, wafBypassAutoDomains: domains },
-          defaults,
-        ),
-      ).toEqual(config);
-    },
-  );
   it.each([
     null,
     [],
@@ -177,37 +165,6 @@ describe('global settings API and probe integration', () => {
       wafBypass: { token: rotatedToken },
     });
   });
-
-  it.each(['["redirect.example.com"]', 'broken'])(
-    'ignores and preserves the retired stored domain data: %s',
-    async (legacyDomains) => {
-      const { read, patch } = client();
-      await fixture.db
-        .prepare('UPDATE global_settings SET waf_bypass_domains_json = ?')
-        .bind(legacyDomains)
-        .run();
-      expect(await (await read()).json()).toEqual(defaults);
-      const saved = await patch({ ...config, wafBypassDomains: null, wafBypassAutoDomains: ['other.test'] });
-      expect(saved.status).toBe(200);
-      expect(await saved.json()).toEqual({
-        performance: DEFAULT_PERFORMANCE,
-        version: 2,
-        pageRefreshSeconds: 30,
-        autoIncidentAfterMinutes: 5,
-        wafBypassEnabled: true,
-        wafBypassTokenConfigured: true,
-      });
-      expect(
-        await fixture.db
-          .prepare('SELECT waf_bypass_domains_json FROM global_settings')
-          .first('waf_bypass_domains_json'),
-      ).toBe(legacyDomains);
-      expect((await getProbeSnapshot(fixture.db, { slot: timestamp })).options.wafBypass).toEqual({
-        enabled: true,
-        token,
-      });
-    },
-  );
 
   it('reads and updates settings independently of monitor data', async () => {
     const { read, patch } = client();

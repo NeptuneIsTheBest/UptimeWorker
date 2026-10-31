@@ -11,9 +11,7 @@ const body = { format: 'json' as const, content: '{ "check": "正常" }' };
 const check = { includes: ['healthy', '服务正常'], excludes: ['error'], ignoreCase: false };
 
 describe('HTTP option validation', () => {
-  it('fills defaults for legacy configurations and normalizes keywords and headers', () => {
-    const { wafBypassEnabled, requestHeaders, requestBody, responseCheck, method, ...legacy } = httpConfig;
-    expect(parseMonitorConfig(legacy)).toEqual(httpConfig);
+  it('normalizes keywords and headers', () => {
     expect(
       parseMonitorConfig({
         ...httpConfig,

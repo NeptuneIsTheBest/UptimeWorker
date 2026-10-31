@@ -1,5 +1,3 @@
-<a id="架构与代码组织"></a>
-
 # Architecture and code organization
 
 [English](architecture.md) | [简体中文](zh-CN/architecture.md)
@@ -7,8 +5,6 @@
 [Back to README](../README.md) · [Development and maintenance](development.md)
 
 UptimeWorker serves the API, scheduled checks, and frontend static assets from a single Cloudflare Worker. D1 stores monitor configurations, check history, and events. Code is organized first by runtime layer, then by feature.
-
-<a id="目录与职责"></a>
 
 ## Directories and responsibilities
 
@@ -55,8 +51,6 @@ tests/
 | settings | Global settings, token input, and rule templates                            | Settings reads and writes, public refresh interval, and internal check credentials  |
 | status   | Home page summary, grouped display, and filtering                           | Aggregation for public status, monitor history, and event detail endpoints          |
 
-<a id="依赖与接口边界"></a>
-
 ## Dependency and interface boundaries
 
 - `shared` uses pure TypeScript and Web standards, with no dependency on React, Hono, D1, or runtime-specific modules. Domain types and constants live in their feature directories; aggregate response types reference those feature types.
@@ -65,8 +59,6 @@ tests/
 - Modules import directly from the files that define their dependencies. Add shared capabilities to the appropriate lower layer; avoid cycles caused by forwarding through old paths or reverse dependencies across layers.
 
 [App](../src/web/app/App.tsx) selects pages by URL, and each feature's `routes.ts` registers HTTP endpoints. Public endpoint contracts are documented in the [API reference](api.md); shared types are organized by feature in [shared](../src/shared/).
-
-<a id="请求与检测流程"></a>
 
 ## Request and check flow
 
@@ -86,12 +78,10 @@ Each run cleans up at most 500 expired detailed checks, 100 expired daily aggreg
 
 Event association validation uses one JSON parameter with `json_each` to stay within D1's limit of 100 bound parameters. Scheduling normally makes 5 D1 calls across snapshot, result, and cleanup batches; each `DB.batch` counts as one call regardless of its statement count. Capacity planning must also account for CPU, D1 row usage, and cleanup backlog.
 
-<a id="前端样式与新增功能"></a>
-
 ## Frontend styles and adding features
 
 The [style entry point](../src/web/styles/index.css) explicitly loads base styles, shared components, layout, feature styles, and accessibility rules. Feature styles live alongside their components, with media queries in the corresponding style file. For overrides across files, check selector specificity and load order, and compare desktop and mobile rendering.
 
 When adding a feature, define the shared contract first, then add Worker routes and data access, frontend components, and relevant feature tests. Cross-feature aggregation belongs in pages or aggregation services; generic HTTP behavior belongs in `http`. Base components should not fetch domain data.
 
-See [development and maintenance](development.md) for database changes, compatibility requirements, and verification commands. Update the API reference when interfaces change, and the configuration or deployment guide when operating procedures change.
+See [development and maintenance](development.md) for database changes and verification commands. Update the API reference when interfaces change, and the configuration or deployment guide when operating procedures change.

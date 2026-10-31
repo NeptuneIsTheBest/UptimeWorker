@@ -6,8 +6,8 @@ import type { PageRefreshSettings } from '../../../shared/settings/types';
 export interface AdminResponse extends PageRefreshSettings {
   monitors: AdminMonitor[];
   identity: { email: string };
-  groups?: MonitorGroup[];
-  ungrouped?: UngroupedOrder;
+  groups: MonitorGroup[];
+  ungrouped: UngroupedOrder;
 }
 
 export type MonitorEditorState = AdminMonitor | 'new' | null;

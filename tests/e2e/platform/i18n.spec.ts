@@ -28,7 +28,7 @@ const automaticEvent = (): StatusEvent => ({
     },
     {
       id: 'recovery',
-      title: null,
+      title: 'Resolved',
       body: '检测已恢复正常。',
       status: 'resolved',
       source: 'automatic',
@@ -69,6 +69,8 @@ test.describe('English interface and language switching', () => {
           pageRefreshSeconds: 0,
           generatedAt: Date.now(),
           monitors,
+          groups: [],
+          ungrouped: { id: '__ungrouped__', sortOrder: 0 },
           events: [event],
         },
       }),
@@ -268,7 +270,7 @@ test.describe('English interface and language switching', () => {
       route.request().method() === 'PATCH'
         ? route.fulfill({
             status: 409,
-            json: { error: '监控已被修改，请刷新后重试。', code: 'monitor_conflict' },
+            json: { code: 'monitor_conflict' },
           })
         : route.continue(),
     );

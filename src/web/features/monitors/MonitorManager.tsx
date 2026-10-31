@@ -44,13 +44,10 @@ export function MonitorManager({
   const [busy, setBusy] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<DisplayMessage | null>(null);
   const collapsedGroups = useCollapsedGroups('admin');
-  const displayGroups = orderedGroups(data?.groups ?? [], {
-    id: UNGROUPED_ID,
-    name: t('groups.ungrouped'),
-    sortOrder: data?.ungrouped?.sortOrder ?? Infinity,
-    version: data?.ungrouped?.version ?? 0,
-  });
-  const groupOf = (monitor: AdminMonitor) => monitorGroupKey(monitor.groupId, data?.groups ?? []);
+  const displayGroups = data
+    ? orderedGroups(data.groups, { ...data.ungrouped, name: t('groups.ungrouped') })
+    : [];
+  const groupOf = (monitor: AdminMonitor) => monitorGroupKey(monitor.groupId, data ? data.groups : []);
   const ordering = useReorder({
     items: data?.monitors ?? [],
     disabled: orderingDisabled || !!busy || !!editor || !!deleting || remote.locked,
@@ -210,7 +207,7 @@ export function MonitorManager({
                                   <div className="monitor-meta">
                                     <span className="protocol">{monitor.type.toUpperCase()}</span>
                                     <span>
-                                      {data.groups?.find((group) => group.id === monitor.groupId)?.name ??
+                                      {data.groups.find((group) => group.id === monitor.groupId)?.name ??
                                         t('groups.ungrouped')}
                                     </span>
                                     <span>{t('monitor.interval', { count: monitor.intervalMinutes })}</span>
@@ -329,7 +326,7 @@ export function MonitorManager({
       </div>
       {editor && (
         <MonitorEditor
-          groups={data?.groups ?? []}
+          groups={data ? data.groups : []}
           initial={editor === 'new' ? undefined : editor}
           save={save}
           close={() => setEditor(null)}

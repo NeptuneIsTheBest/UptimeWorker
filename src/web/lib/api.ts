@@ -22,7 +22,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   });
   const type = response.headers.get('content-type') || '';
   if (!type.includes('application/json')) throw new ApiError(message('error.session'), 401);
-  const data = (await response.json()) as T & { error?: string; code?: unknown; params?: MessageParams };
+  const data = (await response.json()) as T & { code?: unknown; params?: MessageParams };
   if (!response.ok) {
     const params =
       data.params &&
@@ -32,7 +32,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
         ? data.params
         : undefined;
     throw new ApiError(
-      isAppErrorCode(data.code) ? { code: data.code, params } : data.error || message('error.request'),
+      isAppErrorCode(data.code) ? { code: data.code, params } : message('error.request'),
       response.status,
     );
   }

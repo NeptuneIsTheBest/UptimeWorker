@@ -29,11 +29,7 @@ export function eventProgressOptions(
 }
 export const completesEvent = (title: EventProgressTitle) => title === 'Completed' || title === 'Resolved';
 export function resolveEventUpdateConfig(event: StatusEvent, config: EventUpdateConfig) {
-  const title =
-    config.title ?? (config.resolve ? (event.type === 'maintenance' ? 'Completed' : 'Resolved') : 'Updated');
+  const { title, body } = config;
   if (!eventProgressOptions(event).includes(title)) throw new ValidationError('event_progress_unavailable');
-  const resolve = completesEvent(title);
-  if (config.resolve !== undefined && config.resolve !== resolve)
-    throw new ValidationError('event_progress_conflict');
-  return { title, body: config.body, resolve };
+  return { title, body, resolve: completesEvent(title) };
 }

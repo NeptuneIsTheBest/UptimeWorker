@@ -74,9 +74,7 @@ describe('language selection and presentation', () => {
     const event = { source: 'automatic' as const, title: '旧名称 服务异常', monitors: [{ name: '新名称' }] };
     expect(localizedEventTitle(event, 'en')).toBe('旧名称 service outage');
     expect(localizedEventTitle({ ...event, source: 'manual' }, 'en')).toBe(event.title);
-    expect(localizedEventTitle({ ...event, title: 'An older custom title' }, 'en')).toBe(
-      'An older custom title',
-    );
+    expect(localizedEventTitle({ ...event, title: 'Custom title' }, 'en')).toBe('Custom title');
     expect(localizedEntryBody({ source: 'automatic', body: '检测已恢复正常。' }, 'en')).toBe(
       'Checks have returned to normal.',
     );
@@ -84,15 +82,15 @@ describe('language selection and presentation', () => {
       'The monitor was deleted. Tracking has stopped.',
     );
     expect(localizedEntryBody({ source: 'manual', body: '检测已恢复正常。' }, 'en')).toBe('检测已恢复正常。');
-    expect(localizedEntryBody({ source: 'automatic', body: '旧版自由说明' }, 'en')).toBe('旧版自由说明');
+    expect(localizedEntryBody({ source: 'automatic', body: '自定义说明' }, 'en')).toBe('自定义说明');
   });
 });
 
-describe('localized errors and compatibility', () => {
-  it('keeps shared validation details language-neutral and preserves the legacy message', () => {
+describe('localized errors', () => {
+  it('localizes shared validation codes and parameters', () => {
     let error: unknown;
     try {
-      parseGroup({ name: '', sortOrder: 0 });
+      parseGroup({ name: '' });
     } catch (value) {
       error = value;
     }
@@ -108,14 +106,14 @@ describe('localized errors and compatibility', () => {
     expect(formatError('monitor_interval_invalid', { min: 1, max: 60 }, 'en')).toContain('1 to 60 minutes');
   });
   it.each([
-    [{ error: '监控不存在。', code: 'monitor_not_found' }, 'Monitor not found.'],
-    [{ error: '旧版接口错误' }, '旧版接口错误'],
-    [{ error: 'Future server error', code: 'future_error' }, 'Future server error'],
+    [{ code: 'monitor_not_found' }, 'Monitor not found.'],
+    [{}, 'The request failed. Please try again later.'],
+    [{ code: 'unknown_error' }, 'The request failed. Please try again later.'],
     [
-      { error: '字段错误', code: 'text_length', params: { field: 'event_title', max: 120 } },
+      { code: 'text_length', params: { field: 'event_title', max: 120 } },
       'Event title must contain 1–120 characters.',
     ],
-  ])('displays coded and legacy API errors without losing details: %j', async (body, expected) => {
+  ])('localizes known codes and uses a generic message for invalid errors: %j', async (body, expected) => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json(body, { status: 400 })));
     const error: unknown = await api('/api/test').catch((value) => value);
     expect(displayMessage(errorMessage(error, 'error.request'), 'en')).toBe(expected);

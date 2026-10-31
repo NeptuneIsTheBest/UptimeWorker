@@ -28,7 +28,7 @@ export type ErrorCode =
 
 interface CommonConfig {
   name: string;
-  groupId?: string | null;
+  groupId: string | null;
   intervalMinutes: number;
   timeoutSeconds: number;
   enabled: boolean;
@@ -67,7 +67,7 @@ export interface DailyStat {
 
 export interface PublicMonitor {
   id: string;
-  groupId?: string | null;
+  groupId: string | null;
   name: string;
   type: 'http' | 'tcp';
   status: MonitorStatus;

@@ -30,7 +30,7 @@ export function DetailPage({ id }: { id: string }) {
       ) : (
         data && (
           <>
-            <EventList events={data.events ?? []} variant="open" />
+            <EventList events={data.events} variant="open" />
             <div className="detail-heading">
               <div>
                 <h1>{data.monitor.name}</h1>
@@ -75,7 +75,7 @@ export function DetailPage({ id }: { id: string }) {
                 <span>{t('history.daily')}</span>
               </div>
             </section>
-            <EventList events={data.events ?? []} variant="history" />
+            <EventList events={data.events} variant="history" />
           </>
         )
       )}

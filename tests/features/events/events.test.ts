@@ -132,12 +132,12 @@ describe('events', () => {
     expect(await getEvent(fixture.db, event.id)).toMatchObject({
       status: 'resolved',
       endedAt: at(7),
-      updates: [{ title: null, status: 'resolved' }],
+      updates: [{ title: 'Resolved', status: 'resolved' }],
     });
     for (let n = 9; n <= 14; n++) await tick(n);
     expect(await recent()).toHaveLength(2);
     const publicData = await getStatus(environment(fixture.db), at(14));
-    expect(publicData.events?.[0]).not.toHaveProperty('version');
+    expect(publicData.events[0]).not.toHaveProperty('version');
     expect(JSON.stringify(publicData.events)).not.toContain(httpConfig.url);
     expect((await getHistory(fixture.db, row.id, at(14)))?.events).toHaveLength(2);
   });
@@ -222,7 +222,7 @@ describe('events', () => {
       at(0),
     );
     for (let n = 0; n <= 3; n++) await tick(n);
-    await appendEventUpdate(fixture.db, first.id, 1, { title: null, body: '提前完成', resolve: true }, at(4));
+    await appendEventUpdate(fixture.db, first.id, 1, { title: 'Completed', body: '提前完成' }, at(4));
     for (let n = 4; n <= 12; n++) await tick(n);
     expect(await recent()).toHaveLength(2);
     await tick(13);
@@ -234,7 +234,7 @@ describe('events', () => {
     for (let n = 0; n <= 6; n++) await tick(n);
     await tick(7, true);
     expect((await recent())[0].status).toBe('open');
-    await appendEventUpdate(fixture.db, manual.id, 1, { title: null, body: '已处理', resolve: true }, at(8));
+    await appendEventUpdate(fixture.db, manual.id, 1, { title: 'Resolved', body: '已处理' }, at(8));
     for (let n = 8; n <= 13; n++) await tick(n);
     expect(await recent()).toHaveLength(2);
     await createEvent(fixture.db, config(row.id), at(14));
@@ -263,7 +263,7 @@ describe('events', () => {
     expect(event).toMatchObject({
       status: 'stopped',
       monitors: [{ id: null, name: row.name }],
-      updates: [{ title: null, status: 'stopped' }],
+      updates: [{ title: 'Stopped', status: 'stopped' }],
     });
     expect((await getStatus(environment(fixture.db))).events).toMatchObject([
       { id: event.id, status: 'stopped', monitors: event.monitors, updates: event.updates },
@@ -362,20 +362,11 @@ describe('events', () => {
       ).toBe(saved.endedAt);
     },
   );
-  it('normalizes legacy omitted titles and rejects invalid or conflicting stages without writes', async () => {
+  it('requires a fixed title and rejects invalid or unavailable stages without writes', async () => {
     const row = await node();
     let event = await createEvent(fixture.db, config(row.id), at(0));
     const { request } = apiClient(fixture.db);
-    for (const title of [
-      undefined,
-      null,
-      '',
-      ' \n\t ',
-      'Investigating',
-      '  Identified  ',
-      'Monitoring',
-      'Updated',
-    ]) {
+    for (const title of ['Investigating', '  Identified  ', 'Monitoring', 'Updated']) {
       const response = await request(`admin/events/${event.id}/updates`, 'POST', {
         version: event.version,
         title,
@@ -384,11 +375,15 @@ describe('events', () => {
       expect(response.status).toBe(200);
       const saved = (await response.json()) as AdminEvent;
       const update = saved.updates.find((update) => !event.updates.some((old) => old.id === update.id));
-      expect(update).toMatchObject({ title: title?.trim() || 'Updated', body: '继续排查', status: null });
+      expect(update).toMatchObject({ title: title.trim(), body: '继续排查', status: null });
       event = saved;
     }
     for (const change of [
       ...[
+        undefined,
+        null,
+        '',
+        ' \n\t ',
         false,
         123,
         {},
@@ -402,9 +397,6 @@ describe('events', () => {
       ].map((title) => ({ title })),
       { body: '' },
       { body: '  ' },
-      { resolve: 'true' },
-      { title: 'Resolved', resolve: false },
-      { title: 'Updated', resolve: true },
     ]) {
       const response = await request(`admin/events/${event.id}/updates`, 'POST', {
         version: event.version,
@@ -417,8 +409,8 @@ describe('events', () => {
     }
     const completed = await request(`admin/events/${event.id}/updates`, 'POST', {
       version: event.version,
-      body: '旧客户端确认完成',
-      resolve: true,
+      title: 'Resolved',
+      body: '确认完成',
     });
     expect(completed.status).toBe(200);
     event = (await completed.json()) as AdminEvent;
@@ -444,7 +436,7 @@ describe('events', () => {
     expect(followup.status).toBe(200);
     expect(await followup.json()).toMatchObject({ status: 'resolved', endedAt: event.endedAt });
   });
-  it('allows maintenance progress without changing its clock-derived status and preserves legacy completion', async () => {
+  it('keeps maintenance clock-derived until the Completed stage is submitted', async () => {
     const row = await node();
     let event = await createEvent(
       fixture.db,
@@ -481,9 +473,8 @@ describe('events', () => {
     }
     const response = await request(`admin/events/${event.id}/updates`, 'POST', {
       version: event.version,
-      title: null,
+      title: 'Completed',
       body: '取消计划并提前完成',
-      resolve: true,
     });
     expect(response.status).toBe(200);
     const saved = (await response.json()) as AdminEvent;
@@ -577,15 +568,6 @@ describe('events', () => {
     expect(
       (await request(`admin/events/${event.id}`, 'PATCH', { ...config(row.id), version: event.version }))
         .status,
-    ).toBe(409);
-    expect(
-      (
-        await request(`admin/events/${event.id}/updates`, 'POST', {
-          version: event.version,
-          body: '手动完成',
-          resolve: true,
-        })
-      ).status,
     ).toBe(409);
     expect((await getEvent(fixture.db, event.id))?.updates).toHaveLength(0);
     expect(
@@ -684,7 +666,7 @@ describe('events', () => {
           fixture.db,
           event.id,
           1,
-          { title: null, body: '处理完成', resolve: true },
+          { title: 'Resolved', body: '处理完成' },
           at(10 + (index % 3)),
         ),
       );
@@ -695,7 +677,7 @@ describe('events', () => {
       fixture.db,
       unrelated.id,
       1,
-      { title: null, body: '已恢复', resolve: true },
+      { title: 'Resolved', body: '已恢复' },
       at(32),
     );
     const newestFirst = (a: AdminEvent, b: AdminEvent) =>
@@ -727,14 +709,14 @@ describe('events', () => {
     const { version: _version, ...publicOld } = old;
     expect(await oldDetail.json()).toMatchObject({ event: publicOld });
   });
-  it('reads legacy titles and deleted monitor snapshots publicly and returns uncached missing-event errors', async () => {
+  it('reads progress and deleted monitor snapshots publicly and returns uncached missing-event errors', async () => {
     const row = await node();
     const event = await createEvent(fixture.db, config(row.id), at(0));
     await fixture.db
       .prepare(
-        "INSERT INTO event_updates (id, event_id, title, body, source, created_at) VALUES ('legacy', ?, ?, ?, 'manual', ?)",
+        "INSERT INTO event_updates (id, event_id, title, body, source, created_at) VALUES ('progress', ?, ?, ?, 'manual', ?)",
       )
-      .bind(event.id, '<script>旧标题</script>', '旧正文', at(1))
+      .bind(event.id, 'Updated', '<script>正文</script>', at(1))
       .run();
     await fixture.db.prepare('DELETE FROM monitors WHERE id = ?').bind(row.id).run();
     const { request } = apiClient(fixture.db);
@@ -743,14 +725,14 @@ describe('events', () => {
     const data = (await response.json()) as { event: StatusEvent };
     expect(data.event).toMatchObject({
       monitors: [{ id: null, name: row.name }],
-      updates: [{ title: '<script>旧标题</script>', body: '旧正文' }],
+      updates: [{ title: 'Updated', body: '<script>正文</script>' }],
     });
     expect(data.event).not.toHaveProperty('version');
     expect(JSON.stringify(data)).not.toContain(httpConfig.url);
     const missing = await request('events/missing', 'GET', undefined, { headers: {} });
     expect(missing.status).toBe(404);
     expect(missing.headers.get('cache-control')).toBe('no-store');
-    expect(await missing.json()).toEqual({ error: '事件不存在。', code: 'event_not_found' });
+    expect(await missing.json()).toEqual({ code: 'event_not_found' });
   });
   it('paginates identical timestamps without duplicates and protects management APIs', async () => {
     const row = await node();
@@ -768,7 +750,7 @@ describe('events', () => {
       ).toBe(401);
     }
     expect((await request('admin/events?cursor=bad')).status).toBe(400);
-    const created = await request('admin/groups', 'POST', { name: '区域', sortOrder: 1 });
+    const created = await request('admin/groups', 'POST', { name: '区域' });
     expect(created.status).toBe(201);
     const group = (await created.json()) as { id: string; version: number };
     expect((await request(`admin/groups/${group.id}`, 'DELETE', { version: group.version + 1 })).status).toBe(
@@ -780,8 +762,8 @@ describe('events', () => {
       (
         await request(`admin/events/${event.id}/updates`, 'POST', {
           version: event.version,
+          title: 'Resolved',
           body: '确认完成',
-          resolve: true,
         })
       ).status,
     ).toBe(200);

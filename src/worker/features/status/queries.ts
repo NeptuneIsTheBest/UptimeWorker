@@ -42,7 +42,7 @@ function publicMonitor(row: MonitorRow, daily: DailyRow[], now: number): PublicM
   return {
     id: row.id,
     name: row.name,
-    groupId: row.group_id ?? null,
+    groupId: row.group_id,
     type: row.type,
     status: currentStatus(row, now),
     intervalMinutes: row.interval_minutes,

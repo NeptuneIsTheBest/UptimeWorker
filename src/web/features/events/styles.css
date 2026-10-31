@@ -234,12 +234,6 @@
   font-size: 14px;
   margin: 10px 0 0;
 }
-.event-legacy-title {
-  margin-top: 14px;
-  font-weight: 600;
-  font-size: 14px;
-  white-space: pre-wrap;
-}
 .event-actions,
 .event-pagination {
   display: flex;

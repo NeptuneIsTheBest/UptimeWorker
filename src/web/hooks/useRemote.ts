@@ -60,12 +60,7 @@ export function useRemote<T extends PageRefreshSettings>(path: string) {
           setData(value);
           setError(null);
           setLastRefreshedAt(Date.now());
-          // An older cached response may not contain the new setting during rollout.
-          applyInterval(
-            isPageRefreshSeconds(value.pageRefreshSeconds)
-              ? value.pageRefreshSeconds
-              : DEFAULT_PAGE_REFRESH_SECONDS,
-          );
+          applyInterval(value.pageRefreshSeconds);
         }
       } catch (err) {
         if (active && id === requestId && !(err instanceof DOMException && err.name === 'AbortError'))

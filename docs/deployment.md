@@ -1,5 +1,3 @@
-<a id="部署指南"></a>
-
 # Deployment guide
 
 [English](deployment.md) | [简体中文](zh-CN/deployment.md)
@@ -7,8 +5,6 @@
 [Back to README](../README.md)
 
 Verify and deploy manually through GitHub Actions using the repository's [Verify and deploy workflow](../.github/workflows/deploy.yml).
-
-<a id="1-配置-cloudflare"></a>
 
 ## 1. Configure Cloudflare
 
@@ -21,8 +17,6 @@ Enable Cloudflare Workers, the account's `workers.dev` subdomain, and Zero Trust
 | Account | Account Settings: Read |
 
 Deployment uses `workers.dev` by default, so the API Token only needs the permissions above. Configure Access policies in the dashboard.
-
-<a id="2-创建-access-应用"></a>
 
 ## 2. Create an Access application
 
@@ -42,8 +36,6 @@ Configure an **Allow** policy limited to your email address or a designated user
 Record the team domain, such as `your-team.cloudflareaccess.com`, and the **Application Audience (AUD) Tag**. The Worker validates sign-in credentials and denies admin access if Access is not configured or the credentials are invalid.
 
 See [Workers Access](https://developers.cloudflare.com/workers/configuration/cloudflare-access/) and [Access path matching](https://developers.cloudflare.com/cloudflare-one/access-controls/policies/app-paths/) for detailed rules. Custom domain setup is covered [below](#using-only-a-custom-domain).
-
-<a id="3-配置-github"></a>
 
 ## 3. Configure GitHub
 
@@ -77,8 +69,6 @@ A failed step stops the remaining steps of that deployment. Existing databases a
 
 The default deployment URL is `https://<WORKER_NAME>.<your-subdomain>.workers.dev`. When the default domain is disabled, use the custom domain already bound to the Worker. A newly added Cron trigger may take a few minutes to propagate; see [Cron Triggers](https://developers.cloudflare.com/workers/configuration/cron-triggers/).
 
-<a id="仅使用自定义域名"></a>
-
 ## Using only a custom domain
 
 Bind the custom domain to the same Worker in the Cloudflare dashboard. Add its `/admin` and `/api/admin` paths and their subpaths to the Access application. Subsequent deployments preserve the domain binding.
@@ -86,8 +76,6 @@ Bind the custom domain to the same Worker in the Cloudflare dashboard. Add its `
 Set `WORKERS_DEV` to `false` in GitHub Actions Variables, then rerun the workflow on `main`. Every deployment applies this setting; disabling the default domain only in the Cloudflare dashboard will be overridden by a later deployment. See the [Cloudflare documentation](https://developers.cloudflare.com/workers/configuration/routing/workers-dev/).
 
 `WORKERS_DEV` accepts `true` / `false` and defaults to `true`; invalid values stop deployment. Preview URLs are always disabled. This variable applies to GitHub Actions; deploying directly with `wrangler.jsonc` leaves the default domain enabled.
-
-<a id="首次上线验收"></a>
 
 ## Initial production checks
 
@@ -98,8 +86,6 @@ Set `WORKERS_DEV` to `false` in GitHub Actions Variables, then rerun the workflo
 5. Inspect the Worker's Cron logs, CPU usage, and D1 Row Metrics in Cloudflare.
 6. If `WORKERS_DEV=false`, confirm after both the first and subsequent deployments that the Worker's Production and Preview URL switches are off, and that the custom domain's home page and admin sign-in work.
 
-<a id="回滚与数据库恢复"></a>
-
 ## Rollback and database recovery
 
-Handle code rollback and database recovery separately: roll back the Worker version in Cloudflare, and use D1 Time Travel to recover the database when needed after assessing the data impact. A failed deployment does not undo completed migrations. Before rolling back, review [database migrations](development.md#database-migrations) and [compatibility notes](development.md#compatibility-notes).
+Handle code rollback and database recovery separately: roll back the Worker version in Cloudflare, and use D1 Time Travel to recover the database when needed after assessing the data impact. A failed deployment does not undo completed migrations. Before rolling back, review [database migrations](development.md#database-migrations).

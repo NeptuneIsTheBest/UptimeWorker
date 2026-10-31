@@ -4,6 +4,7 @@ export function sampleMonitor(index: number, status: PublicMonitor['status'] = '
   const today = Math.floor(Date.now() / 86_400_000) * 86_400_000;
   return {
     id: `sample-${index}`,
+    groupId: null,
     name: ['官方网站', 'API 服务', '数据库连接', '文件存储服务'][index],
     type: index === 2 ? 'tcp' : 'http',
     status,

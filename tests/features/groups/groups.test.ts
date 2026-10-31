@@ -62,7 +62,7 @@ describe('monitor groups', () => {
   });
   it('keeps current state and failure streaks when changing names/groups; deleting groups ungroups nodes', async () => {
     const row = await node();
-    const group = await saveGroup(fixture.db, { name: '亚洲', sortOrder: 2 });
+    const group = await saveGroup(fixture.db, { name: '亚洲' });
     await tick(0);
     const changed = await updateMonitor(
       fixture.db,

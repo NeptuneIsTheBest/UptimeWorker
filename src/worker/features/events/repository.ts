@@ -248,9 +248,6 @@ export async function appendEventUpdate(
 ) {
   const event = await getEvent(db, id);
   if (!event || event.version !== version) throw new ConflictError('event_changed');
-  // Preserve the legacy completion conflict while fixed choices are validated below.
-  if (config.title === null && config.resolve && (event.source !== 'manual' || event.status !== 'open'))
-    throw new ConflictError('event_managed_or_ended');
   const { title, body, resolve } = resolveEventUpdateConfig(event, config);
   const token = crypto.randomUUID();
   const writes = await db.batch([

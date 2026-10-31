@@ -141,9 +141,11 @@ test('fixed stages and completion drafts survive refresh and failed submission',
   await expect(progress.getByLabel('进展说明')).toHaveValue(body);
 
   const endpoint = `**/api/admin/events/${event.id}/updates`;
-  await page.route(endpoint, (route) => route.fulfill({ status: 503, json: { error: '保存暂时失败' } }));
+  await page.route(endpoint, (route) =>
+    route.fulfill({ status: 503, json: { code: 'service_unavailable' } }),
+  );
   await progress.getByRole('button', { name: '保存进展' }).click();
-  await expect(progress.getByRole('alert')).toContainText('保存暂时失败');
+  await expect(progress.getByRole('alert')).toContainText('服务暂时不可用，请稍后重试。');
   await expect(progress.getByLabel('进展阶段')).toHaveValue(title);
   await expect(progress.getByLabel('进展说明')).toHaveValue(body);
   await page.unroute(endpoint);
@@ -256,6 +258,7 @@ for (const view of ['overview', 'detail'] as const) {
     await page.clock.pauseAt(now);
     const monitor: PublicMonitor = {
       id: 'event-node',
+      groupId: null,
       name: '事件节点',
       type: 'http',
       status: 'up',
@@ -293,7 +296,7 @@ for (const view of ['overview', 'detail'] as const) {
         updates: [
           {
             id: 'preparation',
-            title: null,
+            title: 'Updated',
             body: '维护准备完成',
             source: 'manual',
             status: null,
@@ -307,19 +310,20 @@ for (const view of ['overview', 'detail'] as const) {
     await page.route(`**${endpoint}`, (route) =>
       route.fulfill(
         fail
-          ? { status: 503, json: { error: '事件刷新暂时失败' } }
+          ? { status: 503, json: { code: 'service_unavailable' } }
           : {
               json: {
                 ...(view === 'overview'
-                  ? { siteName: 'UptimeWorker', monitors: [monitor] }
+                  ? {
+                      siteName: 'UptimeWorker',
+                      monitors: [monitor],
+                      groups: [],
+                      ungrouped: { id: '__ungrouped__', sortOrder: 0 },
+                    }
                   : { monitor, checks: [] }),
                 generatedAt: now,
                 pageRefreshSeconds: 30,
-                // Older cached responses do not yet include progress titles.
-                events: events.map((event) => ({
-                  ...event,
-                  updates: event.updates.map(({ title: _title, ...update }) => update),
-                })),
+                events,
               },
             },
       ),
@@ -384,7 +388,7 @@ for (const view of ['overview', 'detail'] as const) {
       .sort((a, b) => b.updatedAt - a.updatedAt || b.id.localeCompare(a.id));
     fail = true;
     await nextRefresh();
-    await expect(page.getByRole('alert')).toContainText('事件刷新暂时失败');
+    await expect(page.getByRole('alert')).toContainText('服务暂时不可用，请稍后重试。');
     await expect(active.locator('.event-card')).toHaveCount(3);
     await expect(history.locator('.event-card')).toHaveCount(1);
     fail = false;

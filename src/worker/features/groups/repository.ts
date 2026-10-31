@@ -26,68 +26,47 @@ export async function listGroupOrder(db: D1Database): Promise<GroupListing> {
   };
 }
 
-export async function saveGroup(
-  db: D1Database,
-  config: { name: string; sortOrder?: number },
-  id?: string,
-  version?: number,
-) {
+export async function saveGroup(db: D1Database, config: { name: string }, id?: string, version?: number) {
   if (id === UNGROUPED_ID) throw new ValidationError('group_readonly');
   const groupId = id ?? crypto.randomUUID();
   const result = id
     ? await db
         .prepare(
-          `UPDATE monitor_groups SET name = ?, sort_order = COALESCE(?, sort_order), version = version + 1
+          `UPDATE monitor_groups SET name = ?, version = version + 1
         WHERE id = ? AND version = ? AND NOT EXISTS (SELECT 1 FROM monitor_groups WHERE name = ? AND id != ?)`,
         )
-        .bind(config.name, config.sortOrder ?? null, id, version!, config.name, id)
+        .bind(config.name, id, version!, config.name, id)
         .run()
     : (
         await db.batch([
-          // Legacy numeric orders can occupy the top of the accepted range.
-          // Compact them only when appending would otherwise exceed that range.
-          db
-            .prepare(
-              `WITH positions AS MATERIALIZED (
-          SELECT id, sort_order AS original_order,
-            ROW_NUMBER() OVER (ORDER BY sort_order, id = '${UNGROUPED_ID}', created_at, id) - 1 AS position
-          FROM monitor_groups
-        ) UPDATE monitor_groups SET
-          sort_order = (SELECT position FROM positions WHERE id = monitor_groups.id),
-          version = version + 1
-        WHERE ? IS NULL AND (SELECT MAX(original_order) FROM positions) >= 1000000
-          AND NOT EXISTS (SELECT 1 FROM monitor_groups WHERE name = ?)
-          AND sort_order != (SELECT position FROM positions WHERE id = monitor_groups.id)`,
-            )
-            .bind(config.sortOrder ?? null, config.name),
           // Preserve a trailing Ungrouped entry when appending a new group.
-          // All three statements run in one transaction, including the name guard.
+          // Both statements run in one transaction, including the name guard.
           db
             .prepare(
               `WITH next AS MATERIALIZED (
-          SELECT COALESCE(?, (SELECT COALESCE(MAX(sort_order), -1) + 1
-            FROM monitor_groups WHERE id != '${UNGROUPED_ID}')) AS position
+          SELECT COALESCE(MAX(sort_order), -1) + 1 AS position
+            FROM monitor_groups WHERE id != '${UNGROUPED_ID}'
         ) UPDATE monitor_groups SET sort_order = (SELECT position + 1 FROM next), version = version + 1
         WHERE id = '${UNGROUPED_ID}' AND sort_order <= (SELECT position FROM next)
           AND NOT EXISTS (SELECT 1 FROM monitor_groups g
             WHERE g.id != '${UNGROUPED_ID}' AND g.sort_order > monitor_groups.sort_order)
           AND NOT EXISTS (SELECT 1 FROM monitor_groups WHERE name = ?)`,
             )
-            .bind(config.sortOrder ?? null, config.name),
+            .bind(config.name),
           db
             .prepare(
               `INSERT INTO monitor_groups(id, name, sort_order, created_at)
-        SELECT ?, ?, COALESCE(?, (SELECT COALESCE(MAX(sort_order), -1) + 1
-          FROM monitor_groups WHERE id != '${UNGROUPED_ID}')), ?
+        SELECT ?, ?, (SELECT COALESCE(MAX(sort_order), -1) + 1
+          FROM monitor_groups WHERE id != '${UNGROUPED_ID}'), ?
         WHERE NOT EXISTS (SELECT 1 FROM monitor_groups WHERE name = ?)`,
             )
-            .bind(groupId, config.name, config.sortOrder ?? null, Date.now(), config.name),
+            .bind(groupId, config.name, Date.now(), config.name),
         ])
-      )[2];
+      )[1];
   if (!result.meta.changes) throw new ConflictError('group_conflict');
   return (await listGroups(db)).find((group) => group.id === groupId)!;
 }
-export async function assertGroup(db: D1Database, id: string | null | undefined) {
+export async function assertGroup(db: D1Database, id: string | null) {
   if (id === UNGROUPED_ID) throw new ValidationError('group_invalid');
   if (id && !(await db.prepare('SELECT id FROM monitor_groups WHERE id = ?').bind(id).first()))
     throw new ValidationError('group_not_found');

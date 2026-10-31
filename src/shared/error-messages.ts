@@ -16,10 +16,6 @@ export const errorMessages = {
     zh: '当前事件不能使用此进展阶段',
     en: 'This progress stage is unavailable for the current event.',
   },
-  event_progress_conflict: {
-    zh: '进展阶段与完成状态不一致',
-    en: 'The progress stage does not match the completion status.',
-  },
   event_type_invalid: { zh: '事件类型无效', en: 'Invalid event type.' },
   event_monitors_invalid: {
     zh: '请选择有效的关联节点',
@@ -30,7 +26,6 @@ export const errorMessages = {
     en: 'Enter valid maintenance times. The end must be after the start.',
   },
   event_progress_invalid: { zh: '请选择有效的进展阶段', en: 'Select a valid progress stage.' },
-  event_resolve_invalid: { zh: '完成状态无效', en: 'Invalid completion status.' },
   access_unconfigured: {
     zh: '后台尚未配置 Cloudflare Access，请按 README 完成配置。',
     en: 'Cloudflare Access is not configured. Follow the README to finish setup.',
@@ -53,10 +48,6 @@ export const errorMessages = {
   request_too_large: { zh: '请求内容过大。', en: 'The request body is too large.' },
   endpoint_not_found: { zh: '接口不存在。', en: 'API endpoint not found.' },
   event_not_found: { zh: '事件不存在。', en: 'Event not found.' },
-  group_order_invalid: {
-    zh: '排序需为 0–1000000 的整数',
-    en: 'Sort order must be an integer between 0 and 1000000.',
-  },
   settings_object_required: { zh: '全局设置必须是对象', en: 'Global settings must be an object.' },
   settings_version_invalid: { zh: '请携带有效的设置版本号', en: 'A valid settings version is required.' },
   auto_incident_interval_invalid: {
@@ -178,10 +169,6 @@ export const errorMessages = {
     en: 'The event or its monitors have changed. Automatic events cannot be edited. Refresh and try again.',
   },
   event_changed: { zh: '事件已变更，请刷新后重试。', en: 'The event has changed. Refresh and try again.' },
-  event_managed_or_ended: {
-    zh: '该事件状态由检测维护，或事件已结束，请刷新后重试。',
-    en: 'The event is managed by checks or has already ended. Refresh and try again.',
-  },
   event_update_conflict: {
     zh: '事件已变更，或该事件状态由检测维护，请刷新后重试。',
     en: 'The event has changed or its status is managed by checks. Refresh and try again.',

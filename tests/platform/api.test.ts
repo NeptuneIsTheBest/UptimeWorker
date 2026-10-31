@@ -39,7 +39,6 @@ describe('API boundaries', () => {
       const response = await app.request(`https://status.test${path}`, { method }, env);
       expect(response.status).toBe(401);
       expect(await response.json()).toMatchObject({
-        error: '请通过 Cloudflare Access 登录后访问后台。',
         code: 'auth_required',
       });
       expect(response.headers.get('cache-control')).toBe('no-store');
@@ -94,7 +93,6 @@ describe('API boundaries', () => {
     const conflict = await request(path, 'PATCH', { version: row.version, enabled: true });
     expect(conflict.status).toBe(409);
     expect(await conflict.json()).toEqual({
-      error: '监控已被修改，请刷新后重试。',
       code: 'monitor_conflict',
     });
     expect(await findMonitor(fixture.db, row.id)).toMatchObject({ enabled: 0, interval_minutes: 5 });
@@ -128,7 +126,6 @@ describe('API boundaries', () => {
       const created = await request('admin/monitors', 'POST', { ...httpConfig, intervalMinutes });
       expect(created.status).toBe(400);
       expect(await created.json()).toEqual({
-        error: '检测间隔需为 1–60 分钟的整数',
         code: 'monitor_interval_invalid',
         params: { min: 1, max: 60 },
       });
@@ -146,13 +143,13 @@ describe('API boundaries', () => {
         const response = await request(path, method, undefined, { body });
         expect(response.status).toBe(400);
         expect(response.headers.get('content-type')).toContain('application/json');
-        expect(await response.json()).toHaveProperty('error');
+        expect(await response.json()).toHaveProperty('code');
       }
     }
     expect((await request('monitors/nope/history')).status).toBe(404);
     const unknown = await request('not-an-endpoint');
     expect(unknown.status).toBe(404);
-    expect(await unknown.json()).toEqual({ error: '接口不存在。', code: 'endpoint_not_found' });
+    expect(await unknown.json()).toEqual({ code: 'endpoint_not_found' });
     expect(unknown.headers.get('content-type')).toContain('application/json');
     expect(await fixture.db.prepare('SELECT version FROM global_settings').first('version')).toBe(1);
   });

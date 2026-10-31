@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createProbe } from '../../../src/worker/features/monitors/probes';
-import { findMonitor } from '../../../src/worker/features/monitors/repository';
+import { findMonitor, monitorConfig } from '../../../src/worker/features/monitors/repository';
 import { getHistory } from '../../../src/worker/features/status/queries';
 import { runScheduled } from '../../../src/worker/features/monitors/scheduler';
 import { WAF_BYPASS_HEADER } from '../../../src/shared/settings/constants';
@@ -45,7 +45,17 @@ function client(fetchMock = vi.fn<typeof fetch>().mockImplementation(async () =>
 }
 
 describe('monitor options API and scheduling', () => {
-  it('normalizes legacy reads, persists new fields and preserves them on partial updates', async () => {
+  it.each(['method', 'wafBypassEnabled', 'requestHeaders', 'requestBody', 'responseCheck'])(
+    'rejects HTTP creation without %s and leaves the database unchanged',
+    async (field) => {
+      const config: Record<string, unknown> = { ...httpConfig };
+      delete config[field];
+      const response = await client().request('admin/monitors', 'POST', config);
+      expect(response.status).toBe(400);
+      expect(await fixture.db.prepare('SELECT COUNT(*) AS n FROM monitors').first('n')).toBe(0);
+    },
+  );
+  it('persists HTTP options, preserves partial updates and rejects incomplete stored configurations', async () => {
     const c = client();
     const row = await c.create({
       method: 'POST',
@@ -59,20 +69,15 @@ describe('monitor options API and scheduling', () => {
       enabled: false,
     });
     expect(await patched.json()).toMatchObject({ ...row, version: 2, enabled: false, status: 'paused' });
-    const legacy = { ...httpConfig } as Record<string, unknown>;
-    for (const key of ['wafBypassEnabled', 'requestHeaders', 'requestBody', 'responseCheck'])
-      delete legacy[key];
+    const incomplete = { ...httpConfig } as Record<string, unknown>;
+    for (const key of ['method', 'wafBypassEnabled', 'requestHeaders', 'requestBody', 'responseCheck'])
+      delete incomplete[key];
     await fixture.db
       .prepare('UPDATE monitors SET config_json = ? WHERE id = ?')
-      .bind(JSON.stringify(legacy), row.id)
+      .bind(JSON.stringify(incomplete), row.id)
       .run();
-    const list = (await (await c.request('admin/monitors')).json()) as { monitors: AdminMonitor[] };
-    expect(list.monitors[0]).toMatchObject({
-      wafBypassEnabled: false,
-      requestHeaders: {},
-      requestBody: null,
-      responseCheck: null,
-    });
+    const stored = (await findMonitor(fixture.db, row.id))!;
+    expect(() => monitorConfig(stored)).toThrow();
   });
 
   it('uses a changed monitor domain without updating global settings', async () => {
@@ -110,7 +115,7 @@ describe('monitor options API and scheduling', () => {
   });
 
   it.each([true, false])(
-    'does not send credentials to another WAF monitor or a legacy domain (other monitor enabled=%s)',
+    'does not send credentials to another WAF monitor or an unrelated domain (other monitor enabled=%s)',
     async (enabled) => {
       const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (input) => {
         const url = new URL(String(input));
@@ -127,14 +132,7 @@ describe('monitor options API and scheduling', () => {
       const c = client(fetchMock);
       const row = await c.create({ wafBypassEnabled: true });
       const other = await c.create({ wafBypassEnabled: true, enabled, url: 'https://auto.example.com/' });
-      await fixture.db
-        .prepare('UPDATE global_settings SET waf_bypass_domains_json = ?')
-        .bind('["manual.example.com"]')
-        .run();
-      await c.configure({
-        wafBypassDomains: ['manual.example.com'],
-        wafBypassAutoDomains: ['auto.example.com'],
-      });
+      await c.configure();
       expect(await (await c.request(`admin/monitors/${row.id}/test`, 'POST', {})).json()).toMatchObject({
         ok: true,
       });

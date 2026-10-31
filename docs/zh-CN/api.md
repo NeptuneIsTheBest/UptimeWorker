@@ -30,7 +30,7 @@
 
 管理接口通过 [Cloudflare Access](deployment.md#2-创建-access-应用) 鉴权。写请求须携带同源 `Origin` 和 `Content-Type: application/json`；删除监控、测试连接可发送 `{}`，删除分组或事件须携带 `version`。
 
-错误格式为 `{ "error": "说明", "code": "稳定错误码", "params": {} }`。`code` 与语言无关，`params` 为空时省略；`error` 保留中文说明，供旧客户端及未知错误码回退使用。例如无效检测间隔返回 `{ "error": "检测间隔需为 1–60 分钟的整数", "code": "monitor_interval_invalid", "params": { "min": 1, "max": 60 } }`。文本长度错误的 `field` 为 `event_title`、`event_body`、`progress_title`、`progress_body` 或 `group_name`，详见[错误码定义](../../src/shared/error-messages.ts)。未知接口返回 JSON `404`；公开接口不返回目标地址、监控配置、JWT 或原始异常。
+错误格式为 `{ "code": "稳定错误码", "params": {} }`。`code` 与语言无关，`params` 为空时省略；界面按当前语言翻译已知错误码，未知错误码显示通用请求失败提示。例如无效检测间隔返回 `{ "code": "monitor_interval_invalid", "params": { "min": 1, "max": 60 } }`。文本长度错误的 `field` 为 `event_title`、`event_body`、`progress_title`、`progress_body` 或 `group_name`，详见[错误码定义](../../src/shared/error-messages.ts)。未知接口返回 JSON `404`；公开接口不返回目标地址、监控配置、JWT 或原始异常。
 
 ## 全局设置
 
@@ -58,19 +58,19 @@ GET / PATCH 返回下表字段。PATCH 须携带当前 `version`，其余字段�
 
 例如 `{"version": 1, "performance": {"concurrency": 6, "maxChecksPerRun": 30}}` 仅修改并发和批量，保留套餐、时间预算以及其他全局设置。估算规则见[性能设置与容量估算](configuration.md#性能设置与容量估算)。
 
-`wafBypassToken` 仅用于写入，省略或空字符串保留原密钥，不回传原值。旧字段 `wafBypassDomains`、`wafBypassAutoDomains` 会被忽略，不返回也不参与放行判定。
+`wafBypassToken` 仅用于写入，省略或空字符串保留原密钥，不回传原值。
 
 `GET /api/status`、`GET /api/monitors/:id/history`、`GET /api/events/:id` 和 `GET /api/admin/monitors` 的顶层响应均包含 `pageRefreshSeconds`。公开接口缓存有效期为 `min(pageRefreshSeconds, 60)` 秒，关闭时为 60 秒；已有缓存自然过期后生效。管理接口及失败响应不缓存。`generatedAt` 表示服务端生成数据的时间，界面刷新行为见[页面自动刷新](configuration.md#页面自动刷新)，事件触发规则见[服务器分组与事件](configuration.md#服务器分组与事件)。
 
 ## 分组与事件
 
-分组包含 `id`、`name`、`sortOrder`、`version`。POST / PATCH 提交 `name`（1–80 字符、不重复），可选 `sortOrder`（0–1000000 的整数），PATCH 另须提交 `version`。创建省略顺序时追加到普通分组末尾；未分组原本在末尾时继续留在末尾。编辑省略时保留原顺序，兼容旧客户端的数字排序。追加时若已有顺序占满数值范围，会先按现有顺序归一化并更新受影响分组的版本。删除分组后节点的 `groupId` 变为 null，并按原组内顺序追加到未分组末尾。
+分组包含 `id`、`name`、只读 `sortOrder`、`version`。POST / PATCH 提交 `name`（1–80 字符、不重复），PATCH 另须提交 `version`。新分组追加到普通分组末尾；未分组原本在末尾时继续留在末尾。重命名保留当前位置，调整顺序使用 `PUT /api/admin/groups/order`。删除分组后节点的 `groupId` 变为 null，并按原组内顺序追加到未分组末尾。
 
 监控的 `groupId` 须指向现存普通分组；创建时省略默认 null，PATCH 省略保留原值，传 null 移出分组。只改名称或分组会增加管理版本，保留当前状态、检测计划和连续失败计时。`GET /api/admin/groups` 和 `GET /api/admin/monitors` 返回普通分组 `groups`，以及 `ungrouped: {id: "__ungrouped__", sortOrder, version}`。`GET /api/status` 返回相应的公开信息，省略版本。系统项仅参与排序，PATCH / DELETE 返回 `400 group_readonly`；将其 ID 用作监控 `groupId` 返回 `400 group_invalid`，未分组节点仍使用 null。
 
-管理端监控响应增加只读 `sortOrder`，不属于探测配置，普通监控 POST / PATCH 不接受它作为排序指令。新增或换组的服务追加到目标组末尾。管理和公开列表均按分组顺序、组内服务顺序排列，未分组使用保存的分组位置；普通分组同序按创建时间、ID 保证稳定，未分组在相同序号的普通分组之后。
+管理端监控响应包含只读 `sortOrder`，不属于探测配置，普通监控 POST / PATCH 不接受它作为排序指令。新增或换组的服务追加到目标组末尾。管理和公开列表均按分组顺序、组内服务顺序排列，未分组使用保存的分组位置；普通分组同序按创建时间、ID 保证稳定，未分组在相同序号的普通分组之后。
 
-排序请求的 `items` 必须是目标顺序的完整非空列表，每项为 `{id, expectedVersion, expectedSortOrder}`，其中版本和顺序取自最近一次管理列表响应，而不是目标序号。`PUT /api/admin/groups/order` 提交 `{items}`，必须同时包含全部普通分组及 `__ungrouped__`（包括空分组），返回 `{groups, ungrouped}`；旧请求遗漏系统项返回 `409 order_conflict`。`PUT /api/admin/monitors/order` 提交 `{groupId, items}`，`groupId` 必填，null 表示未分组，返回 `{groupId, monitors}`（该组全部服务）。成功后按数组位置保存从 0 开始的连续序号。
+排序请求的 `items` 必须是目标顺序的完整非空列表，每项为 `{id, expectedVersion, expectedSortOrder}`，其中版本和顺序取自最近一次管理列表响应，而不是目标序号。`PUT /api/admin/groups/order` 提交 `{items}`，必须同时包含全部普通分组及 `__ungrouped__`（包括空分组），返回 `{groups, ungrouped}`。`PUT /api/admin/monitors/order` 提交 `{groupId, items}`，`groupId` 必填，null 表示未分组，返回 `{groupId, monitors}`（该组全部服务）。成功后按数组位置保存从 0 开始的连续序号。
 
 两个排序接口的请求体上限为 256 KiB；缺失或无效参数、重复 ID、空列表返回 `400`，完整成员集合、分组归属、原版本或原顺序不一致返回 `409 order_conflict`。排序原子提交，不发生部分写入。服务排序保留监控 `version`，分组排序增加位置变化的分组版本。保存后使用返回的新快照，冲突后重新读取再提交。
 
@@ -79,7 +79,7 @@ GET / PATCH 返回下表字段。PATCH 须携带当前 `version`，其余字段�
 事件响应包含 `id`、`title`、`body`、`type`、`startsAt`、`endsAt`、`source`（`manual` / `automatic`）、`status`（`open` / `resolved` / `stopped`）、`startedAt`、`endedAt`、`createdAt`、`updatedAt`、`monitors` 和 `updates`：
 
 - `monitors` 为 `{id, name}` 数组；已删除节点的 id 为 null，name 保留快照。
-- `updates` 中每项包含 `id`、`title`、`body`、`source`、`status`、`createdAt`，按 `createdAt` 升序、同时间按 `id` 升序排列；新写入的 `title` 为固定英文阶段，旧记录仍可能是自由标题或 null，自动生成进展可无标题；仅补充说明时 status 为 null。
+- `updates` 中每项包含 `id`、`title`、`body`、`source`、`status`、`createdAt`，按 `createdAt` 升序、同时间按 `id` 升序排列。所有 `title` 均为固定英文阶段，自动恢复和停止跟踪记录分别使用 `Resolved` 和 `Stopped`；仅补充说明时 status 为 null。
 - 维护的待开始、进行中、已过计划时间由 `open` 状态和计划时间推导，计划结束不会自动变为 `resolved`。
 
 追加进展示例：`{"version": 1, "title": "Completed", "body": "维护已完成"}`。`title` 去除首尾空白后必须属于当前事件允许的固定阶段，区分大小写；`body` 为 1–4000 字符的纯文本。
@@ -93,13 +93,13 @@ GET / PATCH 返回下表字段。PATCH 须携带当前 `version`，其余字段�
 
 `Completed` 完成维护，`Resolved` 恢复手动故障；进展、事件状态及静默窗口原子更新。其他阶段仅记录说明，不改变计划维护状态或检测结果。`Stopped` 表示系统停止跟踪记录，不接受手动提交。
 
-兼容旧客户端：省略 `title`、传 null 或空白时默认为 `Updated`；同时传 `resolve: true` 时，按事件类型保存为 `Completed` 或 `Resolved` 并完成事件。显式提交的 `resolve` 必须与阶段的完成含义一致。新自由文本标题、不可用阶段及冲突参数返回 `400`，不发生写入；旧自由标题仍可读取。
+进展的 `title` 必填；缺失、null、空白、自由文本及当前事件不可用的阶段返回 `400`，不发生写入。
 
-自动事件不能编辑或手动完成，开放时不能删除；过期版本及旧版 `resolve: true` 请求试图完成自动或已结束事件时返回 `409`，需重新读取后处理。
+自动事件不能编辑或手动完成，开放时不能删除；过期版本以及不允许的编辑、删除操作返回 `409`，需重新读取后处理。
 
 `GET /api/admin/events` 返回 `{events, nextCursor, pageRefreshSeconds}`，每页 20 条；将非空 `nextCursor` URL 编码后作为 `?cursor=` 获取下一页。管理事件含 `version`，公开事件不含管理版本、身份或监控目标。
 
-`/api/status` 返回 `groups` 和 `events`；`/api/monitors/:id/history` 返回 `checks` 和仅关联该节点的 `events`。公开 `events` 包含全部 `open` 事件及最近 20 条 `resolved` / `stopped` 事件，按 `updatedAt` 倒序、同时间按 `id` 倒序排列；未结束事件不受历史条数限制。自动事件文案仅使用节点名称及通用检测描述。
+`/api/status` 始终返回 `groups`、`ungrouped` 和 `events`；`/api/monitors/:id/history` 返回 `checks` 和仅关联该节点的 `events`。`groups` 和 `events` 为空时仍返回数组，监控响应始终包含 `groupId`（未分组为 null）。公开 `events` 包含全部 `open` 事件及最近 20 条 `resolved` / `stopped` 事件，按 `updatedAt` 倒序、同时间按 `id` 倒序排列；未结束事件不受历史条数限制。自动事件文案仅使用节点名称及通用检测描述。
 
 `GET /api/events/:id` 无需登录，返回 `{siteName, event, generatedAt, pageRefreshSeconds}`，使用相同的公开事件字段并包含全部进展。按 ID 读取不受最近 20 条历史记录的限制；事件不存在或已删除时返回 `404`，失败响应不缓存。
 
@@ -107,7 +107,7 @@ GET / PATCH 返回下表字段。PATCH 须携带当前 `version`，其余字段�
 
 监控 POST / PATCH 的 JSON 请求上限为 256 KiB，其余 API 为 16 KiB，上述排序接口除外。`intervalMinutes` 接受 1–60 的整数分钟，POST 省略默认 1，PATCH 省略保留原值；小数、越界值、字符串和 null 返回 `400`。
 
-创建 HTTP 监控时，`method` 默认 GET，`wafBypassEnabled` 默认 false，`requestHeaders` 默认 `{}`，`requestBody`、`responseCheck` 默认 null。PATCH 省略字段保留原值，传 null 可清空请求体或响应校验。服务总数无固定上限，`GET /api/admin/monitors` 不再返回 `limit`，创建不再返回 `monitor_limit`。超时和检测行为见[基本配置](configuration.md#基本配置)。
+创建 HTTP 监控必须显式提供 `method`、`wafBypassEnabled`、`requestHeaders`、`requestBody` 和 `responseCheck`。无自定义请求头使用 `{}`，无请求体或响应校验使用 `null`。管理页面将这些选项初始化为 GET、false、`{}`、null 和 null。PATCH 省略字段保留原值，传 null 可清空请求体或响应校验。服务总数无固定上限。超时和检测行为见[基本配置](configuration.md#基本配置)。
 
 ### 基本 HTTP 监控
 
@@ -117,6 +117,10 @@ GET / PATCH 返回下表字段。PATCH 须携带当前 `version`，其余字段�
   "type": "http",
   "url": "https://example.com/health",
   "method": "GET",
+  "wafBypassEnabled": false,
+  "requestHeaders": {},
+  "requestBody": null,
+  "responseCheck": null,
   "expectedStatusMin": 200,
   "expectedStatusMax": 299,
   "intervalMinutes": 1,
