@@ -227,7 +227,7 @@ BEGIN
 
   INSERT INTO events(id, title, body, type, source, status, started_at, created_at, updated_at, auto_monitor_id)
     SELECT 'auto-' || m.id || '-' || NEW.scheduled_at, m.name || ' 服务异常',
-      '定时检测持续失败，已达到自动发布阈值。恢复后将自动更新此事件。',
+      '检测持续失败，恢复后将自动更新。',
       'incident', 'automatic', 'open', o.started_at, NEW.checked_at, NEW.checked_at, m.id
     FROM monitors m JOIN monitor_outages o ON o.monitor_id = m.id
     WHERE m.id = NEW.monitor_id AND m.version = NEW.monitor_version AND m.enabled = 1

@@ -33,7 +33,7 @@
 
 配置 **Allow** 策略，仅允许你的邮箱或指定用户组；选择现有身份提供商或邮件一次性验证码。两条路径使用同一个应用的 AUD。
 
-记录团队域名（如 `your-team.cloudflareaccess.com`）和 **Application Audience (AUD) Tag**。Worker 会校验登录凭据；Access 未配置或凭据无效时，后台拒绝访问。
+记录团队域名（如 `your-team.cloudflareaccess.com`）和 **Application Audience (AUD) Tag**，用于下一步。
 
 详细规则见 [Workers Access](https://developers.cloudflare.com/workers/configuration/cloudflare-access/) 和 [Access 路径匹配](https://developers.cloudflare.com/cloudflare-one/access-controls/policies/app-paths/)。自定义域名的配置见[下文](#仅使用自定义域名)。
 
@@ -52,20 +52,9 @@
 | Variable，可选     | `D1_DATABASE_NAME`      | 默认 `<WORKER_NAME>-db`                |
 | Variable，可选     | `SITE_NAME`             | 状态页站点名称，默认 `UptimeWorker`    |
 
-Access 配置同时存在于 Variables 和 Secrets 时，优先使用 Variables 中的值。
+每个实例使用独立的 Worker 和数据库名称，例如 `team-status` 与 `team-status-db`，使用小写字母开头的小写名称。完整命名规则及变量优先级见[部署配置](development.md#部署配置)。
 
-Worker / D1 名称以小写字母开头，只含小写字母、数字与连字符，最长 63 个字符。使用默认数据库名 `<WORKER_NAME>-db` 时，`WORKER_NAME` 最长 60 个字符，为后缀预留空间；显式指定 `D1_DATABASE_NAME` 时，两者各自最长 63 个字符。每个实例使用独立名称，避免复用其他应用的数据库。
-
-在 **Actions → Verify and deploy → Run workflow** 选择 `main` 手动运行，依次执行：
-
-1. 安装依赖，运行类型检查、单元 / D1 集成测试、生产构建和 Chromium 浏览器测试。
-2. 检查部署变量，按名称查找 D1 数据库；存在则复用，不存在则创建。
-3. 生成生产配置并重新构建，应用数据库迁移。
-4. 发布 Worker 和静态资源，启用每分钟的 Cron。
-
-工作流手动运行，仅 `main` 分支执行部署，其他分支只验证。生产发布逐个执行，排队行为见 [GitHub 并发规则](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency)。
-
-某次发布中的任一步骤失败会停止该次发布的后续步骤；已存在的数据库不会被删除或重建。配置生成过程见[开发指南](development.md#部署配置)。
+在 **Actions → Verify and deploy → Run workflow** 选择 `main` 手动运行。工作流验证项目，创建或复用同名 D1 数据库，初始化数据库结构，然后发布 Worker 和静态资源，并启用每分钟 Cron。其他分支只运行验证。
 
 默认部署地址为 `https://<WORKER_NAME>.<你的子域名>.workers.dev`；关闭默认域名后，通过已绑定的自定义域名访问。首次添加 Cron 后可能需要数分钟传播，参见 [Cron Triggers](https://developers.cloudflare.com/workers/configuration/cron-triggers/)。
 
@@ -73,19 +62,13 @@ Worker / D1 名称以小写字母开头，只含小写字母、数字与连字�
 
 在 Cloudflare 控制台将自定义域名绑定到同一 Worker，并在 Access 应用中添加该域名的 `/admin` 和 `/api/admin` 路径及其子路径。后续部署会保留域名绑定。
 
-在 GitHub Actions Variables 中将 `WORKERS_DEV` 设为 `false`，在 `main` 上重新运行工作流。每次部署都会应用该设置；只在 Cloudflare 控制台关闭默认域名会被后续部署覆盖。[Cloudflare 官方说明](https://developers.cloudflare.com/workers/configuration/routing/workers-dev/)
-
-`WORKERS_DEV` 接受 `true` / `false`，默认 `true`，无效值会阻止部署。预览域名始终关闭。此变量用于 GitHub Actions；直接使用 `wrangler.jsonc` 部署时，默认域名仍开启。
+在 GitHub Actions Variables 中将 `WORKERS_DEV` 设为 `false`，在 `main` 上重新运行工作流。每次部署都会应用此设置，预览域名保持关闭。参见 [workers.dev 路由配置](https://developers.cloudflare.com/workers/configuration/routing/workers-dev/)。
 
 ## 首次上线验收
 
-1. 未登录访问首页应正常，访问 `/admin` 应进入 Access 登录。
-2. 登录后分别新增一个公开 HTTP 目标和一个允许出站连接的 TCP 目标，先执行“测试连接”。
-3. 等待 Cron 运行，在状态页与详情中确认检测结果、延迟和历史记录已出现。
-4. 重新运行部署，确认日志显示 `Reusing D1 database`，监控与历史仍然存在。
-5. 在 Cloudflare 查看 Worker Cron 日志、CPU 用量及 D1 Row Metrics。
-6. 若设置了 `WORKERS_DEV=false`，首次及再次部署后确认 Worker 的 Production 和 Preview URL 开关均关闭，自定义域名首页与后台登录正常。
+1. 未登录打开首页，再访问 `/admin` 并通过 Access 登录。
+2. 添加公网 HTTP 和 TCP 监控，分别执行「测试连接」。
+3. 等待定时检测，确认状态、响应时间和历史记录出现。
+4. 仅使用自定义域名时，确认该域名的公开页和后台登录正常，Worker 的 Production 和 Preview URL 开关均已关闭。
 
-## 回滚与数据库恢复
-
-代码回滚和数据库恢复分别处理：在 Cloudflare 回退 Worker 版本，数据库按需通过 D1 Time Travel 恢复并评估数据影响。发布失败不会撤销已完成的迁移；回滚前检查[数据库迁移](development.md#数据库迁移)。
+部署实现、用量观测和恢复流程见[开发与维护](development.md#部署配置)。

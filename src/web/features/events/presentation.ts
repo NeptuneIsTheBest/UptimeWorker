@@ -71,19 +71,18 @@ export const PROGRESS_LABELS: Record<EventUpdate['title'], MessageKey> = {
   Resolved: 'progress.Resolved',
   Stopped: 'progress.Stopped',
 };
-// Translate persisted automatic templates while preserving user-authored content.
+// Automatic titles store the monitor name at publication followed by this fixed suffix.
 export function localizedEventTitle(event: Pick<StatusEvent, 'source' | 'title'>, locale: Locale) {
   const suffix = ' 服务异常';
-  return event.source === 'automatic' && event.title.endsWith(suffix)
+  return event.source === 'automatic'
     ? translate(locale, 'auto.title', { name: event.title.slice(0, -suffix.length) })
     : event.title;
 }
-export function localizedEntryBody(entry: Pick<EventEntry, 'source' | 'body'>, locale: Locale) {
+export function localizedEntryBody(entry: Pick<EventEntry, 'source' | 'title' | 'body'>, locale: Locale) {
   if (entry.source !== 'automatic') return entry.body;
-  const templates: Record<string, MessageKey> = {
-    '定时检测持续失败，已达到自动发布阈值。恢复后将自动更新此事件。': 'auto.body',
-    '检测已恢复正常。': 'auto.recovered',
-    '节点已删除，已停止跟踪。': 'auto.stopped',
-  };
-  return Object.hasOwn(templates, entry.body) ? translate(locale, templates[entry.body]) : entry.body;
+  // Automatic entries are the initial incident, recovery, or stopped tracking.
+  return translate(
+    locale,
+    entry.title === 'Resolved' ? 'auto.recovered' : entry.title === 'Stopped' ? 'auto.stopped' : 'auto.body',
+  );
 }

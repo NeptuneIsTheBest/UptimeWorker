@@ -23,7 +23,7 @@ test('advanced monitor options persist and remain usable on mobile', async ({ pa
   await expect(dialog.getByLabel('启用 WAF 放行', { exact: true })).not.toBeChecked();
   await dialog.getByLabel('启用 WAF 放行', { exact: true }).check();
   await expect(dialog.getByText('跨域请填写最终地址', { exact: false })).toBeVisible();
-  await expect(dialog.getByRole('status')).toContainText('尚未配置共享密钥');
+  await expect(dialog.getByRole('status')).toContainText('请在全局设置中配置密钥并开启 WAF 放行。');
   await expect(dialog.getByLabel('请求方法').locator('option')).toHaveText([
     'GET',
     'HEAD',

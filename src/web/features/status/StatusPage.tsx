@@ -233,9 +233,7 @@ export function StatusPage() {
           <Legend />
           <details className="inline-help">
             <summary>{t('history.daily')}</summary>
-            <p>
-              {t('status.gapNote')} {t('status.methodNote')}
-            </p>
+            <p>{t('status.methodNote')}</p>
           </details>
         </div>
       </section>

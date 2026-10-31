@@ -33,7 +33,7 @@ Protect these paths and their subpaths. Keep the home page `/`, monitor details 
 
 Configure an **Allow** policy limited to your email address or a designated user group. Use an existing identity provider or an email one-time PIN. Both paths use the same application's AUD.
 
-Record the team domain, such as `your-team.cloudflareaccess.com`, and the **Application Audience (AUD) Tag**. The Worker validates sign-in credentials and denies admin access if Access is not configured or the credentials are invalid.
+Record the team domain, such as `your-team.cloudflareaccess.com`, and the **Application Audience (AUD) Tag** for the next step.
 
 See [Workers Access](https://developers.cloudflare.com/workers/configuration/cloudflare-access/) and [Access path matching](https://developers.cloudflare.com/cloudflare-one/access-controls/policies/app-paths/) for detailed rules. Custom domain setup is covered [below](#using-only-a-custom-domain).
 
@@ -52,20 +52,9 @@ Open the repository's **Settings → Secrets and variables → Actions**:
 | Variable, optional | `D1_DATABASE_NAME`      | Defaults to `<WORKER_NAME>-db`                                   |
 | Variable, optional | `SITE_NAME`             | Status page site name; defaults to `UptimeWorker`                |
 
-If Access settings exist in both Variables and Secrets, the values in Variables take precedence.
+Give each instance its own Worker and database names, for example `team-status` and `team-status-db`. Use lowercase names starting with a letter. Exact naming rules and variable precedence are in [deployment configuration](development.md#deployment-configuration).
 
-Worker / D1 names must start with a lowercase letter, contain only lowercase letters, digits, and hyphens, and be at most 63 characters long. When using the default database name `<WORKER_NAME>-db`, `WORKER_NAME` is limited to 60 characters to leave room for the suffix. If you explicitly set `D1_DATABASE_NAME`, each name can be up to 63 characters long. Use distinct names for each instance to avoid reusing another application's database.
-
-In **Actions → Verify and deploy → Run workflow**, select `main` and run the workflow manually. It performs these steps:
-
-1. Install dependencies, then run type checks, unit / D1 integration tests, a production build, and Chromium browser tests.
-2. Validate deployment variables and find the D1 database by name. Reuse it if it exists, or create it otherwise.
-3. Generate the production configuration, rebuild, and apply database migrations.
-4. Publish the Worker and static assets, and enable Cron to run every minute.
-
-The workflow runs manually and deploys only from `main`; other branches run verification only. Production deployments run one at a time. See [GitHub's concurrency rules](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency) for queue behavior.
-
-A failed step stops the remaining steps of that deployment. Existing databases are never deleted or recreated. See the [development guide](development.md#deployment-configuration) for configuration generation.
+In **Actions → Verify and deploy → Run workflow**, select `main` and run the workflow. It verifies the project, creates or reuses the named D1 database, initializes its schema, and publishes the Worker and static assets with a per-minute Cron trigger. Other branches run verification only.
 
 The default deployment URL is `https://<WORKER_NAME>.<your-subdomain>.workers.dev`. When the default domain is disabled, use the custom domain already bound to the Worker. A newly added Cron trigger may take a few minutes to propagate; see [Cron Triggers](https://developers.cloudflare.com/workers/configuration/cron-triggers/).
 
@@ -73,19 +62,13 @@ The default deployment URL is `https://<WORKER_NAME>.<your-subdomain>.workers.de
 
 Bind the custom domain to the same Worker in the Cloudflare dashboard. Add its `/admin` and `/api/admin` paths and their subpaths to the Access application. Subsequent deployments preserve the domain binding.
 
-Set `WORKERS_DEV` to `false` in GitHub Actions Variables, then rerun the workflow on `main`. Every deployment applies this setting; disabling the default domain only in the Cloudflare dashboard will be overridden by a later deployment. See the [Cloudflare documentation](https://developers.cloudflare.com/workers/configuration/routing/workers-dev/).
-
-`WORKERS_DEV` accepts `true` / `false` and defaults to `true`; invalid values stop deployment. Preview URLs are always disabled. This variable applies to GitHub Actions; deploying directly with `wrangler.jsonc` leaves the default domain enabled.
+Set `WORKERS_DEV` to `false` in GitHub Actions Variables, then rerun the workflow on `main`. This setting is applied on every deployment; preview URLs are disabled. See [workers.dev routing](https://developers.cloudflare.com/workers/configuration/routing/workers-dev/).
 
 ## Initial production checks
 
-1. Confirm that the home page is accessible without signing in and that `/admin` redirects to Access sign-in.
-2. After signing in, add a public HTTP target and a TCP target that permits outbound connections, then run **Test connection** for each.
-3. Wait for Cron to run and confirm that check results, response times, and history appear on the status and detail pages.
-4. Deploy again. Confirm that the logs show `Reusing D1 database` and that monitors and history are retained.
-5. Inspect the Worker's Cron logs, CPU usage, and D1 Row Metrics in Cloudflare.
-6. If `WORKERS_DEV=false`, confirm after both the first and subsequent deployments that the Worker's Production and Preview URL switches are off, and that the custom domain's home page and admin sign-in work.
+1. Open the home page without signing in, then visit `/admin` and sign in through Access.
+2. Add an HTTP monitor and a TCP monitor for public targets, and run **Test connection**.
+3. Wait for scheduled checks and confirm status, response times, and history appear.
+4. For a custom-domain-only deployment, check the public page and admin sign-in on that domain, and confirm the Worker's Production and Preview URL switches are off.
 
-## Rollback and database recovery
-
-Handle code rollback and database recovery separately: roll back the Worker version in Cloudflare, and use D1 Time Travel to recover the database when needed after assessing the data impact. A failed deployment does not undo completed migrations. Before rolling back, review [database migrations](development.md#database-migrations).
+For deployment internals, usage measurement, and recovery procedures, see [development and maintenance](development.md#deployment-configuration).

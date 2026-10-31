@@ -22,21 +22,21 @@ npm run db:migrate
 npm run dev
 ```
 
-Open the [local status page](http://127.0.0.1:5173); the admin console is at `/admin`. The development server is for local access only. See the [development guide](docs/development.md) for the local database, manual Cron triggers, and verification commands.
+Open the [local status page](http://127.0.0.1:5173); the admin console is at `/admin`. See the [development guide](docs/development.md) for the local database, manual Cron triggers, and verification commands.
 
 ## Deployment with GitHub Actions
 
-Configure Cloudflare and Access, set the GitHub Secrets / Variables, then run **Actions → Verify and deploy → Run workflow** manually. See the [deployment guide](docs/deployment.md) for the complete setup, production checks, and rollback instructions.
+Configure Cloudflare and Access, set the GitHub Secrets / Variables, then run **Actions → Verify and deploy → Run workflow** manually. See the [deployment guide](docs/deployment.md) for setup and initial production checks.
 
 ## Documentation
 
-| Document                                                   | Contents                                                                             |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| [Deployment guide](docs/deployment.md)                     | Cloudflare, Access, GitHub Actions, production checks, and rollback                  |
-| [Monitor configuration](docs/configuration.md)             | HTTP/TCP, WAF, statistics, retention, and operational monitoring                     |
-| [API reference](docs/api.md)                               | Endpoints, authentication, request limits, version checks, and request examples      |
-| [Development and maintenance](docs/development.md)         | Local setup, verification commands, test responsibilities, and migration conventions |
-| [Architecture and code organization](docs/architecture.md) | Feature directories, dependency boundaries, request and scheduling flows, and styles |
+| Document                                                   | Contents                                                                  |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------- |
+| [Deployment guide](docs/deployment.md)                     | Cloudflare, Access, GitHub Actions, and initial checks                    |
+| [Monitor configuration](docs/configuration.md)             | Monitors, groups, events, WAF, refreshes, and performance settings        |
+| [API reference](docs/api.md)                               | Endpoints, authentication, field rules, probe behavior, and examples      |
+| [Development and maintenance](docs/development.md)         | Local setup, tests, deployment internals, operations, and recovery        |
+| [Architecture and code organization](docs/architecture.md) | Code organization, scheduling, capacity estimates, statistics, and events |
 
 ## License
 

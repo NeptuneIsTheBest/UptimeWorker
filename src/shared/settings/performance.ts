@@ -15,23 +15,10 @@ export const PERFORMANCE_RANGES = {
   timeBudgetSeconds: [40, 180],
 } as const;
 
-// Reviewed against the linked documentation; no account access is required by the estimator.
+// Scheduler and estimator budgets; see the capacity model in docs/architecture.md.
 export const PLATFORM_LIMITS = {
-  reviewedAt: '2026-10-29',
-  workersUrl: 'https://developers.cloudflare.com/workers/platform/limits/',
-  d1Url: 'https://developers.cloudflare.com/d1/platform/pricing/',
-  d1LimitsUrl: 'https://developers.cloudflare.com/d1/platform/limits/',
-  connections: 6,
-  memoryMb: 128,
-  cronWallSeconds: 900,
-  free: { subrequests: 50, cronCpuMs: 10, d1Reads: 5_000_000, d1Writes: 100_000, d1Queries: 50 },
-  paid: {
-    subrequests: 10_000,
-    cronCpuMs: 30_000,
-    d1Reads: 25_000_000_000,
-    d1Writes: 50_000_000,
-    d1Queries: 1000,
-  },
+  free: { subrequests: 50, d1Writes: 100_000 },
+  paid: { subrequests: 10_000, d1Writes: 50_000_000 },
 } as const;
 export const RESULT_RESERVE_SECONDS = 5;
 export const HTTP_REQUESTS_PER_CHECK = MAX_HTTP_REDIRECTS + 1;
@@ -119,8 +106,7 @@ export function estimatePerformance(
     dailyHttpMin: dailyHttp,
     dailyHttpMax: dailyHttp * HTTP_REQUESTS_PER_CHECK,
     retainedSamples: dailyChecks * 7,
-    // Check insertion, daily aggregation, and monitor state update. Indexes and all
-    // other writes are deliberately excluded: this is a floor, never a safe total.
+    // Check insertion, daily aggregation, and monitor state update; excludes indexes and other writes.
     dailyWriteFloor: dailyChecks * 3,
     started: budget.started,
     deferred,

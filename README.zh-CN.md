@@ -22,21 +22,21 @@ npm run db:migrate
 npm run dev
 ```
 
-打开 [本地状态页](http://127.0.0.1:5173)，后台为 `/admin`。开发服务器仅供本机访问；本地数据库、手动触发 Cron 和验证命令见[开发指南](docs/zh-CN/development.md)。
+打开 [本地状态页](http://127.0.0.1:5173)，后台为 `/admin`。本地数据库、手动触发 Cron 和验证命令见[开发指南](docs/zh-CN/development.md)。
 
 ## GitHub Actions 部署
 
-先配置 Cloudflare 与 Access，再设置 GitHub Secrets / Variables，通过 **Actions → Verify and deploy → Run workflow** 手动运行。完整步骤、上线验收和回滚说明见[部署指南](docs/zh-CN/deployment.md)。
+先配置 Cloudflare 与 Access，再设置 GitHub Secrets / Variables，通过 **Actions → Verify and deploy → Run workflow** 手动运行。配置步骤和首次上线验收见[部署指南](docs/zh-CN/deployment.md)。
 
 ## 文档
 
-| 文档                                         | 内容                                               |
-| -------------------------------------------- | -------------------------------------------------- |
-| [部署指南](docs/zh-CN/deployment.md)         | Cloudflare、Access、GitHub Actions、上线验收与回滚 |
-| [监控配置](docs/zh-CN/configuration.md)      | HTTP/TCP、WAF、统计口径、保留策略与运行观测        |
-| [API 参考](docs/zh-CN/api.md)                | 接口、鉴权、请求限制、版本控制与请求示例           |
-| [开发与维护](docs/zh-CN/development.md)      | 本地环境、验证命令、测试职责与迁移约定             |
-| [架构与代码组织](docs/zh-CN/architecture.md) | 功能目录、依赖边界、请求与调度流程、样式组织       |
+| 文档                                         | 内容                                          |
+| -------------------------------------------- | --------------------------------------------- |
+| [部署指南](docs/zh-CN/deployment.md)         | Cloudflare、Access、GitHub Actions 与首次验收 |
+| [监控配置](docs/zh-CN/configuration.md)      | 监控、分组、事件、WAF、刷新与性能设置         |
+| [API 参考](docs/zh-CN/api.md)                | 接口、鉴权、字段规则、检测行为与请求示例      |
+| [开发与维护](docs/zh-CN/development.md)      | 本地环境、测试、部署实现、运行观测与恢复      |
+| [架构与代码组织](docs/zh-CN/architecture.md) | 代码组织、调度、容量估算、统计与事件规则      |
 
 ## License
 

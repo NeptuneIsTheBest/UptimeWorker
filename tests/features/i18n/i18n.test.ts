@@ -81,19 +81,26 @@ describe('language selection and presentation', () => {
       expect(formatTime(time, false, locale)).toMatch(/^\d{2}:\d{2}:\d{2}$/);
     }
   });
-  it('translates only recognized automatic content and preserves the original title name', () => {
+  it('translates automatic stages and preserves the published name and manual content', () => {
     const event = { source: 'automatic' as const, title: '旧名称 服务异常', monitors: [{ name: '新名称' }] };
     expect(localizedEventTitle(event, 'en')).toBe('旧名称 service outage');
     expect(localizedEventTitle({ ...event, source: 'manual' }, 'en')).toBe(event.title);
-    expect(localizedEventTitle({ ...event, title: 'Custom title' }, 'en')).toBe('Custom title');
-    expect(localizedEntryBody({ source: 'automatic', body: '检测已恢复正常。' }, 'en')).toBe(
-      'Checks have returned to normal.',
-    );
-    expect(localizedEntryBody({ source: 'automatic', body: '节点已删除，已停止跟踪。' }, 'en')).toBe(
-      'The monitor was deleted. Tracking has stopped.',
-    );
-    expect(localizedEntryBody({ source: 'manual', body: '检测已恢复正常。' }, 'en')).toBe('检测已恢复正常。');
-    expect(localizedEntryBody({ source: 'automatic', body: '自定义说明' }, 'en')).toBe('自定义说明');
+    for (const [title, body, english] of [
+      [
+        'Investigating',
+        '检测持续失败，恢复后将自动更新。',
+        'Checks are failing. This event will update on recovery.',
+      ],
+      ['Resolved', '检测已恢复正常。', 'Checks have returned to normal.'],
+      ['Stopped', '节点已删除，已停止跟踪。', 'The monitor was deleted. Tracking has stopped.'],
+    ] as const) {
+      for (const locale of ['en', 'zh-CN'] as const) {
+        expect(localizedEntryBody({ source: 'automatic', title, body }, locale)).toBe(
+          locale === 'en' ? english : body,
+        );
+        expect(localizedEntryBody({ source: 'manual', title: 'Updated', body }, locale)).toBe(body);
+      }
+    }
   });
 });
 

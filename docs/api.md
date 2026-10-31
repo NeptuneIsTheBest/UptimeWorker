@@ -56,11 +56,11 @@ Performance settings share the global settings `version` and are omitted from pu
 | `maxChecksPerRun`   | 10       | 1–500 candidates per run.                                                                            |
 | `timeBudgetSeconds` | 50       | 40–180 seconds; starting a check requires reserving its full timeout plus 5 seconds to save results. |
 
-For example, `{"version": 1, "performance": {"concurrency": 6, "maxChecksPerRun": 30}}` changes only concurrency and batch size, retaining the plan, time budget, and other global settings. See [performance settings and capacity estimates](configuration.md#performance-settings-and-capacity-estimates) for estimation rules.
+For example, `{"version": 1, "performance": {"concurrency": 6, "maxChecksPerRun": 30}}` changes only concurrency and batch size, retaining the plan, time budget, and other global settings. See [scheduling and capacity model](architecture.md#scheduling-and-capacity-model) for estimation rules.
 
-`wafBypassToken` is write-only. Omitting it or passing an empty string retains the existing token; its raw value is never returned.
+`wafBypassToken` is write-only. Omitting it or passing an empty string retains the existing token; its raw value is never returned. Token format and delivery are described under [WAF credentials](#waf-credentials).
 
-The top-level responses from `GET /api/status`, `GET /api/monitors/:id/history`, `GET /api/events/:id`, and `GET /api/admin/monitors` all include `pageRefreshSeconds`. Public endpoints are cached for `min(pageRefreshSeconds, 60)` seconds, or 60 seconds when automatic refresh is disabled. Changes take effect after existing cache entries expire naturally. Admin endpoints and failed responses are not cached. `generatedAt` is the time the server generated the data. See [automatic page refresh](configuration.md#automatic-page-refresh) for interface behavior and [server groups and events](configuration.md#server-groups-and-events) for event rules.
+The top-level responses from `GET /api/status`, `GET /api/monitors/:id/history`, `GET /api/events/:id`, and `GET /api/admin/monitors` all include `pageRefreshSeconds`. Public endpoints are cached for `min(pageRefreshSeconds, 60)` seconds, or 60 seconds when automatic refresh is disabled. Changes take effect after existing cache entries expire naturally. Admin endpoints and failed responses are not cached. `generatedAt` is the time the server generated the data. See [automatic page refresh](configuration.md#automatic-page-refresh) for interface behavior and [event lifecycle](architecture.md#event-lifecycle) for event rules.
 
 ## Groups and events
 
@@ -107,7 +107,51 @@ Automatic incidents cannot be edited or manually resolved, and cannot be deleted
 
 Monitor POST / PATCH requests have a 256 KiB JSON body limit; other API requests are limited to 16 KiB except for the ordering endpoints described above. `intervalMinutes` accepts integer minutes from 1–60, defaults to 1 when omitted on POST, and preserves its value when omitted on PATCH. Fractions, out-of-range values, strings, and null return `400`.
 
-Creating an HTTP monitor requires explicit `method`, `wafBypassEnabled`, `requestHeaders`, `requestBody`, and `responseCheck` fields. Use `{}` for no custom headers and `null` for no request body or response validation. The admin form initializes these options to GET, false, `{}`, null, and null. PATCH preserves omitted fields; null clears the request body or response validation. There is no fixed limit on the total number of services. See [basic configuration](configuration.md#basic-configuration) for timeouts and check behavior.
+Creating an HTTP monitor requires explicit `method`, `wafBypassEnabled`, `requestHeaders`, `requestBody`, and `responseCheck` fields. Use `{}` for no custom headers and `null` for no request body or response validation. The admin form initializes these options to GET, false, `{}`, null, and null. PATCH preserves omitted fields; null clears the request body or response validation. There is no fixed limit on the total number of services. `name` is trimmed to 1–80 characters, `timeoutSeconds` is an integer from 1–30, and `enabled` is a boolean. HTTP URLs accept at most 2048 characters and must use HTTP or HTTPS with a public host and no embedded credentials. Expected status codes are inclusive integers from 100–599, with minimum no greater than maximum.
+
+### HTTP request and response rules
+
+`requestHeaders` is a string-to-string object, up to 8 KiB measured as UTF-8 `name: value` lines including CRLF. Names must be valid HTTP header tokens and unique ignoring case; stored names are lowercase and values are trimmed. Values accept tabs and HTTP header characters, without line breaks. Reserved names include the WAF header, Host, Content-Length, and hop-by-hop transport headers; see [validation](../src/shared/monitors/validation.ts) for the complete list. Credentials such as Authorization and Cookie are returned only through admin endpoints.
+
+`requestBody` is null or `{format: "text" | "json", content: string}`, up to 16 KiB of UTF-8 content. JSON syntax is validated while preserving the original text. GET and HEAD require null. Other supported methods can send a body, with a default Content-Type of `text/plain;charset=UTF-8` or `application/json`; an explicit header takes precedence.
+
+`responseCheck` is null or `{includes: string[], excludes: string[], ignoreCase: boolean}`. Each array accepts at most 20 entries; keywords are trimmed, blank entries removed, and duplicates collapsed. Each retained keyword is at most 256 characters with no line breaks. Empty lists normalize to null. Every included keyword must appear and every excluded keyword must be absent from the UTF-8-decoded response text. Matching uses literal text, with optional case folding, rather than HTML, JSON fields, or regular expressions. HEAD requires no effective response check.
+
+Both status-code and keyword checks must pass. Keyword checking reads up to 1 MiB of response data; a larger body fails with `response_too_large`. Response bodies are not persisted or logged. A `cf-mitigated: challenge` header always fails with `cloudflare_challenge`.
+
+Up to three redirects are followed, with public-address validation at every hop. 301/302 convert POST to GET; 303 converts non-GET/HEAD methods to GET. These conversions remove the body and related content headers. 307/308 preserve method and body. A change in scheme, hostname, or port removes all custom headers permanently for the remaining chain. If a body still needs forwarding across origins, the check fails with `unsafe_redirect`; use the final check URL. Scheduled failures are not automatically retried within the same check.
+
+### WAF credentials
+
+`wafBypassToken` accepts 32–256 letters, digits, underscores, or hyphens. The UI generator uses 32 random bytes. The global switch, individual HTTP monitor switch, and token must all be configured for credentials to be sent. Changes apply to new immediate tests and the next scheduler snapshot. Disabling the global switch preserves the token and individual monitor settings.
+
+`X-UptimeWorker-WAF-Bypass` is sent only to HTTPS URLs with the current monitor's exact hostname, re-evaluated at each redirect. Hostnames are case-normalized, stripped of a trailing dot, and normalized for internationalized domains; matching excludes subdomains and wildcards but does not restrict the port. An HTTP target sends the token only after redirecting to HTTPS on the same hostname. A redirect back to that hostname over HTTPS can send the token again. TCP and IP-address targets cannot enable WAF bypass.
+
+The rule template deduplicates domains from all WAF-enabled monitors, including paused ones. That list configures Cloudflare rules; each probe independently uses its own monitor's hostname. Example:
+
+```text
+(http.host in {"example.com" "api.example.com"}) and
+(http.request.method in {"GET" "HEAD" "POST" "PUT" "PATCH" "DELETE" "OPTIONS"}) and
+(any(http.request.headers["x-uptimeworker-waf-bypass"][*] eq "<YOUR_TOKEN>"))
+```
+
+Saved tokens are not returned in API responses or written to logs or history. After reloading settings, the template uses `<YOUR_TOKEN>`. See the [setup guide](configuration.md#cloudflare-waf-bypass) for configuring the Skip action.
+
+### Probe results
+
+Connection tests and history use `{checkedAt, ok, latencyMs, httpStatus, errorCode}`. `checkedAt` is UTC milliseconds, `latencyMs` is elapsed milliseconds, and `httpStatus` is null for TCP or when no HTTP response was received. A target failure produces `ok: false` with one of these `errorCode` values; this is separate from API validation and authentication errors.
+
+| Error code             | Meaning                                      |
+| ---------------------- | -------------------------------------------- |
+| `timeout`              | The configured timeout elapsed               |
+| `network`              | Connection or response reading failed        |
+| `unexpected_status`    | HTTP status is outside the expected range    |
+| `redirect_limit`       | More than three redirects                    |
+| `blocked_target`       | The address or TCP destination is restricted |
+| `cloudflare_challenge` | Cloudflare returned a challenge              |
+| `content_mismatch`     | Keyword requirements failed                  |
+| `response_too_large`   | Keyword validation exceeded 1 MiB            |
+| `unsafe_redirect`      | A body would be sent across origins          |
 
 ### Basic HTTP monitor
 
@@ -131,7 +175,7 @@ Creating an HTTP monitor requires explicit `method`, `wafBypassEnabled`, `reques
 
 ### Advanced HTTP monitor
 
-See [advanced HTTP configuration](configuration.md#advanced-http-configuration) for request parameters, size limits, and redirect rules, and [Cloudflare WAF bypass](configuration.md#cloudflare-waf-bypass) for bypass setup. This example creates a monitor with a request body and response validation:
+This example combines a request body, credentials, and response validation. Configure the target site using the [WAF setup guide](configuration.md#cloudflare-waf-bypass).
 
 ```json
 {
@@ -153,4 +197,4 @@ See [advanced HTTP configuration](configuration.md#advanced-http-configuration) 
 
 ### TCP monitor
 
-TCP uses `type: "tcp"`, `hostname`, and `port` in place of HTTP-specific fields; other common fields are the same. See [monitor types](../src/shared/monitors/types.ts), [public status and history responses](../src/shared/status/types.ts), [event types](../src/shared/events/types.ts), and [settings types](../src/shared/settings/types.ts) for the complete contracts.
+TCP uses `type: "tcp"`, `hostname`, and `port` in place of HTTP-specific fields; other common fields are the same. Supply a public hostname or IPv4/IPv6 address without a scheme or path, and a separate integer port from 1–65535 except 25. Cloudflare also blocks connections to its own IPs. TCP probes establish a connection without TLS or application-protocol validation. See [TCP socket restrictions](https://developers.cloudflare.com/workers/runtime-apis/tcp-sockets/). See [monitor types](../src/shared/monitors/types.ts), [public status and history responses](../src/shared/status/types.ts), [event types](../src/shared/events/types.ts), and [settings types](../src/shared/settings/types.ts) for the complete contracts.

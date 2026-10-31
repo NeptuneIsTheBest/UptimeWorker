@@ -39,6 +39,12 @@ test('estimates react to drafts, preserve edits across refresh and tabs, and per
   await expect(panel.getByLabel('每轮最大检测数', { exact: true })).toHaveValue('20');
   await panel.getByLabel('Workers 套餐', { exact: true }).selectOption('paid');
   await expect(metric('本轮可启动')).toHaveText('14');
+  await panel.getByLabel('每轮最大检测数', { exact: true }).fill('');
+  await expect(panel.locator('.performance-metric')).toHaveCount(0);
+  await expect(panel.locator('.performance-capacity')).toHaveCount(0);
+  await expect(panel.getByRole('button', { name: '保存设置', exact: true })).toBeDisabled();
+  await panel.getByLabel('每轮最大检测数', { exact: true }).fill('20');
+  await expect(metric('本轮可启动')).toHaveText('14');
   await panel.getByLabel('检测并发数', { exact: true }).fill('7');
   await expect(panel.getByRole('alert')).toContainText('检测并发数须为 1–6 的整数');
   await expect(panel.getByRole('button', { name: '保存设置', exact: true })).toBeDisabled();

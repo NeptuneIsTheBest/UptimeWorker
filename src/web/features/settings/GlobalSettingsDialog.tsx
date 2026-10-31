@@ -51,7 +51,7 @@ export function GlobalSettingsDialog({
         if (controller.signal.aborted) return;
         setSettings(value);
         setEnabled(value.wafBypassEnabled);
-        setAutoIncidentAfterMinutes(value.autoIncidentAfterMinutes ?? 5);
+        setAutoIncidentAfterMinutes(value.autoIncidentAfterMinutes);
         setRefreshPreset(
           [0, 15, 30, 60].includes(value.pageRefreshSeconds) ? String(value.pageRefreshSeconds) : 'custom',
         );
@@ -154,10 +154,6 @@ export function GlobalSettingsDialog({
                 />
               </label>
               <p className="form-note">{t('settings.thresholdNote')}</p>
-              <details className="form-help">
-                <summary>{t('settings.incidentHelp')}</summary>
-                <p>{t('settings.thresholdDetails')}</p>
-              </details>
             </fieldset>
             <fieldset className="settings-fields refresh-settings" disabled={busy}>
               <legend>{t('settings.refresh')}</legend>
@@ -194,10 +190,6 @@ export function GlobalSettingsDialog({
                 </div>
               )}
               <p className="form-note">{t('settings.refreshNote')}</p>
-              <details className="form-help">
-                <summary>{t('settings.refreshHelp')}</summary>
-                <p>{t('settings.refreshDetails')}</p>
-              </details>
             </fieldset>
             <fieldset className="settings-fields" disabled={busy}>
               <label className="checkbox-field">
@@ -249,12 +241,9 @@ export function GlobalSettingsDialog({
               </div>
               <details className="waf-rule-help">
                 <summary>{t('settings.skipHelp')}</summary>
-                <p>{t('settings.wafDescription')}</p>
-                <p>{t('settings.applyNote')}</p>
                 <p>{t('settings.skipInstructions')}</p>
                 {rule ? (
                   <>
-                    <p>{t('settings.ruleDomains')}</p>
                     <pre aria-label={t('settings.ruleTemplate')}>{rule}</pre>
                     <button
                       type="button"

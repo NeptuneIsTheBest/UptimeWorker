@@ -66,7 +66,6 @@ export function PerformancePanel({
     validation = errorMessage(err, 'error.save');
   }
   const estimate = performance && monitors ? estimatePerformance(monitors, performance) : null;
-  const limits = PLATFORM_LIMITS[draft.workersPlan];
   const number = useMemo(() => new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format, [locale]);
   const dirty = settings && JSON.stringify(draft) !== JSON.stringify(settings.performance);
   function change(field: keyof Draft, value: number | '' | PerformanceSettings['workersPlan']) {
@@ -199,7 +198,7 @@ export function PerformancePanel({
           {monitorError && <ErrorNotice message={monitorError} />}
           {!monitors && <p>{t('performance.monitorsUnavailable')}</p>}
           {!performance && <p>{t('performance.correctInputs')}</p>}
-          {estimate && (
+          {performance && estimate && (
             <>
               <dl className="performance-metrics">
                 {metric('performance.enabled', number(estimate.enabled))}
@@ -226,19 +225,23 @@ export function PerformancePanel({
                 )}
               </div>
               <div className="performance-capacities">
-                {capacity('performance.batchCapacity', estimate.enabled, draft.maxChecksPerRun || 1)}
-                {capacity('performance.requestCapacity', estimate.worstHttpRequests, limits.subrequests)}
+                {capacity('performance.batchCapacity', estimate.enabled, performance.maxChecksPerRun)}
+                {capacity(
+                  'performance.requestCapacity',
+                  estimate.worstHttpRequests,
+                  PLATFORM_LIMITS[performance.workersPlan].subrequests,
+                )}
                 {capacity(
                   'performance.timeCapacity',
                   estimate.unboundedProbeSeconds,
-                  (draft.timeBudgetSeconds || 40) - RESULT_RESERVE_SECONDS,
+                  performance.timeBudgetSeconds - RESULT_RESERVE_SECONDS,
                 )}
               </div>
-              {estimate.checksPerMinute > (draft.maxChecksPerRun || 1) && (
+              {estimate.checksPerMinute > performance.maxChecksPerRun && (
                 <p className="performance-warning">{t('performance.averageOverload')}</p>
               )}
-              {estimate.dailyWriteFloor * (draft.workersPlan === 'paid' ? 30 : 1) >=
-                limits.d1Writes * 0.8 && (
+              {estimate.dailyWriteFloor * (performance.workersPlan === 'paid' ? 30 : 1) >=
+                PLATFORM_LIMITS[performance.workersPlan].d1Writes * 0.8 && (
                 <p className="performance-warning">{t('performance.writeWarning')}</p>
               )}
             </>

@@ -201,6 +201,9 @@ for (const status of ['open', 'resolved', 'stopped'] as const) {
     const event = makeEvent({
       type: 'incident',
       source: 'automatic',
+      title: '香港节点 服务异常',
+      body: '检测持续失败，恢复后将自动更新。',
+      monitors: [{ id: status === 'stopped' ? null : 'hong-kong', name: '香港节点' }],
       status,
       startsAt: null,
       endsAt: null,
@@ -212,7 +215,7 @@ for (const status of ['open', 'resolved', 'stopped'] as const) {
               {
                 id: 'automatic-end',
                 title: status === 'resolved' ? 'Resolved' : 'Stopped',
-                body: '检测结果说明。',
+                body: status === 'resolved' ? '检测已恢复正常。' : '节点已删除，已停止跟踪。',
                 status,
                 source: 'automatic',
                 createdAt: now,
@@ -242,6 +245,7 @@ for (const status of ['open', 'resolved', 'stopped'] as const) {
     await expect(editor.getByRole('checkbox')).toHaveCount(0);
     await editor.getByRole('button', { name: '取消', exact: true }).click();
     await page.getByRole('link', { name: '查看时间线', exact: true }).click();
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('香港节点 服务异常');
     await expect(page.locator('.event-timeline h3')).toHaveText(
       status === 'open' ? ['正在排查'] : [status === 'resolved' ? '故障恢复' : '已停止跟踪', '正在排查'],
     );

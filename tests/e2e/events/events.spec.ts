@@ -287,7 +287,11 @@ for (const view of ['overview', 'detail'] as const) {
     });
     let events = [
       makeEvent('history', '此前已恢复', { status: 'resolved', endedAt: now, updatedAt: now }),
-      makeEvent('automatic', '自动检测故障', { source: 'automatic', updatedAt: now - 30_000 }),
+      makeEvent('automatic', '事件节点 服务异常', {
+        source: 'automatic',
+        body: '检测持续失败，恢复后将自动更新。',
+        updatedAt: now - 30_000,
+      }),
       makeEvent('manual', '人工排查故障', { updatedAt: now - 45_000 }),
       makeEvent('maintenance', '即将进行的维护', {
         type: 'maintenance',
@@ -332,7 +336,7 @@ for (const view of ['overview', 'detail'] as const) {
     const active = page.getByRole('region', { name: '进行中与计划事件', exact: true });
     const history = page.getByRole('region', { name: '历史事件', exact: true });
     const maintenance = active.locator('.event-card').filter({ hasText: '即将进行的维护' });
-    await expect(active.locator('h3')).toHaveText(['自动检测故障', '人工排查故障', '即将进行的维护']);
+    await expect(active.locator('h3')).toHaveText(['事件节点 服务异常', '人工排查故障', '即将进行的维护']);
     await expect(active.locator('.event-status')).toHaveText(['处理中', '处理中', '待开始']);
     await expect(history.locator('h3')).toHaveText(['此前已恢复']);
     await expect(page.locator('.event-card')).toHaveCount(4);
@@ -398,7 +402,7 @@ for (const view of ['overview', 'detail'] as const) {
     await expect(history.locator('h3')).toHaveText([
       '人工排查故障',
       '即将进行的维护',
-      '自动检测故障',
+      '事件节点 服务异常',
       '此前已恢复',
     ]);
     await expect(history.locator('.event-status')).toHaveText(['已恢复', '已完成', '已停止跟踪', '已恢复']);

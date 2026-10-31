@@ -17,8 +17,6 @@ test('global settings persist, redact tokens and work on desktop and mobile', as
   const token = dialog.getByLabel('放行密钥', { exact: false });
   await checkDialogLayout(page, dialog, info, 'settings-zh-CN');
   await expect(toggle).not.toBeChecked();
-  await expect(dialog.getByRole('group', { name: '自动纳入的域名' })).toHaveCount(0);
-  await expect(dialog.getByLabel('手动补充域名')).toHaveCount(0);
   await expect(dialog.getByRole('checkbox')).toHaveCount(1);
   await toggle.check();
   await dialog.getByRole('button', { name: '生成随机密钥' }).click();
@@ -64,6 +62,38 @@ test('global settings persist, redact tokens and work on desktop and mobile', as
   await expect(dialog.getByText('已配置', { exact: true })).toBeVisible();
   await dialog.getByText('Cloudflare Skip 规则配置', { exact: true }).click();
   await expect(rule).toContainText('http.host in {"api.example.com" "example.com"}');
+});
+
+test('disabled incidents and refresh remain off, with a usable custom refresh default', async ({
+  page,
+  request,
+}) => {
+  await page.goto('/admin');
+  await page.getByRole('button', { name: '全局设置', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '全局设置' });
+  await dialog.getByLabel('连续离线阈值（分钟）').fill('0');
+  await dialog.getByLabel('刷新间隔', { exact: true }).selectOption('0');
+  await dialog.getByRole('button', { name: '保存设置' }).click();
+  await expect(dialog).toHaveCount(0);
+  await page.reload();
+  await page.getByRole('button', { name: '全局设置', exact: true }).click();
+  await expect(dialog.getByLabel('连续离线阈值（分钟）')).toHaveValue('0');
+  await expect(dialog.getByLabel('刷新间隔', { exact: true })).toHaveValue('0');
+  await dialog.getByRole('button', { name: '保存设置' }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(await (await request.get('/api/admin/settings')).json()).toMatchObject({
+    autoIncidentAfterMinutes: 0,
+    pageRefreshSeconds: 0,
+  });
+  await page.getByRole('button', { name: '全局设置', exact: true }).click();
+  await dialog.getByLabel('刷新间隔', { exact: true }).selectOption('custom');
+  await expect(dialog.getByLabel('自定义间隔（秒）')).toHaveValue('30');
+  await dialog.getByRole('button', { name: '保存设置' }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(await (await request.get('/api/admin/settings')).json()).toMatchObject({
+    autoIncidentAfterMinutes: 0,
+    pageRefreshSeconds: 30,
+  });
 });
 
 test('settings validate input and preserve drafts while retrying load and save failures', async ({

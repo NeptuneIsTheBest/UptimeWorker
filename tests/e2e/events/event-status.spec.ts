@@ -39,7 +39,10 @@ test('homepage reflects incidents while probe metrics and filtered nodes remain 
   await page.clock.install({ time: now });
   await page.clock.pauseAt(now);
   const monitors = [monitor('节点一'), monitor('节点二')];
-  let events = [event('人工故障'), event('自动故障', { source: 'automatic' })];
+  let events = [
+    event('人工故障'),
+    event('节点一 服务异常', { source: 'automatic', body: '检测持续失败，恢复后将自动更新。' }),
+  ];
   let fail = false;
   await page.route('**/api/status', (route) =>
     route.fulfill(

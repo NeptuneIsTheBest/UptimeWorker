@@ -56,11 +56,11 @@ GET / PATCH 返回下表字段。PATCH 须携带当前 `version`，其余字段�
 | `maxChecksPerRun`   | 10       | 1–500，单轮候选数量。                           |
 | `timeBudgetSeconds` | 50       | 40–180 秒，启动前预留完整超时及 5 秒保存时间。  |
 
-例如 `{"version": 1, "performance": {"concurrency": 6, "maxChecksPerRun": 30}}` 仅修改并发和批量，保留套餐、时间预算以及其他全局设置。估算规则见[性能设置与容量估算](configuration.md#性能设置与容量估算)。
+例如 `{"version": 1, "performance": {"concurrency": 6, "maxChecksPerRun": 30}}` 仅修改并发和批量，保留套餐、时间预算以及其他全局设置。估算规则见[调度与容量模型](architecture.md#调度与容量模型)。
 
-`wafBypassToken` 仅用于写入，省略或空字符串保留原密钥，不回传原值。
+`wafBypassToken` 仅用于写入，省略或空字符串保留原密钥，不回传原值。密钥格式与发送规则见 [WAF 凭据](#waf-凭据)。
 
-`GET /api/status`、`GET /api/monitors/:id/history`、`GET /api/events/:id` 和 `GET /api/admin/monitors` 的顶层响应均包含 `pageRefreshSeconds`。公开接口缓存有效期为 `min(pageRefreshSeconds, 60)` 秒，关闭时为 60 秒；已有缓存自然过期后生效。管理接口及失败响应不缓存。`generatedAt` 表示服务端生成数据的时间，界面刷新行为见[页面自动刷新](configuration.md#页面自动刷新)，事件触发规则见[服务器分组与事件](configuration.md#服务器分组与事件)。
+`GET /api/status`、`GET /api/monitors/:id/history`、`GET /api/events/:id` 和 `GET /api/admin/monitors` 的顶层响应均包含 `pageRefreshSeconds`。公开接口缓存有效期为 `min(pageRefreshSeconds, 60)` 秒，关闭时为 60 秒；已有缓存自然过期后生效。管理接口及失败响应不缓存。`generatedAt` 表示服务端生成数据的时间，界面刷新行为见[页面自动刷新](configuration.md#页面自动刷新)，事件触发规则见[事件生命周期](architecture.md#事件生命周期)。
 
 ## 分组与事件
 
@@ -107,7 +107,51 @@ GET / PATCH 返回下表字段。PATCH 须携带当前 `version`，其余字段�
 
 监控 POST / PATCH 的 JSON 请求上限为 256 KiB，其余 API 为 16 KiB，上述排序接口除外。`intervalMinutes` 接受 1–60 的整数分钟，POST 省略默认 1，PATCH 省略保留原值；小数、越界值、字符串和 null 返回 `400`。
 
-创建 HTTP 监控必须显式提供 `method`、`wafBypassEnabled`、`requestHeaders`、`requestBody` 和 `responseCheck`。无自定义请求头使用 `{}`，无请求体或响应校验使用 `null`。管理页面将这些选项初始化为 GET、false、`{}`、null 和 null。PATCH 省略字段保留原值，传 null 可清空请求体或响应校验。服务总数无固定上限。超时和检测行为见[基本配置](configuration.md#基本配置)。
+创建 HTTP 监控必须显式提供 `method`、`wafBypassEnabled`、`requestHeaders`、`requestBody` 和 `responseCheck`。无自定义请求头使用 `{}`，无请求体或响应校验使用 `null`。管理页面将这些选项初始化为 GET、false、`{}`、null 和 null。PATCH 省略字段保留原值，传 null 可清空请求体或响应校验。服务总数无固定上限。`name` 去除首尾空白后为 1–80 字符，`timeoutSeconds` 为 1–30 的整数，`enabled` 为布尔值。HTTP URL 最多 2048 字符，使用 HTTP 或 HTTPS、公网主机且不包含内嵌凭据。期望状态码为 100–599 的整数，包含上下界，最小值不得大于最大值。
+
+### HTTP 请求与响应规则
+
+`requestHeaders` 为字符串键值对象，按 UTF-8 的 `name: value` 行（含 CRLF）计算，合计最多 8 KiB。名称须为合法 HTTP header token，不区分大小写且不重复；存储时转为小写，值去除首尾空白。值支持制表符及 HTTP 请求头字符，不能换行。保留名称包括 WAF 凭据头、Host、Content-Length 和逐跳传输头，完整列表见[校验代码](../../src/shared/monitors/validation.ts)。Authorization、Cookie 等凭据仅通过管理接口返回。
+
+`requestBody` 为 null 或 `{format: "text" | "json", content: string}`，正文按 UTF-8 最多 16 KiB。JSON 校验格式并保留原文。GET 和 HEAD 要求 null，其他支持的方法可携带请求体，默认 Content-Type 分别为 `text/plain;charset=UTF-8` 或 `application/json`，显式请求头优先。
+
+`responseCheck` 为 null 或 `{includes: string[], excludes: string[], ignoreCase: boolean}`。每组最多 20 项，去除首尾空白、空项及重复项；保留的关键词最多 256 字符且不能换行。两组均为空时归一化为 null。包含项须全部出现，排除项须全部不出现；按 UTF-8 解码后的响应原文匹配字面文本，可忽略大小写，不解析 HTML、JSON 字段或正则表达式。HEAD 要求无有效正文校验。
+
+状态码与关键词须同时通过。关键词校验最多读取 1 MiB 响应数据，超出返回 `response_too_large`；响应正文不保存、不记录到日志。响应头 `cf-mitigated: challenge` 始终判定为 `cloudflare_challenge`。
+
+最多跟随三次重定向，每一跳均验证公网地址。301/302 将 POST 改为 GET，303 将非 GET/HEAD 请求改为 GET，同时删除请求体及相关内容头；307/308 保留方法和正文。协议、主机名或端口改变时移除所有自定义请求头，后续跳转也不恢复。仍需跨源转发正文时返回 `unsafe_redirect`，应直接配置最终地址。定时检测失败不在同次检测中自动重试。
+
+### WAF 凭据
+
+`wafBypassToken` 接受 32–256 位字母、数字、下划线或连字符，界面生成器使用 32 字节随机数。全局开关、单站 HTTP 开关和密钥均就绪时才携带凭据。保存后应用于新的即时测试及下一轮调度快照；关闭全局开关保留密钥和单站设置。
+
+`X-UptimeWorker-WAF-Bypass` 仅发送到当前监控完整域名匹配的 HTTPS 地址，每次重定向重新判断。域名统一大小写、移除尾点并规范化国际化域名；不匹配子域名或通配符，不限制端口。HTTP 目标只有跳转到同域 HTTPS 后才携带密钥，跳回原域名 HTTPS 时可再次发送。TCP 和 IP 地址目标不能开启 WAF 放行。
+
+规则模板汇总并去重所有开启 WAF 的监控域名，包含暂停项。此列表用于配置 Cloudflare 规则，每次探测独立使用自身监控的域名。示例：
+
+```text
+(http.host in {"example.com" "api.example.com"}) and
+(http.request.method in {"GET" "HEAD" "POST" "PUT" "PATCH" "DELETE" "OPTIONS"}) and
+(any(http.request.headers["x-uptimeworker-waf-bypass"][*] eq "<YOUR_TOKEN>"))
+```
+
+已保存密钥不通过 API 回传，也不写入日志或历史；重新读取设置后，模板使用 `<YOUR_TOKEN>`。Skip 操作配置见[使用指南](configuration.md#cloudflare-waf-放行)。
+
+### 检测结果
+
+即时测试与历史记录使用 `{checkedAt, ok, latencyMs, httpStatus, errorCode}`。`checkedAt` 为 UTC 毫秒，`latencyMs` 为耗时毫秒，TCP 或尚未取得 HTTP 响应时 `httpStatus` 为 null。目标检测失败返回 `ok: false` 及下列 `errorCode`，与 API 参数校验或鉴权错误分开。
+
+| 错误码                 | 含义                    |
+| ---------------------- | ----------------------- |
+| `timeout`              | 达到配置超时            |
+| `network`              | 连接或读取响应失败      |
+| `unexpected_status`    | HTTP 状态码超出期望范围 |
+| `redirect_limit`       | 超过三次重定向          |
+| `blocked_target`       | 地址或 TCP 目标受限     |
+| `cloudflare_challenge` | Cloudflare 返回挑战响应 |
+| `content_mismatch`     | 不符合关键词要求        |
+| `response_too_large`   | 关键词校验超过 1 MiB    |
+| `unsafe_redirect`      | 请求体需要跨源转发      |
 
 ### 基本 HTTP 监控
 
@@ -131,7 +175,7 @@ GET / PATCH 返回下表字段。PATCH 须携带当前 `version`，其余字段�
 
 ### 高级 HTTP 监控
 
-请求参数、大小限制和重定向规则见 [HTTP 高级配置](configuration.md#http-高级配置)，放行步骤见 [Cloudflare WAF 放行](configuration.md#cloudflare-waf-放行)。以下示例创建带请求体和响应校验的监控：
+以下示例同时使用请求体、凭据与响应校验。目标站点按 [WAF 放行步骤](configuration.md#cloudflare-waf-放行)配置。
 
 ```json
 {
@@ -153,4 +197,4 @@ GET / PATCH 返回下表字段。PATCH 须携带当前 `version`，其余字段�
 
 ### TCP 监控
 
-TCP 使用 `type: "tcp"`、`hostname`、`port` 替代 HTTP 专属字段，其余公共字段一致。完整契约见[监控类型](../../src/shared/monitors/types.ts)、[公开状态与历史响应](../../src/shared/status/types.ts)、[事件类型](../../src/shared/events/types.ts)及[设置类型](../../src/shared/settings/types.ts)。
+TCP 使用 `type: "tcp"`、`hostname`、`port` 替代 HTTP 专属字段，其余公共字段一致。提供公网域名或 IPv4/IPv6 地址，不含协议和路径；端口单独填写，接受 1–65535 的整数，排除 25。Cloudflare 同时限制连接其自身 IP。探测只建立连接，不执行 TLS 或应用协议校验。参见 [TCP Socket 限制](https://developers.cloudflare.com/workers/runtime-apis/tcp-sockets/)。完整契约见[监控类型](../../src/shared/monitors/types.ts)、[公开状态与历史响应](../../src/shared/status/types.ts)、[事件类型](../../src/shared/events/types.ts)及[设置类型](../../src/shared/settings/types.ts)。

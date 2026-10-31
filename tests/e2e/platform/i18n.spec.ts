@@ -6,7 +6,7 @@ import type { StatusEvent } from '../../../src/shared/events/types';
 const automaticEvent = (): StatusEvent => ({
   id: 'automatic-outage',
   title: '原始服务名称 服务异常',
-  body: '定时检测持续失败，已达到自动发布阈值。恢复后将自动更新此事件。',
+  body: '检测持续失败，恢复后将自动更新。',
   type: 'incident',
   source: 'automatic',
   status: 'resolved',
@@ -131,7 +131,9 @@ test.describe('English interface and language switching', () => {
     ]);
     await expect(page.locator('.event-body').first()).toHaveText('Checks have returned to normal.');
     await expect(page.locator('.event-body').nth(1)).toHaveText('管理员原文：排查网络。');
-    await expect(page.locator('.event-body').last()).toContainText('Scheduled checks have continued to fail');
+    await expect(page.locator('.event-body').last()).toHaveText(
+      'Checks are failing. This event will update on recovery.',
+    );
     await expect(page.locator('.event-monitors')).toContainText('改名后的服务 (deleted)');
     await expect(page.locator('.event-last-updated time')).toContainText('minute ago');
     await page.setViewportSize({ width: 390, height: 844 });
