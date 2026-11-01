@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { parseEventConfig } from '../../../src/shared/events/validation';
 import { eventLabel } from '../../../src/web/features/events/labels';
+import { eventTimeline, latestEventEntry } from '../../../src/web/features/events/presentation';
 import { createMonitor, findMonitor, updateMonitor } from '../../../src/worker/features/monitors/repository';
 import { getHistory, getStatus } from '../../../src/worker/features/status/queries';
 import {
@@ -50,6 +51,11 @@ const tick = (n: number, ok = false) =>
     () => at(n),
   );
 const recent = () => listEvents(fixture.db).then((result) => result.events);
+const databaseNow = () =>
+  fixture.db
+    .prepare("SELECT CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) AS now")
+    .first<number>('now')
+    .then((now) => now!);
 const config = (id: string, changes: Partial<EventConfig> = {}): EventConfig => ({
   title: '节点故障说明',
   body: '正在处理',
@@ -141,6 +147,98 @@ describe('events', () => {
     expect(JSON.stringify(publicData.events)).not.toContain(httpConfig.url);
     expect((await getHistory(fixture.db, row.id, at(14)))?.events).toHaveLength(2);
   });
+  it('publishes recovery after progress added during the probe across public cards and timelines', async () => {
+    const row = await node();
+    for (let n = 0; n <= 5; n++) await tick(n);
+    const event = (await recent())[0];
+    const checkedAt = at(6);
+    let now = checkedAt;
+    const beforeRecovery = await databaseNow();
+    await runScheduled(
+      { DB: fixture.db },
+      checkedAt,
+      async () => {
+        now += 1000;
+        await appendEventUpdate(
+          fixture.db,
+          event.id,
+          event.version,
+          { title: 'Investigating', body: '排查中' },
+          now,
+        );
+        now += 1000;
+        return { ...success(checkedAt), latencyMs: now - checkedAt };
+      },
+      () => now,
+    );
+    const afterRecovery = await databaseNow();
+    const saved = (await getEvent(fixture.db, event.id))!;
+    expect(saved.updates.map((update) => update.title)).toEqual(['Investigating', 'Resolved']);
+    const [manual, recovery] = saved.updates;
+    expect(recovery).toMatchObject({ source: 'automatic', status: 'resolved' });
+    expect(recovery.createdAt).toBeGreaterThan(manual.createdAt);
+    expect(recovery.createdAt).toBeGreaterThanOrEqual(beforeRecovery);
+    expect(recovery.createdAt).toBeLessThanOrEqual(afterRecovery);
+    expect(saved).toMatchObject({
+      status: 'resolved',
+      endedAt: checkedAt,
+      updatedAt: recovery.createdAt,
+      version: event.version + 2,
+    });
+    expect(await findMonitor(fixture.db, row.id)).toMatchObject({ last_checked_at: checkedAt, last_ok: 1 });
+
+    const { request } = apiClient(fixture.db);
+    for (const path of ['status', `events/${event.id}`, `monitors/${row.id}/history`]) {
+      const response = await request(path, 'GET', undefined, { headers: {} });
+      expect(response.status).toBe(200);
+      const data = (await response.json()) as { event?: StatusEvent; events?: StatusEvent[] };
+      const publicEvent = data.event ?? data.events?.find((item) => item.id === event.id);
+      expect(publicEvent).toMatchObject({ status: 'resolved', updatedAt: recovery.createdAt });
+      expect(publicEvent!.updates).toEqual(saved.updates);
+      expect(latestEventEntry(publicEvent!)).toEqual(recovery);
+      expect(eventTimeline(publicEvent!).slice(0, 2)).toEqual([recovery, manual]);
+    }
+
+    await fixture.db
+      .prepare(
+        `INSERT OR IGNORE INTO check_results SELECT * FROM check_results
+        WHERE monitor_id = ? AND scheduled_at = ?`,
+      )
+      .bind(row.id, checkedAt)
+      .run();
+    await tick(7, true);
+    expect(await getEvent(fixture.db, event.id)).toEqual(saved);
+  });
+  it.each([0, -1, 1])(
+    'keeps recovery after both timestamps when the event differs from its progress by %i ms',
+    async (eventOffset) => {
+      await node();
+      for (let n = 0; n <= 5; n++) await tick(n);
+      const event = (await recent())[0];
+      // Keep both timestamps ahead of the database clock to exercise the ordering boundary without sleeps.
+      const progressAt = (await databaseNow()) + minute;
+      await appendEventUpdate(
+        fixture.db,
+        event.id,
+        event.version,
+        { title: 'Investigating', body: '排查中' },
+        progressAt,
+      );
+      const updatedAt = progressAt + eventOffset;
+      await fixture.db
+        .prepare('UPDATE events SET updated_at = ? WHERE id = ?')
+        .bind(updatedAt, event.id)
+        .run();
+      await tick(6, true);
+      const saved = (await getEvent(fixture.db, event.id))!;
+      expect(saved.updates.map((update) => update.title)).toEqual(['Investigating', 'Resolved']);
+      const recovery = saved.updates.at(-1)!;
+      expect(recovery.createdAt).toBeGreaterThan(progressAt);
+      expect(recovery.createdAt).toBeGreaterThan(updatedAt);
+      expect(saved.updatedAt).toBe(recovery.createdAt);
+      expect(saved.endedAt).toBe(at(6));
+    },
+  );
   it('clears short failures and does not infer downtime across stale gaps', async () => {
     await node();
     await tick(0);
@@ -253,7 +351,7 @@ describe('events', () => {
     for (let n = 9; n <= 13; n++) await tick(n);
     expect(await recent()).toHaveLength(1);
     await tick(14);
-    expect((await recent())[0].startedAt).toBe(at(9));
+    expect((await recent()).find((event) => event.status === 'open')?.startedAt).toBe(at(9));
   });
   it('retains snapshots and stops tracking when a node is deleted', async () => {
     const row = await node();

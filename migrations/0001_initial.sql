@@ -193,14 +193,19 @@ BEGIN
   ON CONFLICT (monitor_id, day) DO UPDATE SET
     total = total + 1, successful = successful + NEW.ok;
 
+  -- Manual progress may have been added while the probe was running. Publish
+  -- recovery after all existing event writes, even when their clocks coincide.
   INSERT INTO event_updates(id, event_id, title, body, status, source, created_at)
-    SELECT 'recovery-' || e.id, e.id, 'Resolved', '检测已恢复正常。', 'resolved', 'automatic', NEW.checked_at
+    SELECT 'recovery-' || e.id, e.id, 'Resolved', '检测已恢复正常。', 'resolved', 'automatic',
+      MAX(CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER), e.updated_at + 1,
+        COALESCE((SELECT MAX(u.created_at) + 1 FROM event_updates u WHERE u.event_id = e.id), 0))
     FROM events e JOIN monitors m ON m.id = e.auto_monitor_id
     WHERE m.id = NEW.monitor_id AND m.version = NEW.monitor_version AND m.enabled = 1
       AND (m.last_checked_at IS NULL OR m.last_checked_at <= NEW.checked_at)
       AND e.status = 'open' AND NEW.ok = 1;
   UPDATE events SET status = 'resolved', ended_at = NEW.checked_at,
-    updated_at = MAX(updated_at, NEW.checked_at), version = version + 1
+    updated_at = (SELECT created_at FROM event_updates WHERE id = 'recovery-' || events.id),
+    version = version + 1
     WHERE auto_monitor_id = NEW.monitor_id AND status = 'open' AND NEW.ok = 1
       AND EXISTS (SELECT 1 FROM monitors m WHERE m.id = NEW.monitor_id
         AND m.version = NEW.monitor_version AND m.enabled = 1
