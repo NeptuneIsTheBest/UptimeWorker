@@ -2,6 +2,7 @@ import type { Page, Route } from '@playwright/test';
 import type { AdminMonitor } from '../../../src/shared/monitors/types';
 import type { GlobalSettings } from '../../../src/shared/settings/types';
 import type { StatusResponse } from '../../../src/shared/status/types';
+import type { AdminResponse } from '../../../src/web/features/monitors/types';
 import { test, expect, createMonitor, origin } from '../support/fixtures';
 
 test.beforeEach(async ({ page }) => {
@@ -46,6 +47,32 @@ function statusData(monitors: AdminMonitor[] = []): StatusResponse {
         successful: 0,
         uptime: null,
       })),
+    })),
+  };
+}
+
+function adminClockData(statuses: AdminMonitor['status'][] = ['up']): AdminResponse {
+  return {
+    identity: { email: 'local@development' },
+    groups: [],
+    ungrouped: { id: '__ungrouped__', sortOrder: 0, version: 1 },
+    pageRefreshSeconds: 30,
+    monitors: statuses.map((status, index) => ({
+      id: `clock-monitor-${status}`,
+      name: `时钟监控 ${status}`,
+      groupId: null,
+      type: 'tcp',
+      hostname: 'example.com',
+      port: 443,
+      enabled: status !== 'paused',
+      intervalMinutes: 1,
+      timeoutSeconds: 10,
+      sortOrder: index,
+      version: 1,
+      status,
+      lastCheckedAt: status === 'unknown' ? null : Date.UTC(2026, 9, 28, 2, 0, 1),
+      latencyMs: status === 'up' ? 42 : null,
+      errorCode: status === 'down' ? 'network' : null,
     })),
   };
 }
@@ -266,43 +293,106 @@ test('pauses polling and display clocks in the background and refreshes immediat
   await expect.poll(() => calls).toBe(initialCalls + 2);
 });
 
-test('corrects stale status and elapsed time on return even when automatic refresh is disabled', async ({
-  page,
-}) => {
-  const data = statusData();
+test('admin expires statuses without requests when automatic refresh is disabled', async ({ page }) => {
+  const data = adminClockData(['up', 'down', 'paused', 'unknown', 'stale']);
   data.pageRefreshSeconds = 0;
-  data.monitors = [
-    {
-      id: 'clock-monitor',
-      name: '时钟监控',
-      groupId: null,
-      type: 'http',
-      status: 'up',
-      intervalMinutes: 1,
-      lastCheckedAt: Date.UTC(2026, 9, 28, 2, 0, 1),
-      latencyMs: 42,
-      uptime30d: 100,
-      days: [],
-    },
-  ];
   let calls = 0;
-  await page.route('**/api/status', (route) => {
+  await page.route('**/api/admin/monitors', (route) => {
     calls++;
     return route.fulfill({ json: data });
   });
-  await page.goto('/');
+  await page.goto('/admin');
   await refreshed(page);
   const initialCalls = calls;
-  await expect(page.locator('.monitor-card .status-badge')).toHaveClass(/up/);
-  await visibility(page, 'hidden');
-  await page.clock.runFor(130_000);
-  await expect(page.locator('.monitor-card .status-badge')).toHaveClass(/up/);
-  await expect(page.locator('.refresh-elapsed')).toHaveText('已过去 0 秒');
-  await visibility(page, 'visible');
-  await expect(page.locator('.monitor-card .status-badge')).toHaveClass(/stale/);
-  await expect(page.locator('.refresh-elapsed')).toHaveText('已过去 2 分 10 秒');
+  const badges = page.locator('.admin-card .status-badge');
+  const initialClasses = data.monitors.map((monitor) => `status-badge ${monitor.status}`);
+  const expiredClasses = [
+    'status-badge stale',
+    'status-badge stale',
+    'status-badge paused',
+    'status-badge unknown',
+    'status-badge stale',
+  ];
+  await expect(badges).toHaveClass(initialClasses);
+  await page.clock.runFor(120_000);
+  await expect(badges).toHaveClass(initialClasses);
+  await page.clock.runFor(15_000);
+  await expect(badges).toHaveClass(expiredClasses);
+  await page.clock.runFor(165_000);
+  await expect(badges).toHaveClass(expiredClasses);
   expect(calls).toBe(initialCalls);
 });
+
+test('admin expires retained statuses during repeated refresh failures and recovers with fresh checks', async ({
+  page,
+}) => {
+  const data = adminClockData(['up', 'down']);
+  let fail = false;
+  let calls = 0;
+  await page.route('**/api/admin/monitors', (route) => {
+    calls++;
+    return route.fulfill(fail ? { status: 503, json: { code: 'service_unavailable' } } : { json: data });
+  });
+  await page.goto('/admin');
+  await refreshed(page);
+  const initialCalls = calls;
+  const time = page.locator('.refresh-status time');
+  const initialTime = await time.getAttribute('datetime');
+  const badges = page.locator('.admin-card .status-badge');
+  const initialClasses = ['status-badge up', 'status-badge down'];
+  await expect(badges).toHaveClass(initialClasses);
+  fail = true;
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    await page.clock.runFor(30_000);
+    await expect.poll(() => calls).toBe(initialCalls + attempt);
+    await refreshed(page);
+    await expect(time).toHaveAttribute('datetime', initialTime!);
+  }
+  await expect(page.getByRole('alert')).toContainText('服务暂时不可用，请稍后重试。');
+  await expect(badges).toHaveClass(initialClasses);
+  await page.clock.runFor(15_000);
+  await expect(badges).toHaveClass(['status-badge stale', 'status-badge stale']);
+  await expect(time).toHaveAttribute('datetime', initialTime!);
+  await expect(page.locator('.refresh-elapsed')).toHaveText('已过去 2 分 15 秒');
+  const checkedAt = await page.evaluate(() => Date.now());
+  data.monitors = data.monitors.map((monitor) => ({ ...monitor, lastCheckedAt: checkedAt }));
+  fail = false;
+  await page.clock.runFor(15_000);
+  await expect.poll(() => calls).toBe(initialCalls + 5);
+  await refreshed(page);
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await expect(badges).toHaveClass(initialClasses);
+  await expect(page.locator('.refresh-elapsed')).toHaveText('已过去 0 秒');
+  expect(await time.getAttribute('datetime')).not.toBe(initialTime);
+});
+
+for (const view of ['overview', 'admin'] as const) {
+  test(`${view} corrects stale status and elapsed time on return even when automatic refresh is disabled`, async ({
+    page,
+  }) => {
+    const admin = adminClockData();
+    const data = { ...(view === 'overview' ? statusData(admin.monitors) : admin), pageRefreshSeconds: 0 };
+    const endpoint = view === 'overview' ? '/api/status' : '/api/admin/monitors';
+    let calls = 0;
+    await page.route(`**${endpoint}`, (route) => {
+      calls++;
+      return route.fulfill({ json: data });
+    });
+    await page.goto(view === 'overview' ? '/' : '/admin');
+    await refreshed(page);
+    const initialCalls = calls;
+    const badge = page.locator(`.${view === 'overview' ? 'monitor' : 'admin'}-card .status-badge`);
+    await expect(badge).toHaveClass(/up/);
+    await visibility(page, 'hidden');
+    await page.clock.runFor(130_000);
+    await expect(badge).toHaveClass(/up/);
+    await expect(page.locator('.refresh-elapsed')).toHaveText('已过去 0 秒');
+    await visibility(page, 'visible');
+    await expect(badge).toHaveClass(/stale/);
+    await expect(page.locator('.refresh-elapsed')).toHaveText('已过去 2 分 10 秒');
+    expect(calls).toBe(initialCalls);
+  });
+}
 
 test('settings persist, apply immediately and polling preserves monitor and settings drafts', async ({
   page,

@@ -5,11 +5,12 @@ import { ERROR_LABELS } from './labels';
 import type { AdminMonitor, MonitorConfig, ProbeResult } from '../../../shared/monitors/types';
 import { api } from '../../lib/api';
 import { useRemote } from '../../hooks/useRemote';
+import { useNow } from '../../hooks/useNow';
 import { RefreshStatus } from '../../components/RefreshStatus';
 import { Empty, ErrorNotice, Loading } from '../../components/feedback';
 import { Icon } from '../../components/Icon';
 import { Modal } from '../../components/Modal';
-import { StatusBadge } from './status';
+import { StatusBadge, effectiveStatus } from './status';
 import { formatTime, latency } from '../../lib/format';
 import type { AdminResponse, MonitorEditorState, MonitorNotice } from './types';
 import { MonitorEditor } from './MonitorEditor';
@@ -43,6 +44,7 @@ export function MonitorManager({
 }) {
   const { t, locale } = useI18n();
   const { data, error, loading, refresh } = remote;
+  const now = useNow();
   const [deleting, setDeleting] = useState<AdminMonitor | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<DisplayMessage | null>(null);
@@ -204,7 +206,7 @@ export function MonitorManager({
                                 <div>
                                   <div className="admin-name">
                                     <h2>{monitor.name}</h2>
-                                    <StatusBadge status={monitor.status} />
+                                    <StatusBadge status={effectiveStatus(monitor, now)} />
                                   </div>
                                   <p
                                     className="target-text"
