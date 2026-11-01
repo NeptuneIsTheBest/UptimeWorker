@@ -222,7 +222,7 @@ describe('monitor options API and scheduling', () => {
         JSON.stringify(manualResult),
         await (await c.request('status')).text(),
         await (await c.request(`monitors/${row.id}/history`)).text(),
-        JSON.stringify(await getHistory(fixture.db, row.id, timestamp)),
+        JSON.stringify(await getHistory(c.env, row.id, timestamp)),
         JSON.stringify(log.mock.calls),
         JSON.stringify((await fixture.db.prepare('SELECT * FROM check_results').all()).results),
       ];

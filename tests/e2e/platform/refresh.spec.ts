@@ -96,6 +96,7 @@ for (const view of ['overview', 'detail', 'admin'] as const) {
         ? status
         : view === 'detail'
           ? {
+              siteName: status.siteName,
               monitor: status.monitors[0],
               checks: [],
               events: [],

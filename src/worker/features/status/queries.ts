@@ -39,11 +39,8 @@ export async function getStatus(env: Env, now = Date.now()): Promise<StatusRespo
     monitors: publicMonitors(monitors.results as unknown as PublicMonitorRow[], daily, now),
   };
 }
-export async function getHistory(
-  db: D1Database,
-  id: string,
-  now = Date.now(),
-): Promise<HistoryResponse | null> {
+export async function getHistory(env: Env, id: string, now = Date.now()): Promise<HistoryResponse | null> {
+  const db = env.DB;
   const row = await db
     .prepare(`SELECT ${PUBLIC_MONITOR_COLUMNS} FROM monitors m WHERE m.id = ?`)
     .bind(id)
@@ -66,6 +63,7 @@ export async function getHistory(
   ]);
   return {
     events,
+    siteName: env.SITE_NAME || 'UptimeWorker',
     monitor: publicMonitors([row], daily.results as unknown as DailyRow[], now)[0],
     pageRefreshSeconds,
     generatedAt: now,

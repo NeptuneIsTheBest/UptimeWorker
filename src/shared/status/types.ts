@@ -13,6 +13,7 @@ export interface StatusResponse extends PageRefreshSettings {
 }
 
 export interface HistoryResponse extends PageRefreshSettings {
+  siteName: string;
   monitor: PublicMonitor;
   checks: ProbeResult[];
   generatedAt: number;

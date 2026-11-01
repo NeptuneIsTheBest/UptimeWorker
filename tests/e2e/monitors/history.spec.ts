@@ -13,6 +13,7 @@ test('service details render a full day of minute history on desktop and mobile'
   await page.route('**/api/monitors/sample-0/history', (route) =>
     route.fulfill({
       json: {
+        siteName: 'UptimeWorker',
         monitor: { ...sampleMonitor(0), intervalMinutes: 1 },
         pageRefreshSeconds: 30,
         generatedAt: now,

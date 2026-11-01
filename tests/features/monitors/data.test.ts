@@ -279,7 +279,7 @@ describe('D1 scheduling and aggregation', () => {
     expect(status.monitors[0].days[0].uptime).toBeNull();
     expect(JSON.stringify(status)).not.toContain('example.com');
     expect((await getStatus(env, timestamp + 900_001)).monitors[0].status).toBe('stale');
-    expect((await getHistory(fixture.db, row!.id, timestamp + 300_000))?.checks).toHaveLength(2);
+    expect((await getHistory(env, row!.id, timestamp + 300_000))?.checks).toHaveLength(2);
     await updateMonitor(fixture.db, row!.id, 1, { ...httpConfig, enabled: false });
     expect((await getStatus(env, timestamp + 900_001)).monitors[0].status).toBe('paused');
   });
@@ -358,7 +358,7 @@ describe('D1 scheduling and aggregation', () => {
         ),
       );
     await updateMonitor(fixture.db, row.id, 1, { ...httpConfig, intervalMinutes: 60 }, timestamp);
-    const history = await getHistory(fixture.db, row.id, timestamp);
+    const history = await getHistory(environment(fixture.db), row.id, timestamp);
     expect(history?.monitor.intervalMinutes).toBe(60);
     expect(history?.checks.map((check) => check.checkedAt)).toEqual(checks.slice(1));
     expect(history?.checks).toHaveLength(1441);

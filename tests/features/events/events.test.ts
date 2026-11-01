@@ -145,7 +145,7 @@ describe('events', () => {
     const publicData = await getStatus(environment(fixture.db), at(14));
     expect(publicData.events[0]).not.toHaveProperty('version');
     expect(JSON.stringify(publicData.events)).not.toContain(httpConfig.url);
-    expect((await getHistory(fixture.db, row.id, at(14)))?.events).toHaveLength(2);
+    expect((await getHistory(environment(fixture.db), row.id, at(14)))?.events).toHaveLength(2);
   });
   it('publishes recovery after progress added during the probe across public cards and timelines', async () => {
     const row = await node();

@@ -324,7 +324,7 @@ for (const view of ['overview', 'detail'] as const) {
                       groups: [],
                       ungrouped: { id: '__ungrouped__', sortOrder: 0 },
                     }
-                  : { monitor, checks: [] }),
+                  : { siteName: 'UptimeWorker', monitor, checks: [] }),
                 generatedAt: now,
                 pageRefreshSeconds: 30,
                 events,

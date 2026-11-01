@@ -147,6 +147,7 @@ test.describe('English interface and language switching', () => {
     await page.route(`**/api/monitors/${monitors[0].id}/history`, (route) =>
       route.fulfill({
         json: {
+          siteName: 'UptimeWorker',
           monitor: monitors[0],
           pageRefreshSeconds: 0,
           generatedAt: Date.now(),

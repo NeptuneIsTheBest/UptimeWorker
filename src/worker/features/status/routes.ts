@@ -13,7 +13,7 @@ export function registerPublicRoutes(app: Hono<AppEnv>) {
     return c.json(result, 200, { 'Cache-Control': publicCacheControl(result.pageRefreshSeconds) });
   });
   app.get('/api/monitors/:id/history', publicCache, async (c) => {
-    const result = await getHistory(c.env.DB, c.req.param('id'));
+    const result = await getHistory(c.env, c.req.param('id'));
     return result
       ? c.json(result, 200, { 'Cache-Control': publicCacheControl(result.pageRefreshSeconds) })
       : c.json(errorResponse('monitor_not_found'), 404);

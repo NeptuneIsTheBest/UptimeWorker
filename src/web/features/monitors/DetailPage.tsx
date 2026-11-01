@@ -18,7 +18,7 @@ export function DetailPage({ id }: { id: string }) {
   const { data, error, loading, refresh } = remote;
   const now = useNow();
   return (
-    <Layout>
+    <Layout siteName={data?.siteName}>
       <a className="back-link" href="/">
         <Icon name="back" size={17} />
         {t('nav.back')}
