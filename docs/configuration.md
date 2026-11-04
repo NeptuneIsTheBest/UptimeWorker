@@ -37,6 +37,8 @@ The home page supports search, status and group filters, and collapsible groups.
 
 On the **Events** tab, enter a title and description, associate monitors, then publish an incident or scheduled maintenance. Use **Add update** to record progress. Choosing **Completed** or **Resolved** also closes a manual event. Event titles link to a shareable timeline.
 
+New incidents start with an **Investigating** description, new maintenance events with a **Scheduled** description, and progress updates with an **Updated** description. Changing the event type or progress stage replaces blank or unedited generated descriptions and preserves nonempty manual edits. **Use stage description** replaces the current text and resumes automatic updates. Editing an existing event preserves its saved description; the button uses the initial stage for its event type. Generated drafts follow the interface language, while manual edits and saved descriptions keep their original text. Clearing a description still requires entering text before submitting.
+
 Enter maintenance times in your browser's time zone and confirm completion manually. During the scheduled window, checks and uptime statistics continue while new automatic incidents are paused. The home page shows all open events and the 20 most recent closed events; monitor pages show associated events.
 
 Under **Global settings → Automatic outage incidents**, set how long checks must keep failing before an incident is published. The default is 5 minutes; use 1–1440 minutes, or 0 to turn publication off. A successful check resolves an automatic incident. You can add response notes to it, and delete it after it closes.

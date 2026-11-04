@@ -1,11 +1,12 @@
 import { errorMessage, type DisplayMessage } from '../../i18n/core';
 import { useI18n } from '../../i18n/I18nProvider';
-import { useState, type FormEvent } from 'react';
+import { useId, useState, type FormEvent } from 'react';
 import type { AdminEvent, EventConfig } from '../../../shared/events/types';
 import type { AdminMonitor } from '../../../shared/monitors/types';
 import { parseEventConfig } from '../../../shared/events/validation';
 import { ErrorNotice } from '../../components/feedback';
 import { Modal } from '../../components/Modal';
+import { useEventBodyDraft } from './useEventBodyDraft';
 
 const localTime = (time: number) => {
   const date = new Date(time);
@@ -25,8 +26,12 @@ export function EventEditor({
   const { t, locale } = useI18n();
   const deletedMonitors = initial?.monitors.filter((monitor) => monitor.id === null) ?? [];
   const [title, setTitle] = useState(initial?.title ?? '');
-  const [body, setBody] = useState(initial?.body ?? '');
   const [type, setType] = useState<EventConfig['type']>(initial?.type ?? 'incident');
+  const { body, setBody, setStage, resetBody } = useEventBodyDraft(
+    initial?.type === 'maintenance' ? 'Scheduled' : 'Investigating',
+    initial?.body,
+  );
+  const bodyId = useId();
   const [ids, setIds] = useState<string[]>(initial?.monitors.flatMap((m) => (m.id ? [m.id] : [])) ?? []);
   const [start, setStart] = useState(localTime(initial?.startsAt ?? Date.now() + 3_600_000));
   const [end, setEnd] = useState(localTime(initial?.endsAt ?? Date.now() + 7_200_000));
@@ -78,21 +83,34 @@ export function EventEditor({
           </label>
           <label className="field">
             {t('event.type')}
-            <select value={type} onChange={(e) => setType(e.target.value as EventConfig['type'])}>
+            <select
+              value={type}
+              onChange={(e) => {
+                const next = e.target.value as EventConfig['type'];
+                setType(next);
+                setStage(next === 'maintenance' ? 'Scheduled' : 'Investigating');
+              }}
+            >
               <option value="incident">{t('event.incident')}</option>
               <option value="maintenance">{t('event.maintenance')}</option>
             </select>
           </label>
-          <label className="field">
-            {t('event.body')}
+          <div className="field">
+            <label htmlFor={bodyId}>{t('event.body')}</label>
             <textarea
+              id={bodyId}
               required
               rows={5}
               maxLength={4000}
               value={body}
               onChange={(e) => setBody(e.target.value)}
             />
-          </label>
+            <div>
+              <button type="button" className="button small secondary" disabled={busy} onClick={resetBody}>
+                {t('progress.useStageBody')}
+              </button>
+            </div>
+          </div>
           <fieldset className="event-node-picker">
             <legend>{t('event.monitors')}</legend>
             {!monitors.length && !deletedMonitors.length && (

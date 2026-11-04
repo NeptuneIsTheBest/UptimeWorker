@@ -133,6 +133,9 @@ test('fixed stages and completion drafts survive refresh and failed submission',
   ]);
   await progress.getByLabel('进展阶段').selectOption(title);
   await progress.getByLabel('进展说明').fill(body);
+  await progress.getByLabel('进展阶段').selectOption('Monitoring');
+  await expect(progress.getByLabel('进展说明')).toHaveValue(body);
+  await progress.getByLabel('进展阶段').selectOption(title);
   await expect(progress.getByRole('checkbox')).toHaveCount(0);
   const refreshed = page.waitForResponse((value) => value.url().endsWith('/api/admin/events'));
   await page.clock.runFor(31_000);
@@ -203,6 +206,16 @@ test('event drafts survive refresh, editing persists, and the global threshold i
   await page.clock.runFor(31_000);
   await refreshed;
   await expect(editor.getByLabel('事件标题')).toHaveValue('保留未保存的草稿');
+  await expect(editor.getByLabel('事件正文')).toHaveValue('<script>alert("text")</script>\n连接故障排查中');
+  await page.route('**/api/admin/events', (route) =>
+    route.request().method() === 'POST'
+      ? route.fulfill({ status: 503, json: { code: 'service_unavailable' } })
+      : route.continue(),
+  );
+  await editor.getByRole('button', { name: '发布事件', exact: true }).click();
+  await expect(editor.getByRole('alert')).toContainText('服务暂时不可用，请稍后重试。');
+  await expect(editor.getByLabel('事件正文')).toHaveValue('<script>alert("text")</script>\n连接故障排查中');
+  await page.unroute('**/api/admin/events');
   await editor.getByRole('button', { name: '发布事件', exact: true }).click();
   await expect(editor).not.toBeVisible();
   await page.locator('.event-card').getByRole('button', { name: '编辑事件' }).click();

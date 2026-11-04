@@ -1,13 +1,14 @@
 import { errorMessage, type DisplayMessage } from '../../i18n/core';
 import { useI18n } from '../../i18n/I18nProvider';
 import { localizedEventTitle, PROGRESS_LABELS } from './presentation';
-import { useState, type FormEvent } from 'react';
+import { useId, useState, type FormEvent } from 'react';
 import type { AdminEvent, EventProgressTitle } from '../../../shared/events/types';
 import { eventProgressOptions } from '../../../shared/events/progress';
 import { parseEventUpdateConfig } from '../../../shared/events/validation';
 import { api } from '../../lib/api';
 import { ErrorNotice } from '../../components/feedback';
 import { Modal } from '../../components/Modal';
+import { useEventBodyDraft } from './useEventBodyDraft';
 
 export function ProgressEditor({
   event,
@@ -19,8 +20,8 @@ export function ProgressEditor({
   close: () => void;
 }) {
   const { t, locale } = useI18n();
-  const [title, setTitle] = useState<EventProgressTitle>('Updated');
-  const [body, setBody] = useState('');
+  const { stage: title, setStage: setTitle, body, setBody, resetBody } = useEventBodyDraft('Updated');
+  const bodyId = useId();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<DisplayMessage | null>(null);
   async function submit(e: FormEvent) {
@@ -66,16 +67,22 @@ export function ProgressEditor({
               ))}
             </select>
           </label>
-          <label className="field">
-            {t('progress.body')}
+          <div className="field">
+            <label htmlFor={bodyId}>{t('progress.body')}</label>
             <textarea
+              id={bodyId}
               required
               rows={5}
               maxLength={4000}
               value={body}
               onChange={(e) => setBody(e.target.value)}
             />
-          </label>
+            <div>
+              <button type="button" className="button small secondary" disabled={busy} onClick={resetBody}>
+                {t('progress.useStageBody')}
+              </button>
+            </div>
+          </div>
           {(title === 'Completed' || title === 'Resolved') && (
             <p className="form-note">
               {t(
