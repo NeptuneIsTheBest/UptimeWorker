@@ -223,6 +223,16 @@ test.describe('English interface and language switching', () => {
               source: 'manual',
               version: 1,
             },
+            {
+              ...automaticEvent(),
+              id: 'open-event',
+              title: 'Still investigating',
+              source: 'manual',
+              status: 'open',
+              endedAt: null,
+              updates: [],
+              version: 1,
+            },
           ],
           nextCursor: older ? null : 'page-2',
           pageRefreshSeconds: 0,
@@ -231,8 +241,15 @@ test.describe('English interface and language switching', () => {
     });
     await page.goto('/admin');
     await page.getByRole('tab', { name: 'Events', exact: true }).click();
+    await expect(page.getByRole('region', { name: 'Open and scheduled events', exact: true })).toContainText(
+      'Still investigating',
+    );
     await page.getByRole('button', { name: 'Older events', exact: true }).click();
-    await expect(page.getByRole('link', { name: 'Older event', exact: true })).toBeVisible();
+    await expect(
+      page
+        .getByRole('region', { name: 'Event history', exact: true })
+        .getByRole('link', { name: 'Older event', exact: true }),
+    ).toBeVisible();
     const other = await context.newPage();
     await other.goto('/');
     await other.locator('.language-select').selectOption('zh-CN');
@@ -240,7 +257,14 @@ test.describe('English interface and language switching', () => {
       'aria-selected',
       'true',
     );
-    await expect(page.getByRole('link', { name: 'Older event', exact: true })).toBeVisible();
+    await expect(page.getByRole('region', { name: '进行中与计划事件', exact: true })).toContainText(
+      'Still investigating',
+    );
+    await expect(
+      page
+        .getByRole('region', { name: '历史事件', exact: true })
+        .getByRole('link', { name: 'Older event', exact: true }),
+    ).toBeVisible();
     await expect(page.getByRole('button', { name: '上一页', exact: true })).toBeVisible();
     await other.close();
   });

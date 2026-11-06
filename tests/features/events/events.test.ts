@@ -22,7 +22,7 @@ import {
   success,
   timestamp,
 } from '../../support/fixtures';
-import type { AdminEvent, EventConfig, StatusEvent } from '../../../src/shared/events/types';
+import type { AdminEvent, EventConfig, EventsResponse, StatusEvent } from '../../../src/shared/events/types';
 
 let fixture: Awaited<ReturnType<typeof databaseFixture>>;
 beforeAll(async () => {
@@ -800,7 +800,20 @@ describe('events', () => {
       expect(new Set(events.map((event) => event.id)).size).toBe(events.length);
       expect(JSON.stringify(events)).not.toContain(httpConfig.url);
     }
-    expect((await listEvents(fixture.db)).events).toHaveLength(20);
+    const firstPage = await request('admin/events');
+    expect(firstPage.status).toBe(200);
+    const admin = (await firstPage.json()) as EventsResponse;
+    const history = [unrelatedClosed, ...closed];
+    expect(admin.events).toEqual([...open, unrelatedOpen, ...history.slice(0, 20)].sort(newestFirst));
+    expect(admin.pageRefreshSeconds).toBe(30);
+    expect(admin.nextCursor).toBe(JSON.stringify([history[19].updatedAt, history[19].id]));
+    const nextPage = await request(`admin/events?cursor=${encodeURIComponent(admin.nextCursor!)}`);
+    expect(nextPage.status).toBe(200);
+    expect(await nextPage.json()).toEqual({
+      events: [...open, unrelatedOpen, ...history.slice(20)].sort(newestFirst),
+      nextCursor: null,
+      pageRefreshSeconds: 30,
+    });
     const old = closed.at(-1)!;
     const oldDetail = await request(`events/${old.id}`, 'GET', undefined, { headers: {} });
     expect(oldDetail.status).toBe(200);
@@ -834,11 +847,26 @@ describe('events', () => {
   });
   it('paginates identical timestamps without duplicates and protects management APIs', async () => {
     const row = await node();
-    for (let n = 0; n < 22; n++) await createEvent(fixture.db, config(row.id, { title: `事件 ${n}` }), at(0));
+    const closed: AdminEvent[] = [];
+    for (let n = 0; n < 22; n++) {
+      const event = await createEvent(fixture.db, config(row.id, { title: `事件 ${n}` }), at(0));
+      closed.push(
+        await appendEventUpdate(
+          fixture.db,
+          event.id,
+          event.version,
+          { title: 'Resolved', body: '已恢复' },
+          at(1),
+        ),
+      );
+    }
+    closed.sort((a, b) => b.id.localeCompare(a.id));
     const page = await listEvents(fixture.db);
     const next = await listEvents(fixture.db, { cursor: page.nextCursor! });
     expect(page.events).toHaveLength(20);
     expect(next.events).toHaveLength(2);
+    expect([...page.events, ...next.events]).toEqual(closed);
+    expect(next.nextCursor).toBeNull();
     expect(new Set([...page.events, ...next.events].map((event) => event.id)).size).toBe(22);
     const { request } = apiClient(fixture.db);
     for (const path of ['admin/groups', 'admin/events']) {
@@ -860,7 +888,7 @@ describe('events', () => {
       (
         await request(`admin/events/${event.id}/updates`, 'POST', {
           version: event.version,
-          title: 'Resolved',
+          title: 'Updated',
           body: '确认完成',
         })
       ).status,
@@ -871,5 +899,15 @@ describe('events', () => {
     expect(
       (await request('admin/settings', 'PATCH', { version: 1, autoIncidentAfterMinutes: 0 })).status,
     ).toBe(200);
+  });
+  it('returns open events even when history is empty or its cursor is beyond the last page', async () => {
+    expect(await listEvents(fixture.db)).toEqual({ events: [], nextCursor: null });
+    const row = await node();
+    const event = await createEvent(fixture.db, config(row.id), at(0));
+    expect(await listEvents(fixture.db)).toEqual({ events: [event], nextCursor: null });
+    expect(await listEvents(fixture.db, { cursor: JSON.stringify([at(-1), 'old-history']) })).toEqual({
+      events: [event],
+      nextCursor: null,
+    });
   });
 });

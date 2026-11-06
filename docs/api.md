@@ -97,7 +97,7 @@ The update `title` is required. Missing, null, blank, free-form, or unavailable 
 
 Automatic incidents cannot be edited or manually resolved, and cannot be deleted while open. Stale versions and disallowed edit or deletion attempts return `409`; read the latest data before proceeding.
 
-`GET /api/admin/events` returns `{events, nextCursor, pageRefreshSeconds}`, with 20 events per page. URL-encode a nonempty `nextCursor` and send it as `?cursor=` to fetch the next page. Admin events include `version`; public events exclude management versions, identity, and monitor targets.
+`GET /api/admin/events` returns `{events, nextCursor, pageRefreshSeconds}`. Every page includes all `open` events plus up to 20 `resolved` / `stopped` events, sorted by descending `updatedAt`, then descending `id`. Pagination applies only to closed events: URL-encode a nonempty `nextCursor` and send it as `?cursor=` to fetch the next history page. Open events are included on every page and do not count toward its 20-event history limit. Admin events include `version`; public events exclude management versions, identity, and monitor targets.
 
 `/api/status` always returns `groups`, `ungrouped`, and `events`; `/api/monitors/:id/history` returns `checks` and only associated `events`. The `groups` and `events` arrays are present even when empty, and monitor responses always include `groupId` (null for Ungrouped). Public `events` include all `open` events plus the 20 most recent `resolved` / `stopped` events, sorted by descending `updatedAt`, then descending `id`. Open events are not subject to the history limit. Automatic event messages use only monitor names and generic check descriptions.
 

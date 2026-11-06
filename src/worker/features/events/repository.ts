@@ -97,7 +97,7 @@ export async function listPublicEvents(db: D1Database, monitorId?: string): Prom
   return rows.map(publicEvent);
 }
 export async function listEvents(db: D1Database, options: { cursor?: string } = {}) {
-  const predicates: string[] = [];
+  const predicates = ["e.status != 'open'"];
   const values: (string | number)[] = [];
 
   if (options.cursor) {
@@ -119,15 +119,23 @@ export async function listEvents(db: D1Database, options: { cursor?: string } = 
   }
   const rows = await readEvents(
     db,
-    `SELECT e.* FROM events e ${predicates.length ? `WHERE ${predicates.join(' AND ')}` : ''}
-      ORDER BY e.updated_at DESC, e.id DESC LIMIT 21`,
+    `SELECT * FROM (
+      SELECT e.* FROM events e WHERE e.status = 'open'
+      UNION ALL
+      SELECT * FROM (
+        SELECT e.* FROM events e WHERE ${predicates.join(' AND ')}
+        ORDER BY e.updated_at DESC, e.id DESC LIMIT 21
+      )
+    )
+    ORDER BY updated_at DESC, id DESC`,
     values,
   );
-  const page = rows.slice(0, 20);
-  const last = page.at(-1);
+  const history = rows.filter((event) => event.status !== 'open');
+  const extra = history[20];
+  const last = history[19];
   return {
-    events: page,
-    nextCursor: rows.length > 20 && last ? JSON.stringify([last.updatedAt, last.id]) : null,
+    events: rows.filter((event) => event.id !== extra?.id),
+    nextCursor: extra && last ? JSON.stringify([last.updatedAt, last.id]) : null,
   };
 }
 // The private token gates every statement after the optimistic parent update.

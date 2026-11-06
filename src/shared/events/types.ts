@@ -52,7 +52,9 @@ export interface AdminEvent extends StatusEvent {
 }
 
 export interface EventsResponse extends PageRefreshSettings {
+  /** All open events and up to 20 closed events, ordered by updatedAt and id descending. */
   events: AdminEvent[];
+  /** Cursor for the next page of closed events only. */
   nextCursor: string | null;
 }
 

@@ -47,7 +47,7 @@ export function EventManager({
   function latest() {
     setCursor(null);
     setPrevious([]);
-    remote.refresh();
+    if (!cursor) remote.refresh();
   }
   async function remove() {
     if (!deleting) return;
@@ -66,6 +66,31 @@ export function EventManager({
       setBusy(false);
     }
   }
+  function renderActions(event: AdminEvent) {
+    return (
+      <>
+        <button className="button small secondary" onClick={() => setProgress(event)}>
+          {t('event.addUpdate')}
+        </button>
+        {event.source === 'manual' && (
+          <button className="button small secondary" onClick={() => setEditor(event)}>
+            {t('event.edit')}
+          </button>
+        )}
+        {(event.source === 'manual' || event.status !== 'open') && (
+          <button
+            className="button small secondary"
+            onClick={() => {
+              setDeleting(event);
+              setError(null);
+            }}
+          >
+            {t('event.delete')}
+          </button>
+        )}
+      </>
+    );
+  }
   return (
     <div className="event-manager">
       <div className="event-toolbar">
@@ -78,32 +103,10 @@ export function EventManager({
       {remote.loading ? (
         <Loading />
       ) : (
-        <EventList
-          events={remote.data ? remote.data.events : []}
-          actions={(event) => (
-            <>
-              <button className="button small secondary" onClick={() => setProgress(event)}>
-                {t('event.addUpdate')}
-              </button>
-              {event.source === 'manual' && (
-                <button className="button small secondary" onClick={() => setEditor(event)}>
-                  {t('event.edit')}
-                </button>
-              )}
-              {(event.source === 'manual' || event.status !== 'open') && (
-                <button
-                  className="button small secondary"
-                  onClick={() => {
-                    setDeleting(event);
-                    setError(null);
-                  }}
-                >
-                  {t('event.delete')}
-                </button>
-              )}
-            </>
-          )}
-        />
+        <>
+          <EventList events={remote.data?.events ?? []} variant="open" actions={renderActions} />
+          <EventList events={remote.data?.events ?? []} variant="history" actions={renderActions} />
+        </>
       )}
       <div className="event-pagination">
         {previous.length > 0 && (

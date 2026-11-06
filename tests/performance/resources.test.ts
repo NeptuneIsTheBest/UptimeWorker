@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { listPublicEvents } from '../../src/worker/features/events/repository';
+import { listEvents, listPublicEvents } from '../../src/worker/features/events/repository';
 import {
   publicMonitors,
   type DailyRow,
@@ -117,6 +117,30 @@ describe('resource usage on isolated D1 data', () => {
     expect(events.every((event) => event.updates.length === 1)).toBe(true);
     const [parents] = batches[0];
     expect(parents.meta.rows_read).toBeLessThan(100);
+    const adminCapture = captureBatches();
+    const admin = await listEvents(adminCapture.db);
+    expect(admin.events.map((event) => event.id)).toEqual(events.map((event) => event.id));
+    expect(admin.events.every((event) => event.version === 1 && event.updates.length === 1)).toBe(true);
+    expect(adminCapture.batches[0][0].meta.rows_read).toBeLessThan(100);
+    const next = await listEvents(adminCapture.db, { cursor: admin.nextCursor! });
+    expect(next.events).toHaveLength(25);
+    expect(next.events.filter((event) => event.status === 'open')).toEqual(
+      admin.events.filter((event) => event.status === 'open'),
+    );
+    const closedIds = [...admin.events, ...next.events]
+      .filter((event) => event.status !== 'open')
+      .map((event) => event.id);
+    expect(new Set(closedIds).size).toBe(40);
+    console.info(
+      JSON.stringify({
+        benchmark: 'admin_events',
+        events: 10000,
+        returned: admin.events.length,
+        parentRowsRead: adminCapture.batches[0][0].meta.rows_read,
+        nextPageParentRowsRead: adminCapture.batches[1][0].meta.rows_read,
+        fullSnapshotRowsRead: adminCapture.batches[0].reduce((sum, query) => sum + query.meta.rows_read, 0),
+      }),
+    );
     const scoped = await listPublicEvents(db, 'm0000');
     expect(scoped).toHaveLength(25);
     expect(scoped.every((event) => event.monitors[0]?.id === 'm0000')).toBe(true);

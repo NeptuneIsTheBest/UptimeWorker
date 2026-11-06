@@ -97,7 +97,7 @@ GET / PATCH 返回下表字段。PATCH 须携带当前 `version`，其余字段�
 
 自动事件不能编辑或手动完成，开放时不能删除；过期版本以及不允许的编辑、删除操作返回 `409`，需重新读取后处理。
 
-`GET /api/admin/events` 返回 `{events, nextCursor, pageRefreshSeconds}`，每页 20 条；将非空 `nextCursor` URL 编码后作为 `?cursor=` 获取下一页。管理事件含 `version`，公开事件不含管理版本、身份或监控目标。
+`GET /api/admin/events` 返回 `{events, nextCursor, pageRefreshSeconds}`。每页包含全部 `open` 事件和最多 20 条 `resolved` / `stopped` 事件，合并后按 `updatedAt` 倒序、同时间按 `id` 倒序排列。分页仅作用于已结束事件：将非空 `nextCursor` URL 编码后作为 `?cursor=` 获取下一页历史。全部未结束事件会在每页返回，不占用 20 条历史额度。管理事件含 `version`，公开事件不含管理版本、身份或监控目标。
 
 `/api/status` 始终返回 `groups`、`ungrouped` 和 `events`；`/api/monitors/:id/history` 返回 `checks` 和仅关联该节点的 `events`。`groups` 和 `events` 为空时仍返回数组，监控响应始终包含 `groupId`（未分组为 null）。公开 `events` 包含全部 `open` 事件及最近 20 条 `resolved` / `stopped` 事件，按 `updatedAt` 倒序、同时间按 `id` 倒序排列；未结束事件不受历史条数限制。自动事件文案仅使用节点名称及通用检测描述。
 

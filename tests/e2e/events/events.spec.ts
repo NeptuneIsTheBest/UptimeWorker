@@ -1,7 +1,7 @@
 import { checkDialogLayout } from '../support/layout';
 import { test, expect, createMonitor, origin } from '../support/fixtures';
 import type { PublicMonitor } from '../../../src/shared/monitors/types';
-import type { StatusEvent } from '../../../src/shared/events/types';
+import type { AdminEvent, StatusEvent } from '../../../src/shared/events/types';
 
 const localTime = (time: number) => {
   const date = new Date(time);
@@ -229,40 +229,101 @@ test('event drafts survive refresh, editing persists, and the global threshold i
   await page.getByRole('tab', { name: '事件', exact: true }).click();
   await page.locator('.event-card').getByRole('button', { name: '删除事件' }).click();
   await page.getByRole('dialog', { name: '删除事件' }).getByRole('button', { name: '确认删除事件' }).click();
-  await expect(page.getByText('暂无关联事件', { exact: true })).toBeVisible();
+  await expect(page.getByRole('region', { name: '进行中与计划事件', exact: true })).toHaveCount(0);
+  await expect(page.getByText('暂无历史事件', { exact: true })).toBeVisible();
 });
 
-test('admin can page through older events', async ({ page, request }) => {
+test('admin keeps every open event above independently paginated history', async ({ page, request }) => {
   const monitor = await createMonitor(request);
-  for (let index = 0; index < 21; index++) {
+  async function publish(title: string) {
     const response = await request.post('/api/admin/events', {
       headers: origin,
       data: {
-        title: `记录 ${index}`,
+        title,
         body: '故障进展',
         type: 'incident',
         monitorIds: [monitor.id],
       },
     });
     expect(response.status()).toBe(201);
+    return (await response.json()) as AdminEvent;
+  }
+  const open: AdminEvent[] = [];
+  for (let index = 0; index < 21; index++) open.push(await publish(`未结束 ${index}`));
+  await page.clock.install();
+  await page.goto('/admin');
+  await page.getByRole('tab', { name: '事件', exact: true }).click();
+  const active = page.getByRole('region', { name: '进行中与计划事件', exact: true });
+  const history = page.getByRole('region', { name: '历史事件', exact: true });
+  await expect(active.locator('.event-card')).toHaveCount(21);
+  await expect(history).toContainText('暂无历史事件');
+  await expect(page.getByRole('button', { name: '更早事件' })).toHaveCount(0);
+  for (const path of ['/', `/monitors/${monitor.id}`]) {
+    await page.goto(path);
+    await expect(active.locator('.event-card')).toHaveCount(21);
+    await expect(page.getByText('暂无历史事件', { exact: true })).toBeVisible();
+  }
+  for (let index = 0; index < 21; index++) {
+    const event = await publish(`历史 ${index}`);
+    const response = await request.post(`/api/admin/events/${event.id}/updates`, {
+      headers: origin,
+      data: { version: event.version, title: 'Resolved', body: '已恢复' },
+    });
+    expect(response.status()).toBe(200);
   }
   await page.goto('/admin');
   await page.getByRole('tab', { name: '事件', exact: true }).click();
-  await expect(page.locator('.event-card')).toHaveCount(20);
+  await expect(active.locator('.event-card')).toHaveCount(21);
+  await expect(history.locator('.event-card')).toHaveCount(20);
+  await expect(page.locator('.event-manager .events-section').first()).toHaveAttribute(
+    'aria-label',
+    '进行中与计划事件',
+  );
+  const firstPage = await history.locator('h3').allTextContents();
   await page.getByRole('button', { name: '更早事件' }).click();
-  await expect(page.locator('.event-card')).toHaveCount(1);
+  await expect(history.locator('.event-card')).toHaveCount(1);
+  await expect(active.locator('.event-card')).toHaveCount(21);
+  expect(new Set([...firstPage, ...(await history.locator('h3').allTextContents())]).size).toBe(21);
+  const progressResponse = await request.post(`/api/admin/events/${open[0].id}/updates`, {
+    headers: origin,
+    data: { version: open[0].version, title: 'Updated', body: '历史翻页时收到的新进展' },
+  });
+  expect(progressResponse.status()).toBe(200);
+  const refreshed = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return url.pathname === '/api/admin/events' && url.searchParams.has('cursor');
+  });
+  await page.clock.runFor(31_000);
+  await refreshed;
+  await expect(active).toContainText('历史翻页时收到的新进展');
+  await expect(active.locator('.event-card')).toHaveCount(21);
+  await expect(history.locator('.event-card')).toHaveCount(1);
+  await expect(page.getByRole('button', { name: '上一页', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '上一页', exact: true }).click();
+  await expect(history.locator('h3')).toHaveText(firstPage);
+  await page.getByRole('button', { name: '更早事件' }).click();
+  await expect(history.locator('.event-card')).toHaveCount(1);
   await page.getByRole('button', { name: '返回最新' }).click();
-  await expect(page.locator('.event-card')).toHaveCount(20);
-  for (const path of ['/', `/monitors/${monitor.id}`]) {
-    await page.goto(path);
-    await expect(page.getByRole('region', { name: '进行中与计划事件' }).locator('.event-card')).toHaveCount(
-      21,
-    );
-    await expect(page.getByText('暂无历史事件', { exact: true })).toBeVisible();
-  }
+  await expect(history.locator('h3')).toHaveText(firstPage);
+
+  await page.getByRole('button', { name: '更早事件' }).click();
+  await expect(history.locator('.event-card')).toHaveCount(1);
+  await active
+    .locator('.event-card')
+    .filter({ hasText: open[0].title })
+    .getByRole('button', { name: '追加进展' })
+    .click();
+  const progress = page.getByRole('dialog', { name: '追加事件进展' });
+  await progress.getByLabel('进展阶段').selectOption('Resolved');
+  await progress.getByRole('button', { name: '保存进展' }).click();
+  await expect(progress).toHaveCount(0);
+  await expect(active.locator('.event-card')).toHaveCount(20);
+  await expect(history.locator('.event-card')).toHaveCount(20);
+  await expect(history.getByRole('link', { name: open[0].title, exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '上一页', exact: true })).toHaveCount(0);
 });
 
-for (const view of ['overview', 'detail'] as const) {
+for (const view of ['overview', 'detail', 'admin'] as const) {
   test(`${view} keeps open events prominent and moves them to history after refresh`, async ({
     page,
   }, testInfo) => {
@@ -322,7 +383,12 @@ for (const view of ['overview', 'detail'] as const) {
         ],
       }),
     ];
-    const endpoint = view === 'overview' ? '/api/status' : `/api/monitors/${monitor.id}/history`;
+    const endpoint =
+      view === 'overview'
+        ? '/api/status'
+        : view === 'detail'
+          ? `/api/monitors/${monitor.id}/history`
+          : '/api/admin/events';
     let fail = false;
     await page.route(`**${endpoint}`, (route) =>
       route.fulfill(
@@ -337,15 +403,18 @@ for (const view of ['overview', 'detail'] as const) {
                       groups: [],
                       ungrouped: { id: '__ungrouped__', sortOrder: 0 },
                     }
-                  : { siteName: 'UptimeWorker', monitor, checks: [] }),
+                  : view === 'detail'
+                    ? { siteName: 'UptimeWorker', monitor, checks: [] }
+                    : { nextCursor: null }),
                 generatedAt: now,
                 pageRefreshSeconds: 30,
-                events,
+                events: view === 'admin' ? events.map((event) => ({ ...event, version: 1 })) : events,
               },
             },
       ),
     );
-    await page.goto(view === 'overview' ? '/' : `/monitors/${monitor.id}`);
+    await page.goto(view === 'overview' ? '/' : view === 'detail' ? `/monitors/${monitor.id}` : '/admin');
+    if (view === 'admin') await page.getByRole('tab', { name: '事件', exact: true }).click();
     const active = page.getByRole('region', { name: '进行中与计划事件', exact: true });
     const history = page.getByRole('region', { name: '历史事件', exact: true });
     const maintenance = active.locator('.event-card').filter({ hasText: '即将进行的维护' });
@@ -363,14 +432,19 @@ for (const view of ['overview', 'detail'] as const) {
       await page.setViewportSize({ width, height });
       const top = (await active.boundingBox())!;
       const summary = (await page
-        .locator(view === 'overview' ? '.status-hero' : '.detail-heading')
+        .locator(
+          view === 'overview' ? '.status-hero' : view === 'detail' ? '.detail-heading' : '.admin-heading',
+        )
         .boundingBox())!;
       if (view === 'overview') {
         expect(summary.y + summary.height).toBeLessThan(top.y);
         const services = (await page.locator('.services-section').boundingBox())!;
         expect(top.y + top.height).toBeLessThan(services.y);
-      } else {
+      } else if (view === 'detail') {
         expect(top.y + top.height).toBeLessThan(summary.y);
+      } else {
+        expect(summary.y + summary.height).toBeLessThan(top.y);
+        expect(top.y + top.height).toBeLessThan((await history.boundingBox())!.y);
       }
       if (view === 'detail') {
         const back = (await page.getByRole('link', { name: '返回状态概览' }).boundingBox())!;
@@ -383,7 +457,9 @@ for (const view of ['overview', 'detail'] as const) {
       const response = page.waitForResponse((value) => value.url().endsWith(endpoint));
       await page.clock.runFor(30_000);
       await response;
-      await expect(page.locator('.refresh-button')).toHaveAttribute('aria-busy', 'false');
+      await expect(
+        page.locator(view === 'admin' ? '.event-manager .refresh-button' : '.refresh-button'),
+      ).toHaveAttribute('aria-busy', 'false');
     }
     await nextRefresh();
     await expect(maintenance.locator('.event-status')).toHaveText('维护进行中');
