@@ -177,6 +177,14 @@ export const errorMessages = {
     zh: '事件已变更，或自动事件仍在进行中，请刷新后重试。',
     en: 'The event has changed or the automatic incident is still open. Refresh and try again.',
   },
+  event_bulk_delete_invalid: {
+    zh: '请选择要删除的事件，每条事件需包含唯一 ID 和有效版本。',
+    en: 'Select events to delete, each with a unique ID and a valid version.',
+  },
+  event_bulk_delete_conflict: {
+    zh: '部分事件已变更、不存在或无法删除，本次未删除任何事件。请刷新后重新选择。',
+    en: 'Some events have changed, no longer exist, or cannot be deleted. No events were deleted. Refresh and select again.',
+  },
   settings_conflict: {
     zh: '全局设置已被修改，请重新加载后重试。',
     en: 'Global settings have changed. Reload and try again.',

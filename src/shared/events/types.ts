@@ -51,6 +51,20 @@ export interface AdminEvent extends StatusEvent {
   version: number;
 }
 
+export interface EventDeleteItem {
+  id: string;
+  version: number;
+}
+
+export interface EventBulkDeleteRequest {
+  items: EventDeleteItem[];
+}
+
+export interface EventBulkDeleteResponse {
+  ok: true;
+  deletedCount: number;
+}
+
 export interface EventsResponse extends PageRefreshSettings {
   /** All open events and up to 20 closed events, ordered by updatedAt and id descending. */
   events: AdminEvent[];

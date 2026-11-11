@@ -1,4 +1,4 @@
-import type { EventConfig, EventUpdateConfig } from './types';
+import type { EventBulkDeleteRequest, EventConfig, EventUpdateConfig } from './types';
 import { ValidationError } from '../errors';
 import { object, parseText } from '../validation';
 import { isEventProgressTitle } from './progress';
@@ -32,4 +32,27 @@ export function parseEventUpdateConfig(value: unknown): EventUpdateConfig {
   const body = parseText(v.body, 'progress_body', 4000);
   if (!isEventProgressTitle(title)) throw new ValidationError('event_progress_invalid');
   return { title, body };
+}
+
+export function parseEventBulkDelete(value: unknown): EventBulkDeleteRequest {
+  const { items } = object(value);
+  if (!Array.isArray(items) || !items.length) throw new ValidationError('event_bulk_delete_invalid');
+  const ids = new Set<string>();
+  return {
+    items: items.map((item) => {
+      const { id, version } = object(item);
+      if (
+        typeof id !== 'string' ||
+        !id.trim() ||
+        id.length > 100 ||
+        ids.has(id) ||
+        typeof version !== 'number' ||
+        !Number.isSafeInteger(version) ||
+        version < 1
+      )
+        throw new ValidationError('event_bulk_delete_invalid');
+      ids.add(id);
+      return { id, version };
+    }),
+  };
 }

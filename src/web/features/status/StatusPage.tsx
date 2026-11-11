@@ -1,6 +1,8 @@
 import { number } from '../../lib/format';
 import { useI18n } from '../../i18n/I18nProvider';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
+import { usePageScroll, usePageState } from '../../hooks/usePageState';
+import { isRecord } from '../../lib/navigation';
 import type { StatusResponse } from '../../../shared/status/types';
 import { useRemote } from '../../hooks/useRemote';
 import { EventList } from '../events/EventList';
@@ -22,14 +24,31 @@ import type { PublicMonitor } from '../../../shared/monitors/types';
 
 const EMPTY_MONITORS: PublicMonitor[] = [];
 
+interface Filters {
+  search: string;
+  filter: string;
+  groupFilter: string;
+}
+
+const isFilters = (value: unknown): value is Filters =>
+  isRecord(value) &&
+  typeof value.search === 'string' &&
+  typeof value.groupFilter === 'string' &&
+  typeof value.filter === 'string' &&
+  ['all', 'up', 'down', 'stale', 'unknown', 'paused'].includes(value.filter);
+
 export function StatusPage() {
   const { t, locale } = useI18n();
   const remote = useRemote<StatusResponse>('/api/status');
   const { data, error, loading, refresh } = remote;
   const now = useNow();
-  const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState('all');
-  const [groupFilter, setGroupFilter] = useState('all');
+  const [filters, setFilters] = usePageState<Filters>(
+    'overviewFilters',
+    { search: '', filter: 'all', groupFilter: 'all' },
+    isFilters,
+  );
+  const { search, filter, groupFilter } = filters;
+  usePageScroll(Boolean(data) && !loading);
   const collapsedGroups = useCollapsedGroups('public');
   const filtering = search !== '' || filter !== 'all' || groupFilter !== 'all';
   const displayGroups = useMemo(
@@ -151,13 +170,13 @@ export function StatusPage() {
                   aria-label={t('status.search')}
                   placeholder={t('status.searchPlaceholder')}
                   value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+                  onChange={(e) => setFilters({ ...filters, search: e.target.value })}
                 />
               </label>
               <select
                 aria-label={t('status.groupFilter')}
                 value={groupFilter}
-                onChange={(e) => setGroupFilter(e.target.value)}
+                onChange={(e) => setFilters({ ...filters, groupFilter: e.target.value })}
               >
                 <option value="all">{t('status.allGroups')}</option>
                 {displayGroups.map((group) => (
@@ -169,7 +188,7 @@ export function StatusPage() {
               <select
                 aria-label={t('status.statusFilter')}
                 value={filter}
-                onChange={(e) => setFilter(e.target.value)}
+                onChange={(e) => setFilters({ ...filters, filter: e.target.value })}
               >
                 <option value="all">{t('status.allStatuses')}</option>
                 <option value="up">{t('status.up')}</option>

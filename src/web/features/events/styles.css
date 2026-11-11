@@ -243,10 +243,39 @@
 }
 .event-toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
   gap: 16px;
   margin: 12px 0 20px;
+}
+.event-bulk-controls {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  font-size: 13px;
+}
+.event-selection {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  font-size: 12px;
+}
+.event-bulk-controls .checkbox-field,
+.event-selection .checkbox-field {
+  margin: 0;
+}
+.event-selection .checkbox-field:has(input:disabled) {
+  cursor: default;
+  color: var(--muted);
+}
+.event-bulk-titles {
+  padding-left: 24px;
+  overflow-wrap: anywhere;
+  line-height: 1.8;
 }
 .event-node-picker {
   border: 1px solid var(--line);

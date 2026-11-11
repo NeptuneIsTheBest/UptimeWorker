@@ -2,6 +2,67 @@ import type { GlobalSettings } from '../../../src/shared/settings/types';
 import { checkPageLayout } from '../support/layout';
 import { test, expect, createMonitor, origin } from '../support/fixtures';
 
+for (const scenario of ['reload', 'browser back', 'reload while loading', 'retry'] as const) {
+  test(`performance restores scroll after ${scenario}`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 600 });
+    await page.clock.install();
+    await page.goto('/admin');
+    const tab = page.getByRole('tab', { name: '性能', exact: true });
+    await tab.click();
+    const panel = page.getByRole('region', { name: '性能设置与容量估算' });
+    await expect(panel.locator('.performance-capacity')).toHaveCount(3);
+    const scroll = await page.evaluate(() => {
+      window.scrollTo({ top: 600, behavior: 'instant' });
+      return scrollY;
+    });
+    expect(scroll).toBeGreaterThan(300);
+
+    let release!: () => void;
+    const settingsReady = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let failLoad = scenario === 'retry';
+    await page.route('**/api/admin/settings', async (route) => {
+      if (failLoad) return route.fulfill({ status: 503, json: { code: 'service_unavailable' } });
+      await settingsReady;
+      await route.continue();
+    });
+    try {
+      if (scenario === 'browser back') {
+        await page.goto('/');
+        await page.goBack();
+      } else {
+        await page.reload();
+      }
+      // This button is enabled only after monitors have loaded; settings remain pending.
+      await expect(page.getByRole('button', { name: '分组管理', exact: true })).toBeEnabled();
+      await expect(tab).toHaveAttribute('aria-selected', 'true');
+      if (scenario === 'retry') {
+        await expect(page.getByRole('alert')).toContainText('服务暂时不可用，请稍后重试。');
+        await page.clock.runFor(50);
+        expect(await page.evaluate(() => scrollY)).toBe(0);
+        failLoad = false;
+        await page.getByRole('button', { name: '重试', exact: true }).click();
+      }
+      await expect(page.locator('.loading')).toBeVisible();
+      await page.clock.runFor(50);
+      expect(await page.evaluate(() => scrollY)).toBe(0);
+
+      if (scenario === 'reload while loading') {
+        await page.reload();
+        await expect(page.getByRole('button', { name: '分组管理', exact: true })).toBeEnabled();
+        await expect(page.locator('.loading')).toBeVisible();
+        await page.clock.runFor(50);
+        expect(await page.evaluate(() => scrollY)).toBe(0);
+      }
+    } finally {
+      release();
+    }
+    await expect(panel.locator('.performance-capacity')).toHaveCount(3);
+    await expect.poll(() => page.evaluate(() => scrollY)).toBeCloseTo(scroll, 0);
+  });
+}
+
 test('estimates react to drafts, preserve edits across refresh and tabs, and persist in both languages', async ({
   page,
   request,

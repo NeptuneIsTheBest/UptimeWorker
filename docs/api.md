@@ -23,6 +23,7 @@
 | PUT                  | `/api/admin/monitors/order`     | Save the order of all services in a specified group atomically                         |
 | PATCH / DELETE       | `/api/admin/groups/:id`         | Update / delete a group; requires `version`                                            |
 | GET / POST           | `/api/admin/events`             | List events with pagination / publish an event                                         |
+| POST                 | `/api/admin/events/bulk-delete` | Atomically delete selected events; each item requires `id` and `version`               |
 | GET / PATCH / DELETE | `/api/admin/events/:id`         | Read / edit / delete an event; writes require `version`                                |
 | POST                 | `/api/admin/events/:id/updates` | Append an update, optionally completing a manual event; requires `version`             |
 
@@ -96,6 +97,10 @@ Example update: `{"version": 1, "title": "Completed", "body": "Maintenance is co
 The update `title` is required. Missing, null, blank, free-form, or unavailable stages return `400` without writes.
 
 Automatic incidents cannot be edited or manually resolved, and cannot be deleted while open. Stale versions and disallowed edit or deletion attempts return `409`; read the latest data before proceeding.
+
+`POST /api/admin/events/bulk-delete` accepts `{"items": [{"id": "event-id", "version": 1}]}` and returns `{"ok": true, "deletedCount": 1}`. The nonempty list must contain unique, nonblank IDs of at most 100 characters and positive safe-integer versions. Invalid selections return `400`; the request body is limited to 256 KiB (`413` when exceeded), with no fixed item-count limit. Every event must exist, match its submitted version, and be deletable. If any item fails these checks, the entire batch returns `409 event_bulk_delete_conflict` without changes. Database failures roll back the entire batch.
+
+Bulk deletion permanently removes the selected events, associations, and updates. As with single-event deletion, future suppression windows are removed, active windows end at deletion time, and past suppression intervals remain available to automatic incident tracking. The admin interface selects only events on the current page, clears selection on pagination, and requests confirmation with event titles and a count. Refreshes retain only visible, eligible selections with unchanged versions; an open confirmation keeps its original selection and versions. Success returns to the latest page; a conflict clears selection and refreshes the current page for a new selection.
 
 `GET /api/admin/events` returns `{events, nextCursor, pageRefreshSeconds}`. Every page includes all `open` events plus up to 20 `resolved` / `stopped` events, sorted by descending `updatedAt`, then descending `id`. Pagination applies only to closed events: URL-encode a nonempty `nextCursor` and send it as `?cursor=` to fetch the next history page. Open events are included on every page and do not count toward its 20-event history limit. Admin events include `version`; public events exclude management versions, identity, and monitor targets.
 

@@ -1,4 +1,10 @@
-import type { AdminEvent, EventConfig, EventUpdateConfig, StatusEvent } from '../../../shared/events/types';
+import type {
+  AdminEvent,
+  EventConfig,
+  EventDeleteItem,
+  EventUpdateConfig,
+  StatusEvent,
+} from '../../../shared/events/types';
 import { resolveEventUpdateConfig } from '../../../shared/events/progress';
 import { ValidationError } from '../../../shared/errors';
 import { ConflictError } from '../../errors';
@@ -293,4 +299,44 @@ export async function deleteEvent(db: D1Database, id: string, version: number, n
     db.prepare('DELETE FROM events WHERE id = ? AND write_token = ?').bind(id, token),
   ]);
   if (!writes[0].meta.changes) throw new ConflictError('event_delete_conflict');
+}
+
+export async function bulkDeleteEvents(db: D1Database, items: EventDeleteItem[], now = Date.now()) {
+  const token = crypto.randomUUID();
+  const requested = JSON.stringify(items);
+  const ids = "SELECT json_extract(value, '$.id') FROM json_each(?1)";
+  const claimed = `SELECT id FROM events WHERE id IN (${ids}) AND write_token = ?2`;
+  const writes = await db.batch([
+    db
+      .prepare(
+        // Materialize validation before any version changes. Every later write
+        // is guarded by this batch's token, so a conflict leaves no side effects.
+        `WITH requested AS MATERIALIZED (
+          SELECT json_extract(value, '$.id') AS id, json_extract(value, '$.version') AS version
+          FROM json_each(?1)
+        ), valid AS MATERIALIZED (
+          SELECT (SELECT COUNT(*) FROM requested) > 0
+            AND (SELECT COUNT(*) FROM requested) = (SELECT COUNT(DISTINCT id) FROM requested)
+            AND NOT EXISTS (
+              SELECT 1 FROM requested r LEFT JOIN events e ON e.id = r.id
+              WHERE e.id IS NULL OR e.version != r.version OR (e.source = 'automatic' AND e.status = 'open')
+            ) AS ok
+        )
+        UPDATE events SET write_token = ?2, version = version + 1
+        WHERE id IN (SELECT id FROM requested) AND (SELECT ok FROM valid)`,
+      )
+      .bind(requested, token),
+    db
+      .prepare(`DELETE FROM event_suppressions WHERE event_id IN (${claimed}) AND starts_at >= ?3`)
+      .bind(requested, token, now),
+    db
+      .prepare(
+        `UPDATE event_suppressions SET ends_at = ?3 WHERE event_id IN (${claimed})
+        AND starts_at < ?3 AND (ends_at IS NULL OR ends_at > ?3)`,
+      )
+      .bind(requested, token, now),
+    db.prepare(`DELETE FROM events WHERE id IN (${ids}) AND write_token = ?2`).bind(requested, token),
+  ]);
+  if (!writes[0].meta.changes) throw new ConflictError('event_bulk_delete_conflict');
+  return items.length;
 }

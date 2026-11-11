@@ -17,8 +17,9 @@ export function registerMiddleware(app: Hono<AppEnv>, verify?: TokenVerifier) {
       (c.req.method === 'PATCH' && /^\/api\/admin\/monitors\/[^/]+$/.test(c.req.path));
     const orderWrite =
       c.req.method === 'PUT' && ['/api/admin/monitors/order', '/api/admin/groups/order'].includes(c.req.path);
+    const bulkEventDelete = c.req.method === 'POST' && c.req.path === '/api/admin/events/bulk-delete';
     return bodyLimit({
-      maxSize: (monitorWrite || orderWrite ? 256 : 16) * 1024,
+      maxSize: (monitorWrite || orderWrite || bulkEventDelete ? 256 : 16) * 1024,
       onError: (context) => context.json(errorResponse('request_too_large'), 413),
     })(c, next);
   });

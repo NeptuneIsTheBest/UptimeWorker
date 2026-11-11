@@ -22,10 +22,12 @@ export function PerformancePanel({
   monitors,
   monitorError,
   saved,
+  onReadyChange,
 }: {
   monitors: readonly AdminMonitor[] | undefined;
   monitorError: DisplayMessage | null;
   saved: (settings: GlobalSettings) => void;
+  onReadyChange: (ready: boolean) => void;
 }) {
   const { t, locale } = useI18n();
   const [settings, setSettings] = useState<GlobalSettings | null>(null);
@@ -57,6 +59,12 @@ export function PerformancePanel({
       });
     return () => controller.abort();
   }, [revision]);
+
+  const ready = Boolean(settings) && !loading;
+  useEffect(() => {
+    onReadyChange(ready);
+    return () => onReadyChange(false);
+  }, [ready, onReadyChange]);
 
   let performance: PerformanceSettings | null = null;
   let validation: DisplayMessage | null = null;

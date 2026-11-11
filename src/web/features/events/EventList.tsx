@@ -1,5 +1,6 @@
 import { useI18n } from '../../i18n/I18nProvider';
-import { useMemo, type ReactNode } from 'react';
+import { useMemo, type MouseEvent, type ReactNode } from 'react';
+import { isPlainLinkClick, rememberEventNavigation } from '../../lib/navigation';
 import type { StatusEvent } from '../../../shared/events/types';
 import { eventLabel } from './labels';
 import { Icon } from '../../components/Icon';
@@ -11,6 +12,10 @@ import {
   localizedEntryBody,
   PROGRESS_LABELS,
 } from './presentation';
+
+function rememberVisit(event: MouseEvent<HTMLAnchorElement>) {
+  if (isPlainLinkClick(event)) rememberEventNavigation(event.currentTarget.href);
+}
 
 export function EventMonitors({ event }: { event: StatusEvent }) {
   const { t } = useI18n();
@@ -34,11 +39,13 @@ export function EventList<T extends StatusEvent>({
   title,
   variant = 'all',
   actions,
+  selection,
 }: {
   events: T[];
   title?: string;
   variant?: 'all' | 'open' | 'history';
   actions?: (event: T) => ReactNode;
+  selection?: (event: T) => ReactNode;
 }) {
   const { t, locale } = useI18n();
   const now = useNow();
@@ -83,9 +90,10 @@ export function EventList<T extends StatusEvent>({
                       {event.source === 'automatic' ? t('event.automatic') : t('event.manual')}
                     </span>
                   </div>
+                  {selection?.(event)}
                 </div>
                 <h3>
-                  <a className="event-title-link" href={href}>
+                  <a className="event-title-link" href={href} onClick={rememberVisit}>
                     {localizedEventTitle(event, locale)}
                     <Icon name="arrow" size={16} />
                   </a>
@@ -126,7 +134,7 @@ export function EventList<T extends StatusEvent>({
                     </time>
                   </div>
                   <p className="event-body event-excerpt">{localizedEntryBody(latest, locale)}</p>
-                  <a className="event-timeline-link" href={href}>
+                  <a className="event-timeline-link" href={href} onClick={rememberVisit}>
                     {t('event.viewTimeline')}
                     <Icon name="arrow" size={14} />
                   </a>

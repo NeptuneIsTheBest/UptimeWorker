@@ -3,6 +3,7 @@ import { useI18n } from '../i18n/I18nProvider';
 import { useState } from 'react';
 import type { GlobalSettings } from '../../shared/settings/types';
 import { useRemote } from '../hooks/useRemote';
+import { usePageScroll, usePageState } from '../hooks/usePageState';
 import { GroupManager } from '../features/groups/GroupManager';
 import { EventManager } from '../features/events/EventManager';
 import { GlobalSettingsDialog } from '../features/settings/GlobalSettingsDialog';
@@ -21,8 +22,18 @@ export function AdminPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [savedSettings, setSavedSettings] = useState<GlobalSettings>();
   const [groupsOpen, setGroupsOpen] = useState(false);
-  const [tab, setTab] = useState<'monitors' | 'events' | 'performance'>('monitors');
-  const [performanceVisited, setPerformanceVisited] = useState(false);
+  const [tab, setTab] = usePageState<'monitors' | 'events' | 'performance'>(
+    'adminTab',
+    'monitors',
+    (value): value is 'monitors' | 'events' | 'performance' =>
+      value === 'monitors' || value === 'events' || value === 'performance',
+  );
+  const [eventsReady, setEventsReady] = useState(false);
+  const [performanceReady, setPerformanceReady] = useState(false);
+  usePageScroll(
+    Boolean(data) && (tab !== 'events' || eventsReady) && (tab !== 'performance' || performanceReady),
+  );
+  const [performanceVisited, setPerformanceVisited] = useState(tab === 'performance');
   const [notice, setNotice] = useState<MonitorNotice | null>(null);
   return (
     <Layout admin>
@@ -92,13 +103,16 @@ export function AdminPage() {
         notice={notice}
         onNoticeChange={setNotice}
       />
-      {tab === 'events' && data && <EventManager monitors={data.monitors} settings={savedSettings} />}
+      {tab === 'events' && data && (
+        <EventManager monitors={data.monitors} settings={savedSettings} onReadyChange={setEventsReady} />
+      )}
       {performanceVisited && (
         <div hidden={tab !== 'performance'}>
           <RefreshStatus {...remote} />
           <PerformancePanel
             monitors={data?.monitors}
             monitorError={remote.error}
+            onReadyChange={setPerformanceReady}
             saved={(settings) => {
               remote.refreshWithSettings(settings);
               setSavedSettings(settings);

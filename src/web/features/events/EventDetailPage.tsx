@@ -2,6 +2,8 @@ import { useI18n } from '../../i18n/I18nProvider';
 import { eventLabel } from './labels';
 import type { EventDetailResponse } from '../../../shared/events/types';
 import { useRemote } from '../../hooks/useRemote';
+import { usePageScroll } from '../../hooks/usePageState';
+import { isPlainLinkClick, readEventReturn } from '../../lib/navigation';
 import { ErrorNotice, Loading } from '../../components/feedback';
 import { Icon } from '../../components/Icon';
 import { Layout } from '../../app/Layout';
@@ -16,20 +18,37 @@ import {
   PROGRESS_LABELS,
 } from './presentation';
 import { RefreshStatus } from '../../components/RefreshStatus';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 
 export function EventDetailPage({ id }: { id: string }) {
   const { t, locale } = useI18n();
   const remote = useRemote<EventDetailResponse>(`/api/events/${encodeURIComponent(id)}`);
   const { data, error, loading, refresh } = remote;
+  const [back] = useState(readEventReturn);
+  usePageScroll(Boolean(data));
   const event = data?.event;
   const timeline = useMemo(() => (event ? eventTimeline(event) : []), [event]);
   const now = useNow();
   return (
     <Layout siteName={data?.siteName}>
-      <a className="back-link" href="/">
+      <a
+        className="back-link"
+        href={back?.href ?? '/'}
+        onClick={(click) => {
+          if (back && isPlainLinkClick(click)) {
+            click.preventDefault();
+            history.back();
+          }
+        }}
+      >
         <Icon name="back" size={17} />
-        {t('nav.back')}
+        {t(
+          back?.kind === 'events'
+            ? 'nav.backEvents'
+            : back?.kind === 'monitor'
+              ? 'nav.backMonitor'
+              : 'nav.back',
+        )}
       </a>
       {error && <ErrorNotice message={error} retry={refresh} />}
       {loading ? (

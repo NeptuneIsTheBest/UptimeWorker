@@ -23,6 +23,7 @@
 | PUT                  | `/api/admin/monitors/order`     | 原子保存指定分组内全部服务的顺序                       |
 | PATCH / DELETE       | `/api/admin/groups/:id`         | 更新／删除分组，必须携带 `version`                     |
 | GET / POST           | `/api/admin/events`             | 分页列出／发布事件                                     |
+| POST                 | `/api/admin/events/bulk-delete` | 原子删除选中的事件，每项必须携带 `id` 和 `version`     |
 | GET / PATCH / DELETE | `/api/admin/events/:id`         | 获取／编辑／删除事件，写入必须携带 `version`           |
 | POST                 | `/api/admin/events/:id/updates` | 追加进展，可同时完成手动事件，必须携带 `version`       |
 
@@ -96,6 +97,10 @@ GET / PATCH 返回下表字段。PATCH 须携带当前 `version`，其余字段�
 进展的 `title` 必填；缺失、null、空白、自由文本及当前事件不可用的阶段返回 `400`，不发生写入。
 
 自动事件不能编辑或手动完成，开放时不能删除；过期版本以及不允许的编辑、删除操作返回 `409`，需重新读取后处理。
+
+`POST /api/admin/events/bulk-delete` 接受 `{"items": [{"id": "event-id", "version": 1}]}`，成功返回 `{"ok": true, "deletedCount": 1}`。列表不能为空；每项 ID 须唯一、非空白且不超过 100 字符，版本须为正安全整数。无效选择返回 `400`；请求体上限为 256 KiB，超限返回 `413`，无固定条数上限。所有事件必须存在、版本匹配且允许删除；任一项不满足条件，整批返回 `409 event_bulk_delete_conflict`，不产生修改。数据库执行失败时整批回滚。
+
+批量删除会永久移除选中的事件、关联关系及进展记录。与单条删除一致，尚未开始的静默窗口会被移除，正在生效的窗口结束于删除时刻，过去的静默区间保留供自动故障跟踪使用。后台仅选择当前页事件，翻页清空选择，删除前展示标题和数量供确认。刷新仅保留仍可见、可删除且版本未变的选择；已打开的确认弹窗固定原选择与版本。成功后返回最新页；冲突时清空选择并刷新当前页，供重新选择。
 
 `GET /api/admin/events` 返回 `{events, nextCursor, pageRefreshSeconds}`。每页包含全部 `open` 事件和最多 20 条 `resolved` / `stopped` 事件，合并后按 `updatedAt` 倒序、同时间按 `id` 倒序排列。分页仅作用于已结束事件：将非空 `nextCursor` URL 编码后作为 `?cursor=` 获取下一页历史。全部未结束事件会在每页返回，不占用 20 条历史额度。管理事件含 `version`，公开事件不含管理版本、身份或监控目标。
 
