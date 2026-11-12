@@ -93,73 +93,75 @@ export function StatusPage() {
   }, [monitors, search, filter, groupFilter, statusById, knownGroups]);
   return (
     <Layout siteName={data?.siteName}>
-      <section className={`status-hero ${summary.tone}`}>
-        <span className="status-symbol" aria-hidden="true">
-          <Icon name={summary.icon} size={24} />
-        </span>
-        <div className="hero-copy">
-          <h1>{summary.title}</h1>
-          {summary.description && <p>{summary.description}</p>}
-        </div>
-      </section>
+      <div className="status-overview">
+        <section className={`status-hero ${summary.tone}`}>
+          <span className="status-symbol" aria-hidden="true">
+            <Icon name={summary.icon} size={24} />
+          </span>
+          <div className="hero-copy">
+            <h1>{summary.title}</h1>
+            {summary.description && <p>{summary.description}</p>}
+          </div>
+        </section>
+        <section className="stats-grid" aria-label={t('status.overview')}>
+          <div className="stat-card">
+            <span className="stat-label">
+              <span className="stat-label-wide">{t('status.healthyServices')}</span>
+              <span className="stat-label-short">{t('status.healthyShort')}</span>
+            </span>
+            <div className="stat-value">
+              {number(up, locale)}
+              <span className="stat-denominator"> / {number(active, locale)}</span>
+            </div>
+            {statuses.includes('paused') && (
+              <span className="stat-note">
+                {t('status.pausedCount', { count: statuses.filter((s) => s === 'paused').length })}
+              </span>
+            )}
+          </div>
+          <div className="stat-card">
+            <span className="stat-label">
+              <span className="stat-label-wide">{t('status.overallUptime')}</span>
+              <span className="stat-label-short">{t('status.uptimeShort')}</span>
+            </span>
+            <div className="stat-value">
+              {totals.total ? (
+                <>
+                  {number((totals.success / totals.total) * 100, locale, 2)}
+                  <span className="stat-unit">%</span>
+                </>
+              ) : (
+                '—'
+              )}
+            </div>
+          </div>
+          <div className="stat-card">
+            <span className="stat-label">
+              <span className="stat-label-wide">{t('status.averageLatency')}</span>
+              <span className="stat-label-short">{t('status.latencyShort')}</span>
+            </span>
+            <div className="stat-value">
+              {latencies.length ? (
+                <>
+                  {number(Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length), locale)}
+                  <span className="stat-unit">ms</span>
+                </>
+              ) : (
+                '—'
+              )}
+            </div>
+          </div>
+        </section>
+      </div>
       {error && <ErrorNotice message={error} retry={refresh} />}
       <RefreshStatus {...remote} />
-      <EventList events={data ? data.events : []} variant="open" />
-      <section className="stats-grid" aria-label={t('status.overview')}>
-        <div className="stat-card">
-          <span className="stat-label">
-            <Icon name="server" size={16} />
-            {t('status.healthyServices')}
-          </span>
-          <div className="stat-value">
-            {number(up, locale)}
-            <span className="stat-denominator"> / {number(active, locale)}</span>
-          </div>
-          {statuses.includes('paused') && (
-            <span className="stat-note">
-              {t('status.pausedCount', { count: statuses.filter((s) => s === 'paused').length })}
-            </span>
-          )}
-        </div>
-        <div className="stat-card">
-          <span className="stat-label">
-            <Icon name="shield" size={16} />
-            {t('status.overallUptime')}
-          </span>
-          <div className="stat-value">
-            {totals.total ? (
-              <>
-                {number((totals.success / totals.total) * 100, locale, 2)}
-                <span className="stat-unit">%</span>
-              </>
-            ) : (
-              '—'
-            )}
-          </div>
-        </div>
-        <div className="stat-card">
-          <span className="stat-label">
-            <Icon name="pulse" size={16} />
-            {t('status.averageLatency')}
-          </span>
-          <div className="stat-value">
-            {latencies.length ? (
-              <>
-                {number(Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length), locale)}
-                <span className="stat-unit">ms</span>
-              </>
-            ) : (
-              '—'
-            )}
-          </div>
-        </div>
-      </section>
+      <EventList events={data ? data.events : []} variant="open" compact />
       <section className="services-section">
         <div className="section-heading">
           <div>
             <h2>
               {t('status.services')}
-              <span className="count-badge">{monitors.length.toString().padStart(2, '0')}</span>
+              <span className="count-badge">{number(monitors.length, locale)}</span>
             </h2>
           </div>
           {monitors.length > 0 && (
@@ -234,6 +236,13 @@ export function StatusPage() {
                       filtering={filtering}
                     />
                     <div className="monitor-group-list" id={controls} hidden={collapsed}>
+                      <div className="monitor-columns" aria-hidden="true">
+                        <span>{t('status.serviceName')}</span>
+                        <span>{t('history.period')}</span>
+                        <span>{t('monitor.latency')}</span>
+                        <span>{t('monitor.uptime')}</span>
+                        <span>{t('status.current')}</span>
+                      </div>
                       {members.map((monitor) => (
                         <MonitorCard
                           key={monitor.id}

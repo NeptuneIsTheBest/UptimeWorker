@@ -1,3 +1,4 @@
+import { selectLanguage } from '../support/preferences';
 import type { APIRequestContext, Page, Route } from '@playwright/test';
 import type { MonitorGroup } from '../../../src/shared/groups/types';
 import type { AdminResponse } from '../../../src/web/features/monitors/types';
@@ -101,7 +102,7 @@ test('buttons support keyboard, mobile layouts and both languages', async ({ pag
   await saved(page);
   await expect(names(page)).toHaveText(['数据库', '应用服务', '备用节点二', '备用节点一']);
   await checkPageLayout(page, info, 'ordering-zh');
-  await page.locator('.language-select').selectOption('en');
+  await selectLanguage(page, 'en');
   await page.getByRole('button', { name: 'Move down 数据库', exact: true }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Order saved.' })).toBeVisible();
   await checkPageLayout(page, info, 'ordering-en');

@@ -42,6 +42,7 @@ export async function checkPageLayout(page: Page, info: TestInfo, name: string) 
 
 async function settleLayout(page: Page) {
   await page.evaluate(async () => {
+    await document.fonts.ready;
     window.scrollTo(0, 0);
     await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
   });

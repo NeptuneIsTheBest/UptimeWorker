@@ -3,7 +3,7 @@ export type Theme = Exclude<ThemePreference, 'system'>;
 
 export const THEME_STORAGE_KEY = 'uptimeworker.theme';
 export const SYSTEM_THEME_QUERY = '(prefers-color-scheme: dark)';
-export const THEME_COLORS = { light: '#f6f7f9', dark: '#111318' } as const;
+export const THEME_COLORS = { light: '#f3f6fa', dark: '#101d2f' } as const;
 
 export const isThemePreference = (value: unknown): value is ThemePreference =>
   value === 'system' || value === 'light' || value === 'dark';

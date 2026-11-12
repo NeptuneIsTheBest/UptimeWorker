@@ -29,7 +29,7 @@
 }
 .waf-rule-help summary {
   cursor: pointer;
-  color: var(--green);
+  color: var(--accent);
 }
 .waf-rule-help p {
   margin: 10px 0;
@@ -65,18 +65,18 @@
   min-width: 0;
 }
 .performance-heading {
-  margin: 8px 0 24px;
+  margin: 8px 0 16px;
 }
 .performance-layout {
   display: grid;
   grid-template-columns: minmax(250px, 320px) minmax(0, 1fr);
-  gap: 24px;
+  gap: 20px;
   align-items: start;
 }
 .performance-controls,
 .performance-estimates {
   min-width: 0;
-  padding: 24px;
+  padding: 20px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface);
@@ -121,7 +121,7 @@
 }
 .performance-metric dd {
   margin: 4px 0 0;
-  font-size: 22px;
+  font-size: 28px;
   font-weight: 600;
   overflow-wrap: anywhere;
   font-variant-numeric: tabular-nums;
@@ -143,7 +143,7 @@
 }
 .performance-capacity {
   padding: 14px 16px;
-  border-radius: 8px;
+  border-radius: var(--control-radius);
   background: var(--subtle);
 }
 .performance-capacity > div {
@@ -187,6 +187,6 @@
     padding: 18px;
   }
   .performance-metric dd {
-    font-size: 19px;
+    font-size: 20px;
   }
 }

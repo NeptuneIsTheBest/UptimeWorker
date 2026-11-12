@@ -32,7 +32,6 @@ export function DetailPage({ id }: { id: string }) {
       ) : (
         data && (
           <>
-            <EventList events={data.events} variant="open" />
             <div className="detail-heading">
               <div>
                 <h1>{data.monitor.name}</h1>
@@ -46,6 +45,7 @@ export function DetailPage({ id }: { id: string }) {
               <StatusBadge status={effectiveStatus(data.monitor, now)} />
             </div>
             <RefreshStatus {...remote} />
+            <EventList events={data.events} variant="open" compact />
             <div className="detail-metrics">
               <div>
                 <span>{t('monitor.currentLatency')}</span>

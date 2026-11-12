@@ -67,7 +67,7 @@ export function ResponseChart({
             </text>
           </g>
         ))}
-        <path d={d} fill="none" stroke="var(--green)" strokeWidth="2" strokeLinejoin="round" />
+        <path d={d} fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinejoin="round" />
         {checks
           .filter((c) => !c.ok || checks.length === 1)
           .map((c) => (
@@ -75,8 +75,10 @@ export function ResponseChart({
               key={c.checkedAt}
               cx={x(c.checkedAt)}
               cy={y(c.latencyMs)}
-              r="3"
-              fill={c.ok ? 'var(--green)' : 'var(--red)'}
+              r="4"
+              fill={c.ok ? 'var(--accent)' : 'var(--red)'}
+              stroke="var(--surface)"
+              strokeWidth="1.5"
             >
               <title>
                 {formatTime(c.checkedAt, false, locale)} ·{' '}

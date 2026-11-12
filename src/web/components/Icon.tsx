@@ -10,6 +10,13 @@ export function Icon({
   className?: string;
 }) {
   const paths: Record<string, ReactNode> = {
+    sliders: (
+      <>
+        <path d="M4 7h3m4 0h9M4 17h9m4 0h3" />
+        <circle cx="9" cy="7" r="2" />
+        <circle cx="15" cy="17" r="2" />
+      </>
+    ),
     grip: <path d="M9 5h.01M15 5h.01M9 12h.01M15 12h.01M9 19h.01M15 19h.01" />,
     up: <path d="m6 10 6-6 6 6M12 4v16" />,
     down: <path d="m6 14 6 6 6-6M12 4v16" />,

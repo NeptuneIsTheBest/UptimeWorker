@@ -16,34 +16,29 @@ export const MonitorCard = memo(function MonitorCard({
   const { t, locale } = useI18n();
   return (
     <article className="monitor-card">
-      <div className="monitor-top">
-        <div className="monitor-title-group">
-          <span className="service-icon">
-            <Icon name={monitor.type === 'http' ? 'globe' : 'server'} size={21} />
-          </span>
-          <div>
-            <a className="monitor-name" href={`/monitors/${monitor.id}`}>
-              {monitor.name}
-              <Icon name="arrow" size={15} />
-            </a>
-            <div className="monitor-meta">
-              <span className="protocol">{monitor.type === 'http' ? 'HTTP' : 'TCP'}</span>
-            </div>
+      <div className="monitor-title-group">
+        <span className="service-icon">
+          <Icon name={monitor.type === 'http' ? 'globe' : 'server'} size={21} />
+        </span>
+        <div>
+          <a className="monitor-name" href={`/monitors/${monitor.id}`}>
+            {monitor.name}
+          </a>
+          <div className="monitor-meta">
+            <span className="protocol">{monitor.type === 'http' ? 'HTTP' : 'TCP'}</span>
           </div>
-        </div>
-        <div className="monitor-figures">
-          <div className="inline-metric">
-            <strong>{latency(monitor.latencyMs, locale)}</strong>
-            <span>{t('monitor.latency')}</span>
-          </div>
-          <div className="inline-metric">
-            <strong>{percent(monitor.uptime30d, locale)}</strong>
-            <span>{t('monitor.uptime')}</span>
-          </div>
-          <StatusBadge status={status} />
         </div>
       </div>
-      <HistoryBars days={monitor.days} />
+      <HistoryBars days={monitor.days} compact />
+      <div className="inline-metric monitor-latency">
+        <strong>{latency(monitor.latencyMs, locale)}</strong>
+        <span>{t('monitor.latency')}</span>
+      </div>
+      <div className="inline-metric monitor-uptime">
+        <strong>{percent(monitor.uptime30d, locale)}</strong>
+        <span>{t('monitor.uptime')}</span>
+      </div>
+      <StatusBadge status={status} />
     </article>
   );
 });

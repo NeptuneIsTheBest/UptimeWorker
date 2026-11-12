@@ -51,12 +51,13 @@ export function RefreshStatus({
               {t('refresh.elapsed', { duration: elapsedTime(now - lastRefreshedAt, locale) })}
             </span>
           )}
-          {pageRefreshSeconds !== 0 && (
-            <span className="refresh-interval">{t('refresh.interval', { count: pageRefreshSeconds })}</span>
-          )}
+          <span className="refresh-interval">
+            {pageRefreshSeconds === 0
+              ? t('refresh.disabled')
+              : t('refresh.interval', { count: pageRefreshSeconds })}
+          </span>
         </div>
       </details>
-      {pageRefreshSeconds === 0 && <span className="refresh-interval">{t('refresh.disabled')}</span>}
       <button type="button" className="refresh-button" onClick={refresh} aria-busy={refreshing}>
         {refreshing ? <span className="spinner" /> : <Icon name="refresh" size={14} />}
         {t('refresh.now')}

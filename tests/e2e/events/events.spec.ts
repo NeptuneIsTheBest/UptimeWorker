@@ -441,7 +441,8 @@ for (const view of ['overview', 'detail', 'admin'] as const) {
         const services = (await page.locator('.services-section').boundingBox())!;
         expect(top.y + top.height).toBeLessThan(services.y);
       } else if (view === 'detail') {
-        expect(top.y + top.height).toBeLessThan(summary.y);
+        expect(summary.y + summary.height).toBeLessThan(top.y);
+        expect(top.y + top.height).toBeLessThan((await page.locator('.detail-metrics').boundingBox())!.y);
       } else {
         expect(summary.y + summary.height).toBeLessThan(top.y);
         expect(top.y + top.height).toBeLessThan((await history.boundingBox())!.y);

@@ -1,34 +1,50 @@
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/ibm-plex-sans/IBMPlexSans-Regular-Latin1.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/ibm-plex-sans/IBMPlexSans-Medium-Latin1.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/ibm-plex-sans/IBMPlexSans-SemiBold-Latin1.woff2') format('woff2');
+}
 :root {
-  font-family:
-    Inter,
-    -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    'PingFang SC',
-    'Microsoft YaHei',
-    sans-serif;
+  font-family: 'IBM Plex Sans', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   font-size: 14px;
   color: var(--text);
   background: var(--background);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
-  --text: #20242c;
-  --muted: #667085;
-  --line: #e3e6eb;
+  --text: #20334d;
+  --muted: #5f7188;
+  --line: #dce4ef;
+  --accent: #2856a3;
+  --accent-soft: #edf2fb;
   --surface: #fff;
-  --background: #f6f7f9;
-  --subtle: #f3f4f6;
+  --background: #f3f6fa;
+  --subtle: #f1f5f9;
   --green: #137b5b;
   --green-dark: #106247;
   --green-soft: #edf7f1;
   --red: #bd3f42;
   --amber: #966215;
-  --empty: #e6e9ee;
-  --hover: #e9ecf0;
-  --primary-background: #20242c;
+  --empty: #dce4ed;
+  --hover: #e7eef7;
+  --primary-background: #2856a3;
   --primary-foreground: #fff;
-  --primary-hover: #363d48;
+  --primary-hover: #214887;
   --destructive-background: #bd3f42;
   --destructive-foreground: #fff;
   --red-soft: #fdf0f0;
@@ -37,8 +53,8 @@
   --green-line: #d4eadd;
   --amber-soft: #fff7e8;
   --hint-background: #fff8eb;
-  --field-line: #d5dae2;
-  --count-background: #eaecf0;
+  --field-line: #bdcbdc;
+  --count-background: #e9eff6;
   --modal-shadow: #1c243329;
   --modal-backdrop: #20242c66;
   --event-neutral-text: #626c76;
@@ -48,28 +64,31 @@
   --event-maintenance-text: #90650c;
   --event-resolved-background: #e9f5ef;
   --event-resolved-text: #23764e;
-  --history-up: #48a584;
+  --history-up: #458e79;
   --history-down: #d65c62;
   --history-partial: #d7a441;
-  --radius: 12px;
+  --radius: 10px;
+  --control-radius: 6px;
 }
 :root[data-theme='dark'] {
-  --text: #e7eaf0;
-  --muted: #aab3c2;
-  --line: #343c49;
-  --surface: #1b1f27;
-  --background: #111318;
-  --subtle: #242a35;
+  --text: #e9eff7;
+  --muted: #afbed2;
+  --line: #324661;
+  --surface: #1a2b42;
+  --background: #101d2f;
+  --subtle: #21344e;
+  --accent: #a0c3ff;
+  --accent-soft: #243d60;
   --green: #6bd5a5;
   --green-dark: #8fe5bb;
   --green-soft: #18382b;
   --red: #ff929b;
   --amber: #efc274;
-  --empty: #363e4b;
-  --hover: #2c3442;
-  --primary-background: #e7eaf0;
-  --primary-foreground: #181c24;
-  --primary-hover: #cbd2dc;
+  --empty: #34485f;
+  --hover: #2a405c;
+  --primary-background: #a0c3ff;
+  --primary-foreground: #101d2f;
+  --primary-hover: #c1d7ff;
   --destructive-background: #a3343b;
   --destructive-foreground: #fff;
   --red-soft: #3c242b;
@@ -79,7 +98,7 @@
   --amber-soft: #382e1c;
   --hint-background: #382e1c;
   --field-line: #647185;
-  --count-background: #2b3340;
+  --count-background: #2a405c;
   --modal-shadow: #00000066;
   --modal-backdrop: #05070bb3;
   --event-neutral-text: #b3bccb;
@@ -137,7 +156,7 @@ summary {
   outline-offset: 3px;
 }
 :focus-visible {
-  outline: 2px solid var(--green);
+  outline: 2px solid var(--accent);
 }
 svg {
   flex-shrink: 0;
@@ -151,13 +170,13 @@ p {
 }
 h1 {
   font-size: 28px;
-  font-weight: 650;
-  letter-spacing: -0.7px;
+  font-weight: 600;
+  letter-spacing: -0.5px;
   line-height: 1.35;
 }
 h2 {
-  font-size: 18px;
-  font-weight: 650;
+  font-size: 20px;
+  font-weight: 600;
   line-height: 1.5;
 }
 h3 {

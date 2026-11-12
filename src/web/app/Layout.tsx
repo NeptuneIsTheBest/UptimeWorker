@@ -1,7 +1,6 @@
 import { useI18n } from '../i18n/I18nProvider';
 import { useEffect, type ReactNode } from 'react';
-import { LanguageSelect } from '../i18n/LanguageSelect';
-import { ThemeSelect } from '../theme/ThemeSelect';
+import { HeaderPreferences } from './HeaderPreferences';
 import { Icon } from '../components/Icon';
 
 export function Layout({
@@ -36,17 +35,14 @@ export function Layout({
             </span>
           </a>
           <nav aria-label={t('nav.main')}>
-            <a href="/" className={!admin ? 'active' : ''}>
+            <a href="/" className={!admin ? 'active' : ''} aria-current={!admin ? 'page' : undefined}>
               {t('nav.overview')}
             </a>
-            <a href="/admin" className={admin ? 'active' : ''}>
+            <a href="/admin" className={admin ? 'active' : ''} aria-current={admin ? 'page' : undefined}>
               {t('nav.admin')}
             </a>
           </nav>
-          <div className="header-preferences">
-            <LanguageSelect />
-            <ThemeSelect />
-          </div>
+          <HeaderPreferences />
         </div>
       </header>
       <main className="main-content">{children}</main>

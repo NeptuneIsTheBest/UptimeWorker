@@ -3,10 +3,16 @@ import type { DailyStat } from '../../../shared/monitors/types';
 import { percent } from '../../lib/format';
 import { memo } from 'react';
 
-export const HistoryBars = memo(function HistoryBars({ days }: { days: DailyStat[] }) {
+export const HistoryBars = memo(function HistoryBars({
+  days,
+  compact = false,
+}: {
+  days: DailyStat[];
+  compact?: boolean;
+}) {
   const { t, locale } = useI18n();
   return (
-    <div className="history">
+    <div className={`history${compact ? ' history-compact' : ''}`}>
       <div className="history-bars" aria-label={t('history.label')}>
         {days.map((day) => (
           <span

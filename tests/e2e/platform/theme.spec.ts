@@ -1,3 +1,4 @@
+import { openPreferences, closePreferences } from '../support/preferences';
 import type { Locator, Page } from '@playwright/test';
 import type { StatusEvent } from '../../../src/shared/events/types';
 import { translator } from '../../../src/web/i18n/core';
@@ -12,11 +13,11 @@ async function expectTheme(page: Page, theme: 'light' | 'dark') {
   await expect(page.locator('html')).toHaveCSS('color-scheme', theme);
   await expect(page.locator('html')).toHaveCSS(
     'background-color',
-    theme === 'dark' ? 'rgb(17, 19, 24)' : 'rgb(246, 247, 249)',
+    theme === 'dark' ? 'rgb(16, 29, 47)' : 'rgb(243, 246, 250)',
   );
   await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute(
     'content',
-    theme === 'dark' ? '#111318' : '#f6f7f9',
+    theme === 'dark' ? '#101d2f' : '#f3f6fa',
   );
 }
 
@@ -284,10 +285,24 @@ for (const theme of ['light', 'dark'] as const) {
           ),
         );
         await checkPageLayout(page, info, 'overview');
+        for (const viewport of [
+          { width: 1440, height: 900 },
+          { width: 390, height: 844 },
+        ]) {
+          await page.setViewportSize(viewport);
+          await page.evaluate(async () => {
+            await document.fonts.ready;
+            window.scrollTo(0, 0);
+          });
+          await expect(page.locator('.monitor-card').first()).toBeInViewport({ ratio: 1 });
+          await expect(page.locator('.monitor-card').first().locator('.history-bar')).toHaveCount(90);
+        }
         for (const width of [320, 390, 768, 1440]) {
           await page.setViewportSize({ width, height: 1000 });
+          await openPreferences(page);
           await expect(page.getByLabel(t('theme.label'))).toBeInViewport({ ratio: 1 });
           await expect(page.getByLabel(t('language.label'))).toBeInViewport({ ratio: 1 });
+          await closePreferences(page);
         }
         await page.goto('/monitors/' + monitors[0].id);
         await expect(page.locator('.response-chart')).toBeVisible();

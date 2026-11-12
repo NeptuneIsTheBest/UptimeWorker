@@ -40,12 +40,14 @@ export function EventList<T extends StatusEvent>({
   variant = 'all',
   actions,
   selection,
+  compact = false,
 }: {
   events: T[];
   title?: string;
   variant?: 'all' | 'open' | 'history';
   actions?: (event: T) => ReactNode;
   selection?: (event: T) => ReactNode;
+  compact?: boolean;
 }) {
   const { t, locale } = useI18n();
   const now = useNow();
@@ -63,10 +65,10 @@ export function EventList<T extends StatusEvent>({
     (variant === 'open' ? t('event.open') : variant === 'history' ? t('event.history') : t('event.recent'));
   return (
     <section
-      className={`events-section${variant === 'open' ? ' events-section-open' : ''}`}
+      className={`events-section${variant === 'open' ? ' events-section-open' : ''}${compact ? ' events-compact' : ''}`}
       aria-label={heading}
     >
-      <div className="section-heading">
+      <div className={compact ? 'visually-hidden' : 'section-heading'}>
         <div>
           <h2>{heading}</h2>
         </div>
@@ -79,26 +81,28 @@ export function EventList<T extends StatusEvent>({
             const latest = latestEventEntry(event);
             const href = `/events/${encodeURIComponent(event.id)}`;
             return (
-              <article className="event-card" key={event.id}>
-                <div className="event-heading">
-                  <div className="event-tags">
-                    <span className={`event-status ${event.status === 'open' ? event.type : event.status}`}>
-                      {eventLabel(event, now, locale)}
-                    </span>
-                    <span className="muted">
-                      {event.type === 'maintenance' ? t('event.maintenance') : t('event.incident')} ·{' '}
-                      {event.source === 'automatic' ? t('event.automatic') : t('event.manual')}
-                    </span>
+              <article className="event-card" data-event-type={event.type} key={event.id}>
+                <div className="event-overview">
+                  <div className="event-heading">
+                    <div className="event-tags">
+                      <span className={`event-status ${event.status === 'open' ? event.type : event.status}`}>
+                        {eventLabel(event, now, locale)}
+                      </span>
+                      <span className="muted">
+                        {event.type === 'maintenance' ? t('event.maintenance') : t('event.incident')} ·{' '}
+                        {event.source === 'automatic' ? t('event.automatic') : t('event.manual')}
+                      </span>
+                    </div>
+                    {selection?.(event)}
                   </div>
-                  {selection?.(event)}
+                  <h3>
+                    <a className="event-title-link" href={href} onClick={rememberVisit}>
+                      {localizedEventTitle(event, locale)}
+                      <Icon name="arrow" size={16} />
+                    </a>
+                  </h3>
+                  <EventMonitors event={event} />
                 </div>
-                <h3>
-                  <a className="event-title-link" href={href} onClick={rememberVisit}>
-                    {localizedEventTitle(event, locale)}
-                    <Icon name="arrow" size={16} />
-                  </a>
-                </h3>
-                <EventMonitors event={event} />
                 {event.type === 'maintenance' && (
                   <p className="event-window">
                     {t('event.plannedWindow', {
