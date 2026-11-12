@@ -1,4 +1,44 @@
 import { test, expect } from '../support/fixtures';
+import { selectLanguage } from '../support/preferences';
+
+for (const width of [390, 1440]) {
+  test(`language switching waits for delayed app startup at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    let releaseStartup!: () => void;
+    const startupReady = new Promise<void>((resolve) => {
+      releaseStartup = resolve;
+    });
+    await page.route('**/src/web/main.tsx', async (route) => {
+      await startupReady;
+      await route.continue();
+    });
+
+    const toggle = page.locator('.preferences-toggle');
+    const language = page.locator('.language-select');
+    try {
+      await page.goto('/', { waitUntil: 'commit' });
+      await expect(page.locator('#root')).toBeEmpty();
+      const changingLanguage = selectLanguage(page, 'en');
+      // Keep startup blocked while the helper begins checking the unmounted header.
+      await expect(toggle).toHaveCount(0);
+      releaseStartup();
+      await changingLanguage;
+    } finally {
+      releaseStartup();
+    }
+
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+    await expect(language).toHaveValue('en');
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    if (width === 390) {
+      await expect(toggle).toBeVisible();
+      await expect(language).toBeHidden();
+    } else {
+      await expect(toggle).toBeHidden();
+      await expect(language).toBeVisible();
+    }
+  });
+}
 
 test('mobile preferences support keyboard changes, dismissal and focus return', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
