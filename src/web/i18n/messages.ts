@@ -365,6 +365,7 @@ export const zh = {
   'summary.empty': '暂无监控',
   'page.description': '服务运行状态、可用率与响应时间。由 Cloudflare Workers 驱动的轻量服务监控。',
   'language.label': '界面语言',
+  'language.system': '跟随系统',
   'theme.label': '外观主题',
   'theme.system': '跟随系统',
   'theme.light': '浅色',
@@ -791,6 +792,7 @@ export const en = {
   'page.description':
     'Service status, uptime and response times. Lightweight service monitoring powered by Cloudflare Workers.',
   'language.label': 'Interface language',
+  'language.system': 'System',
   'theme.label': 'Color theme',
   'theme.system': 'System',
   'theme.light': 'Light',

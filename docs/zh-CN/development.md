@@ -28,7 +28,7 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-`npm run check` 执行类型检查、单元 / D1 集成测试和生产构建，包括 D1、Cron 配置及开发鉴权分支移除检查。浏览器测试单独运行，GitHub Actions 执行两组检查。
+`npm run check` 先执行单元 / D1 集成测试，再执行包含类型检查的生产构建，包括 D1、Cron 配置及开发鉴权分支移除检查。浏览器测试单独运行；GitHub Actions 并行执行两组检查，全部通过后才部署。
 
 按需单独运行：
 
@@ -70,7 +70,9 @@ npm run test:e2e
 
 使用 [API 测试客户端](../../tests/support/api-client.ts) 统一身份、请求头和 JSON 请求，将断言放入对应功能测试。浏览器测试聚焦交互，刷新和时间行为使用可控时钟验证。
 
-[浏览器夹具](../../tests/e2e/support/fixtures.ts) 在每个用例前重置数据与设置。各文件须可独立运行；测试串行共用数据库，不要并行启动多个浏览器测试进程。失败截图和 trace 保存到 `test-results/`，由 GitHub Actions 上传。
+[浏览器夹具](../../tests/e2e/support/fixtures.ts) 在每个用例前重置数据与设置。各文件须可独立运行。同一工作目录中的测试共用数据库，保持 `workers: 1` 和 `fullyParallel: false` 串行执行，不要在该目录中并行启动多个浏览器测试进程。GitHub Actions 将测试文件分配到四个独立 runner，各自使用独立的服务和数据库。失败截图和 trace 保存到 `test-results/`，由 Actions 以 `browser-test-results-<分片编号>` 上传并保留七天。一个分片失败不会取消其他分片。
+
+本地复现单个分片时，运行 `npm run test:e2e -- --shard=1/4 --reporter=list`，将 `1` 替换为对应分片编号。本地须逐个运行分片，避免共用端口和数据库状态。
 
 ## 代码组织
 
@@ -80,7 +82,7 @@ npm run test:e2e
 
 手动 [Verify and deploy 工作流](../../.github/workflows/deploy.yml) 仅从 `main` 部署，其他分支运行验证。生产部署使用同一个并发组，已开始的发布运行至结束；排队规则见 [GitHub 并发](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency)。
 
-1. 验证阶段安装依赖，执行 `npm run check`，安装 Chromium 并运行 `npm run test:e2e`。
+1. `verify` 任务执行 `npm run check`，同时运行四个 `e2e` 任务。每个浏览器任务通过 `npx playwright install --with-deps --only-shell chromium` 安装 Chromium 无头浏览器及系统依赖，再通过 `npm run test:e2e -- --shard=N/4 --reporter=list` 执行对应编号的分片。所有任务使用 npm 缓存并通过 `npm ci` 安装依赖。`verify` 和全部浏览器分片成功后才进入部署。
 2. `npm run deploy:prepare` 校验环境变量，按完整名称查找 D1，不存在时创建，存在时复用。并发创建冲突后再次查找；同名结果不唯一或身份无效时停止准备。
 3. 脚本读取 `wrangler.jsonc`，将 Worker 名称、D1 绑定、Access 配置、站点名和域名开关写入 `wrangler.deploy.json`，不写入 API Token。
 4. 工作流通过 `UPTIME_WRANGLER_CONFIG=wrangler.deploy.json` 重新构建，执行 `npm run deploy:migrate` 应用远端迁移，然后发布 Worker 和静态资源。失败步骤会停止后续步骤。

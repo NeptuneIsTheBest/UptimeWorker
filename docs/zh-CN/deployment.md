@@ -97,7 +97,7 @@ Worker 和 D1 名称使用小写字母开头的小写字母、数字及连字符
 
 1. 打开仓库 **Actions → Verify and deploy**。Fork 后若提示启用 Actions，先启用工作流。
 2. 通过 **Run workflow** 选择 **main** 分支并运行。
-3. 等待 `verify` 和 `deploy` 两个任务成功。其他分支只运行验证，不发布。
+3. 等待 `verify` 和全部四个 `e2e` 分片成功，再等待 `deploy` 完成。验证与浏览器分片并行运行，任一验证失败都会阻止部署。其他分支只运行验证，不发布。
 
 在 `deploy` 日志中检查以下步骤：
 

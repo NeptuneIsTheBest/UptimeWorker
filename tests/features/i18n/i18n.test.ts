@@ -7,8 +7,10 @@ import { elapsedTime, formatTime, latency, number, percent } from '../../../src/
 import {
   displayMessage,
   errorMessage,
+  LOCALE_STORAGE_KEY,
   message,
   readLocale,
+  readLocalePreference,
   resolveLocale,
   translate,
 } from '../../../src/web/i18n/core';
@@ -25,6 +27,11 @@ describe('language selection and presentation', () => {
   it.each([
     ['en', ['zh-CN'], 'en'],
     ['zh-CN', ['en-US'], 'zh-CN'],
+    ['system', ['zh-TW', 'en-US'], 'zh-CN'],
+    ['system', ['ZH-Hans'], 'zh-CN'],
+    ['system', ['en-GB', 'zh-CN'], 'en'],
+    ['system', ['fr-FR', 'zh-CN'], 'en'],
+    ['system', [], 'en'],
     [null, ['zh-TW', 'en-US'], 'zh-CN'],
     [null, ['en-GB', 'zh-CN'], 'en'],
     ['invalid', ['zh-Hans'], 'zh-CN'],
@@ -33,6 +40,23 @@ describe('language selection and presentation', () => {
   ])('resolves stored %s and browser %j to %s', (saved, languages, expected) => {
     expect(resolveLocale(saved, languages as string[])).toBe(expected);
   });
+  it.each([
+    ['en', 'en'],
+    ['zh-CN', 'zh-CN'],
+    ['system', 'system'],
+    [null, 'system'],
+    ['invalid', 'system'],
+  ])(
+    'reads stored %s as preference %s without replacing it with the resolved language',
+    (saved, expected) => {
+      const getItem = vi.fn().mockReturnValue(saved);
+      vi.stubGlobal('localStorage', { getItem });
+      vi.stubGlobal('navigator', { languages: ['zh-CN'] });
+      expect(readLocalePreference()).toBe(expected);
+      expect(getItem).toHaveBeenCalledWith(LOCALE_STORAGE_KEY);
+      expect(readLocale()).toBe(expected === 'en' ? 'en' : 'zh-CN');
+    },
+  );
   it('uses the browser preference when storage is unavailable', () => {
     vi.stubGlobal('localStorage', {
       getItem() {
@@ -40,9 +64,16 @@ describe('language selection and presentation', () => {
       },
     });
     vi.stubGlobal('navigator', { languages: ['zh-CN'], language: 'en' });
+    expect(readLocalePreference()).toBe('system');
     expect(readLocale()).toBe('zh-CN');
+    expect(readLocale('en')).toBe('en');
     vi.stubGlobal('navigator', { languages: [], language: 'en-GB' });
     expect(readLocale()).toBe('en');
+  });
+  it('falls back to English when browser language information is unavailable', () => {
+    vi.stubGlobal('navigator', undefined);
+    expect(readLocale('system')).toBe('en');
+    expect(readLocale('zh-CN')).toBe('zh-CN');
   });
   it('re-renders stored messages and nested probe reasons, including singular and plural counts', () => {
     const notice = message('monitor.testFailed', {

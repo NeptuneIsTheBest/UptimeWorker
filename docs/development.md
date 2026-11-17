@@ -28,7 +28,7 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-`npm run check` runs type checks, unit / D1 integration tests, and a production build. Build checks cover D1 and Cron configuration and removal of development authentication. Browser tests run separately; GitHub Actions runs both.
+`npm run check` runs unit / D1 integration tests, then a production build that includes type checks. Build checks cover D1 and Cron configuration and removal of development authentication. Browser tests run separately; GitHub Actions runs both groups of checks concurrently and requires all of them to pass before deployment.
 
 Run individual checks as needed:
 
@@ -70,7 +70,9 @@ Unit tests use HTTP / socket test doubles and local RSA keys for JWTs. D1 integr
 
 Use the [API test client](../tests/support/api-client.ts) for identity, headers, and JSON requests, and place assertions in the relevant feature tests. Browser tests focus on interactions; use a controllable clock for refresh and timing behavior.
 
-The [browser fixtures](../tests/e2e/support/fixtures.ts) reset data and settings before each case. Each file must run independently; tests share a database and run serially, so do not start multiple browser test processes in parallel. Failures save screenshots and traces to `test-results/`, which GitHub Actions uploads.
+The [browser fixtures](../tests/e2e/support/fixtures.ts) reset data and settings before each case. Each file must run independently. Tests within one checkout share a database and run serially with `workers: 1` and `fullyParallel: false`; do not start multiple browser test processes in parallel in that checkout. GitHub Actions splits test files across four independent runners, each with its own server and database. Failures save screenshots and traces to `test-results/`, which Actions uploads as `browser-test-results-<shard>` and retains for seven days. A failed shard does not cancel the other shards.
+
+To reproduce one shard locally, run `npm run test:e2e -- --shard=1/4 --reporter=list`, replacing `1` with the shard number. Run local shards one at a time to avoid sharing ports and database state.
 
 ## Code organization
 
@@ -80,7 +82,7 @@ Code is divided into `web / worker / shared` layers, with monitors, groups, even
 
 The manual [Verify and deploy workflow](../.github/workflows/deploy.yml) deploys only from `main`; other branches verify. Production deployments use one concurrency group with active runs allowed to finish. See [GitHub concurrency](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency) for queue behavior.
 
-1. Verification installs dependencies, runs `npm run check`, installs Chromium, and runs `npm run test:e2e`.
+1. The `verify` job runs `npm run check` alongside four `e2e` jobs. Each browser job installs Chromium's headless shell and system dependencies with `npx playwright install --with-deps --only-shell chromium`, then runs `npm run test:e2e -- --shard=N/4 --reporter=list` for its shard number. All jobs use the npm cache and install dependencies with `npm ci`. Deployment waits for `verify` and every browser shard to succeed.
 2. `npm run deploy:prepare` validates environment variables and finds D1 by exact name, creating it when absent. An existing database is reused. A concurrent create conflict triggers a second lookup; an ambiguous name or invalid identity stops preparation.
 3. The script reads `wrangler.jsonc` and writes `wrangler.deploy.json` with the Worker name, D1 binding, Access values, site name, and domain switches. It excludes the API Token.
 4. The workflow rebuilds with `UPTIME_WRANGLER_CONFIG=wrangler.deploy.json`, applies remote migrations with `npm run deploy:migrate`, then publishes the Worker and assets. A failed step stops later steps.

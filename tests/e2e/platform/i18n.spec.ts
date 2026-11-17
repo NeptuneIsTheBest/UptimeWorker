@@ -3,6 +3,17 @@ import { checkDialogLayout, checkPageLayout } from '../support/layout';
 import { test, expect, createMonitor } from '../support/fixtures';
 import { sampleMonitor } from '../support/status-data';
 import type { StatusEvent } from '../../../src/shared/events/types';
+import type { Page } from '@playwright/test';
+
+async function setBrowserLanguages(page: Page, languages: string[]) {
+  await page.evaluate((languages) => {
+    Object.defineProperties(navigator, {
+      languages: { configurable: true, value: languages },
+      language: { configurable: true, value: languages[0] ?? '' },
+    });
+    window.dispatchEvent(new Event('languagechange'));
+  }, languages);
+}
 
 const automaticEvent = (): StatusEvent => ({
   id: 'automatic-outage',
@@ -50,13 +61,55 @@ for (const [browserLocale, language] of [
       await page.addInitScript(() => localStorage.setItem('uptimeworker.locale', 'invalid'));
       await page.goto('/');
       await expect(page.locator('html')).toHaveAttribute('lang', language);
-      await expect(page.locator('.language-select')).toHaveValue(language);
+      await expect(page.locator('.language-select')).toHaveValue('system');
     });
   });
 }
 
 test.describe('English interface and language switching', () => {
   test.use({ locale: 'en-US', timezoneId: 'Asia/Shanghai' });
+
+  test('follows browser changes in system mode and remembers manual and automatic choices', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    const language = page.locator('.language-select');
+    await expect(language).toHaveValue('system');
+    await expect(language.locator('option')).toHaveText(['System', '简体中文', 'English']);
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+
+    await selectLanguage(page, 'zh-CN');
+    await page.reload();
+    await expect(language).toHaveValue('zh-CN');
+    await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN');
+    await setBrowserLanguages(page, ['fr-FR', 'zh-CN']);
+    await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN');
+
+    await selectLanguage(page, 'system');
+    await expect(language).toHaveValue('system');
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+    expect(await page.evaluate(() => localStorage.getItem('uptimeworker.locale'))).toBe('system');
+    const timeOrigin = await page.evaluate(() => performance.timeOrigin);
+    await setBrowserLanguages(page, ['zh-TW', 'en-US']);
+    await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN');
+    await expect(language.locator('option:checked')).toHaveText('跟随系统');
+    await expect(page).toHaveTitle('UptimeWorker · 服务状态');
+    await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /服务运行状态/);
+    await setBrowserLanguages(page, ['en-GB', 'zh-CN']);
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+    await expect(page).toHaveTitle('UptimeWorker · Service status');
+    await expect(page.locator('meta[name="description"]')).toHaveAttribute(
+      'content',
+      /Service status, uptime/,
+    );
+    expect(await page.evaluate(() => performance.timeOrigin)).toBe(timeOrigin);
+
+    await setBrowserLanguages(page, ['zh-CN']);
+    await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN');
+    await page.reload();
+    await expect(language).toHaveValue('system');
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+  });
 
   test('preserves filters, localizes automatic history, and fits both languages on narrow screens', async ({
     page,
@@ -196,9 +249,20 @@ test.describe('English interface and language switching', () => {
     await expect(dialog.getByLabel('检测间隔（分钟）')).toHaveValue('0');
     await expect(dialog.getByRole('alert')).toContainText('检测间隔需为 1–60 分钟的整数');
     expect(await page.evaluate(() => performance.timeOrigin)).toBe(timeOrigin);
-    await other.getByLabel('界面语言').selectOption('en');
+    await other.getByLabel('界面语言').selectOption('system');
+    await expect(page.locator('.language-select')).toHaveValue('system');
     dialog = page.getByRole('dialog', { name: 'Add monitor', exact: true });
     await expect(dialog.getByRole('alert')).toContainText('integer from 1 to 60 minutes');
+    await setBrowserLanguages(page, ['zh-CN']);
+    dialog = page.getByRole('dialog', { name: '新增监控', exact: true });
+    await expect(dialog.getByLabel('服务名称', { exact: true })).toHaveValue('未保存的服务');
+    await expect(dialog.getByLabel('检测间隔（分钟）')).toHaveValue('0');
+    await expect(dialog.getByRole('alert')).toContainText('检测间隔需为 1–60 分钟的整数');
+    await expect(page.locator('.language-select')).toHaveValue('system');
+    await other.getByLabel('Interface language').selectOption('en');
+    dialog = page.getByRole('dialog', { name: 'Add monitor', exact: true });
+    await expect(dialog.getByRole('alert')).toContainText('integer from 1 to 60 minutes');
+    expect(await page.evaluate(() => performance.timeOrigin)).toBe(timeOrigin);
     await dialog.getByRole('spinbutton', { name: /^Check interval \(minutes\)/ }).fill('7');
     await dialog.getByRole('button', { name: 'Save monitor' }).click();
     await expect(dialog).toHaveCount(0);
@@ -208,6 +272,9 @@ test.describe('English interface and language switching', () => {
     await page.reload();
     await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN');
     await expect(page.getByRole('heading', { name: '未保存的服务', exact: true })).toBeVisible();
+    await other.evaluate(() => localStorage.removeItem('uptimeworker.locale'));
+    await expect(page.locator('.language-select')).toHaveValue('system');
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en');
     await other.close();
   });
 
@@ -354,11 +421,20 @@ test.describe('English interface and language switching', () => {
       }),
     );
     await page.goto('/');
+    await expect(page.locator('.language-select')).toHaveValue('system');
     await expect(page.locator('html')).toHaveAttribute('lang', 'en');
     await page.getByLabel('Interface language').selectOption('zh-CN');
     await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN');
     await expect(page.getByRole('link', { name: '状态概览', exact: true })).toBeVisible();
+    await setBrowserLanguages(page, ['fr-FR', 'zh-CN']);
+    await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN');
+    await selectLanguage(page, 'system');
+    await expect(page.locator('.language-select')).toHaveValue('system');
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+    await setBrowserLanguages(page, ['zh-TW']);
+    await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN');
     await page.reload();
+    await expect(page.locator('.language-select')).toHaveValue('system');
     await expect(page.locator('html')).toHaveAttribute('lang', 'en');
     expect(failures).toEqual([]);
   });

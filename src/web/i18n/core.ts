@@ -4,6 +4,7 @@ import { interpolate, intlLocale, type Locale, type MessageParams } from '../../
 import { en, zh, type MessageKey, type Translation } from './messages';
 
 export type { Locale, MessageKey };
+export type LocalePreference = 'system' | Locale;
 export type MessageValues = Readonly<Record<string, string | number | Message>>;
 export interface Message {
   key: MessageKey;
@@ -13,6 +14,8 @@ export type DisplayMessage = string | Message | { code: AppErrorCode; params?: M
 export const message = (key: MessageKey, params?: MessageValues): Message => ({ key, params });
 export const LOCALE_STORAGE_KEY = 'uptimeworker.locale';
 export const isLocale = (value: unknown): value is Locale => value === 'zh-CN' || value === 'en';
+export const isLocalePreference = (value: unknown): value is LocalePreference =>
+  value === 'system' || isLocale(value);
 
 const formatsByLocale = new Map<Locale, { number: Intl.NumberFormat; plural: Intl.PluralRules }>();
 function localeFormats(locale: Locale) {
@@ -31,20 +34,23 @@ export function resolveLocale(saved: unknown, languages: readonly string[]): Loc
   if (isLocale(saved)) return saved;
   return /^zh(?:-|$)/i.test(languages[0] ?? '') ? 'zh-CN' : 'en';
 }
-export function readLocale(): Locale {
-  let saved: string | null = null;
+export function readLocalePreference(): LocalePreference {
   try {
-    saved = localStorage.getItem(LOCALE_STORAGE_KEY);
+    const saved = localStorage.getItem(LOCALE_STORAGE_KEY);
+    if (isLocalePreference(saved)) return saved;
   } catch {
     /* Storage may be disabled. */
   }
+  return 'system';
+}
+export function readLocale(preference: LocalePreference = readLocalePreference()): Locale {
   const languages =
     typeof navigator === 'undefined'
       ? []
       : navigator.languages?.length
         ? navigator.languages
         : [navigator.language];
-  return resolveLocale(saved, languages);
+  return resolveLocale(preference, languages);
 }
 export function translate(locale: Locale, key: MessageKey, values: MessageValues = {}): string {
   const entry: Translation = locale === 'en' ? en[key] : zh[key];

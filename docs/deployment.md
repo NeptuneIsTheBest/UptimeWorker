@@ -97,7 +97,7 @@ Worker and database names start with a lowercase letter and contain lowercase le
 
 1. Open **Actions → Verify and deploy**. Enable Actions first if prompted after forking.
 2. Use **Run workflow** to select and run the **main** branch.
-3. Wait for both `verify` and `deploy` to succeed. Other branches run verification without deploying.
+3. Wait for `verify` and all four `e2e` shards to succeed, then for `deploy` to finish. Verification and browser shards run concurrently; any verification failure blocks deployment. Other branches run verification without deploying.
 
 Check these steps in the `deploy` logs:
 

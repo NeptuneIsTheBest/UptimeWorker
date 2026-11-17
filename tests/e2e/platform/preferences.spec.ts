@@ -1,5 +1,30 @@
 import { test, expect } from '../support/fixtures';
-import { selectLanguage } from '../support/preferences';
+import { closePreferences, openPreferences, selectLanguage } from '../support/preferences';
+
+for (const colorScheme of ['light', 'dark'] as const) {
+  for (const locale of ['zh-CN', 'en-US']) {
+    test.describe(`system language in ${colorScheme} ${locale}`, () => {
+      test.use({ colorScheme, locale });
+      test('fits desktop and mobile preferences', async ({ page }, info) => {
+        await page.goto('/');
+        const language = page.locator('.language-select');
+        for (const width of [320, 390, 1440]) {
+          await page.setViewportSize({ width, height: 900 });
+          await openPreferences(page);
+          await expect(language).toHaveValue('system');
+          await expect(language.locator('option:checked')).toHaveText(
+            locale === 'zh-CN' ? '跟随系统' : 'System',
+          );
+          await expect(language).toBeInViewport();
+          await expect(page.locator('.theme-select')).toBeInViewport();
+          expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+          await page.screenshot({ path: info.outputPath(`system-language-${width}.png`) });
+          await closePreferences(page);
+        }
+      });
+    });
+  }
+}
 
 for (const width of [390, 1440]) {
   test(`language switching waits for delayed app startup at ${width}px`, async ({ page }) => {
@@ -55,6 +80,11 @@ test('mobile preferences support keyboard changes, dismissal and focus return', 
   await expect(language).toBeFocused();
   await language.selectOption('en');
   await expect(toggle).toHaveText('Preferences');
+  await language.selectOption('system');
+  await expect(toggle).toHaveText('偏好');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN');
+  await expect(language).toBeFocused();
+  await language.selectOption('en');
   await page.keyboard.press('Tab');
   await expect(theme).toBeFocused();
   await theme.selectOption('dark');
