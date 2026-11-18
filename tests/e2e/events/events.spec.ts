@@ -192,6 +192,7 @@ test('event drafts survive refresh, editing persists, and the global threshold i
   await expect(settings.getByLabel('连续离线阈值（分钟）')).toHaveValue('5');
   await settings.getByLabel('连续离线阈值（分钟）').fill('12');
   await settings.getByRole('button', { name: '保存设置' }).click();
+  await expect(settings).toHaveCount(0);
   const response = await request.get('/api/admin/settings');
   expect((await response.json()).autoIncidentAfterMinutes).toBe(12);
   await page.getByRole('tab', { name: '事件', exact: true }).click();
